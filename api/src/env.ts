@@ -202,7 +202,7 @@ function computeProductionProblems(opts: { isBuildPhase: boolean }): string[] {
     // S3_ENDPOINT already get, applied to the most dangerous DSN we hold: the superuser.
     // (APP_DATABASE_URL is left to its exact-default + dev-password checks, because that
     // one is the serving credential and may legitimately name an in-network service host.)
-    /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(e.DATABASE_URL);
+    /@(?:localhost|127\.0\.0\.1|0\.0\.0\.0|::1|\[::1\])(?::\d+)?\//i.test(e.DATABASE_URL);
   if (databaseUrlIsDevDefault) {
     problems.push(
       "DATABASE_URL must be set explicitly in production: its default is the development ADMIN (superuser) DSN",
@@ -215,7 +215,9 @@ function computeProductionProblems(opts: { isBuildPhase: boolean }): string[] {
   if (
     unset("REDIS_URL") ||
     e.REDIS_URL === DEV_DEFAULT_REDIS_URL ||
-    /^rediss?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(e.REDIS_URL)
+    /^rediss?:\/\/(?:[^@/]*@)?(?:localhost|127\.0\.0\.1|0\.0\.0\.0|::1|\[::1\])(?::\d+)?\/?$/i.test(
+      e.REDIS_URL,
+    )
   ) {
     problems.push(
       "REDIS_URL must be an authenticated production endpoint: the development default is an unauthenticated localhost",
@@ -242,15 +244,28 @@ function computeProductionProblems(opts: { isBuildPhase: boolean }): string[] {
 
   // Values that must be chosen deliberately rather than inherited. Each of these has a
   // development default that would otherwise apply silently in production.
-  if (unset("S3_BUCKET")) {
-    problems.push("S3_BUCKET must be set explicitly: the development bucket name would be used");
+  if (unset("S3_BUCKET") || e.S3_BUCKET === "dsar-evidence") {
+    problems.push(
+      "S3_BUCKET must not be the development bucket name: customer evidence must not be written to it",
+    );
   }
+  // NOT checked by value, deliberately: S3_FORCE_PATH_STYLE, DB_POOL_MAX and SMTP_SECURE
+  // have defaults that are legitimate in production (path-style is required by MinIO, a
+  // pool size is a sizing choice, secure=false is correct behind STARTTLS). Rejecting
+  // those VALUES would refuse valid deployments - an over-block, which this guard has
+  // already been caught doing once. They must merely be chosen explicitly.
+  // 1025 is different: it is the development mail sink (maildev/mailhog), where mail sent
+  // in production would go nowhere, silently.
+  if (e.SMTP_PORT === 1025) {
+    problems.push("SMTP_PORT 1025 is the development mail sink and must not be used in production");
+  }
+
   if (unset("S3_FORCE_PATH_STYLE")) {
     problems.push("S3_FORCE_PATH_STYLE must be set explicitly rather than inherited");
   }
-  if (unset("DB_OWNER_USER")) {
+  if (unset("DB_OWNER_USER") || e.DB_OWNER_USER === "hermes") {
     problems.push(
-      "DB_OWNER_USER must be set explicitly: it names the owner role the least-privilege assertion checks against",
+      "DB_OWNER_USER must name the production owner role: the development default (hermes) is not it",
     );
   }
   if (unset("DB_POOL_MAX")) {

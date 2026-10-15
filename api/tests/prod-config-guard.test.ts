@@ -301,4 +301,39 @@ describe("production config guard (R3)", () => {
       expect(`${r.stdout}${r.stderr}`).toMatch(/SESSION_SECRET must be set to at least 32 characters/);
     }
   });
+
+  it("refuses the development S3 bucket, owner role and mail-sink port by VALUE - L1", () => {
+    // These three have development defaults that are genuinely wrong in production, so the
+    // value matters, not just its absence. (S3_FORCE_PATH_STYLE / DB_POOL_MAX / SMTP_SECURE
+    // are deliberately unset-only: their defaults are legitimate in production.)
+    for (const [key, bad, re_] of [
+      ["S3_BUCKET", "dsar-evidence", /S3_BUCKET must not be the development bucket name/],
+      ["DB_OWNER_USER", "hermes", /DB_OWNER_USER must name the production owner role/],
+      ["SMTP_PORT", "1025", /SMTP_PORT 1025 is the development mail sink/],
+    ] as const) {
+      const r = load({ [key]: bad });
+      expect(r.status, `accepted ${key}=${bad}`).not.toBe(0);
+      expect(`${r.stdout}${r.stderr}`).toMatch(re_);
+    }
+  });
+
+  it("refuses exotic loopback forms in DATABASE_URL/REDIS_URL - L2", () => {
+    for (const bad of [
+      "postgres://hermes:x@::1:5432/hermes_dsar",
+      "postgres://hermes:x@0.0.0.0:5432/hermes_dsar",
+      "postgres://hermes:x@localhost:5432/hermes_dsar",
+    ]) {
+      expect(load({ DATABASE_URL: bad }).status, `accepted ${bad}`).not.toBe(0);
+    }
+    for (const bad of [
+      "redis://:password@localhost:6379",
+      "redis://:password@::1:6379",
+      "redis://0.0.0.0:6379",
+      "redis://:password@127.0.0.1:6379",
+    ]) {
+      const r = load({ REDIS_URL: bad });
+      expect(r.status, `accepted ${bad}`).not.toBe(0);
+      expect(`${r.stdout}${r.stderr}`).toMatch(/REDIS_URL must be an authenticated production endpoint/);
+    }
+  });
 });
