@@ -15,6 +15,20 @@
       "when": 1792012581970,
       "tag": "0001_bent_ronan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792051720411,
+      "tag": "0002_ambiguous_may_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792052793529,
+      "tag": "0003_r1_substrate_hardening",
+      "breakpoints": true
     }
   ]
 }

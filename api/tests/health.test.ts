@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
  */
 const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 
-vi.mock("@/db/client", () => ({ pool: { query } }));
+vi.mock("@/db/client", () => ({ pingDatabase: () => query("select 1") }));
 
 const { liveness, readiness } = await import("@/server/health");
 

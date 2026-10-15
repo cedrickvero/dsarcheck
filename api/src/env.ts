@@ -33,6 +33,9 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().int().positive().default(1025),
   SMTP_FROM: z.string().default("no-reply@privacyspace.local"),
 
+  DB_POOL_MAX: z.coerce.number().int().positive().default(10),
+  DB_OWNER_USER: z.string().default("hermes"),
+
   APP_BASE_URL: z.string().default("http://localhost:3000"),
 });
 

@@ -21,3 +21,6 @@ npm-debug.log*
 # coverage / os
 coverage/
 .DS_Store
+
+# graphify knowledge-graph build output
+graphify-out/
