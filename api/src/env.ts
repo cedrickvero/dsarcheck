@@ -20,6 +20,12 @@ import { EXCEPTION_TTL_HARD_CAP, validateTtlExceptions } from "@/server/storage/
  */
 export const DEV_DEFAULT_DATABASE_URL =
   "postgres://hermes:hermes_dev_password@127.0.0.1:5432/hermes_dsar";
+export const DEV_DEFAULT_REDIS_URL = "redis://127.0.0.1:6379";
+export const DEV_DEFAULT_SMTP_HOST = "127.0.0.1";
+export const DEV_DEFAULT_SMTP_FROM = "no-reply@privacyspace.local";
+/** The admin password embedded in the development DSN, derived so it is never re-typed. */
+const DEV_DEFAULT_DATABASE_PASSWORD =
+  /^[^:]+:\/\/[^:]+:([^@]*)@/.exec(DEV_DEFAULT_DATABASE_URL)?.[1] ?? "";
 export const DEV_DEFAULT_APP_DATABASE_URL =
   "postgres://app_runtime:app_runtime_dev_password@hermes_dsar_postgres:5432/hermes_dsar";
 export const DEV_DEFAULT_APP_DB_PASSWORD = "app_runtime_dev_password";
@@ -37,7 +43,7 @@ const envSchema = z.object({
     .min(1)
     .default(DEV_DEFAULT_DATABASE_URL),
 
-  REDIS_URL: z.string().min(1).default("redis://127.0.0.1:6379"),
+  REDIS_URL: z.string().min(1).default(DEV_DEFAULT_REDIS_URL),
 
   S3_ENDPOINT: z.string().default(DEV_DEFAULT_S3_ENDPOINT),
   S3_REGION: z.string().default("us-east-1"),
@@ -59,9 +65,9 @@ const envSchema = z.object({
     .default("true")
     .transform((value) => value === "true"),
 
-  SMTP_HOST: z.string().default("127.0.0.1"),
+  SMTP_HOST: z.string().default(DEV_DEFAULT_SMTP_HOST),
   SMTP_PORT: z.coerce.number().int().positive().default(1025),
-  SMTP_FROM: z.string().default("no-reply@privacyspace.local"),
+  SMTP_FROM: z.string().default(DEV_DEFAULT_SMTP_FROM),
   /** Signs the session cookie. Required in production; unused until T-08 sets one. */
   SESSION_SECRET: z.string().default(""),
   // Explicit string enums rather than z.coerce.boolean(), which maps the string
@@ -186,21 +192,48 @@ function computeProductionProblems(opts: { isBuildPhase: boolean }): string[] {
   // FINDING B. DATABASE_URL's development default is the ADMIN/SUPERUSER DSN: silently
   // inheriting a superuser connection string in production is what this guard exists to
   // stop, even though it is not used on the request path today.
-  if (unset("DATABASE_URL") || e.DATABASE_URL === DEV_DEFAULT_DATABASE_URL) {
+  const databaseUrlIsDevDefault =
+    unset("DATABASE_URL") ||
+    e.DATABASE_URL === DEV_DEFAULT_DATABASE_URL ||
+    // defence in depth: a DSN need not be byte-identical to the default to be the dev one
+    (DEV_DEFAULT_DATABASE_PASSWORD !== "" &&
+      e.DATABASE_URL.includes(DEV_DEFAULT_DATABASE_PASSWORD)) ||
+    // A production ADMIN DSN never points at loopback. Same treatment REDIS_URL and
+    // S3_ENDPOINT already get, applied to the most dangerous DSN we hold: the superuser.
+    // (APP_DATABASE_URL is left to its exact-default + dev-password checks, because that
+    // one is the serving credential and may legitimately name an in-network service host.)
+    /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(e.DATABASE_URL);
+  if (databaseUrlIsDevDefault) {
     problems.push(
       "DATABASE_URL must be set explicitly in production: its default is the development ADMIN (superuser) DSN",
     );
   }
-  if (unset("REDIS_URL")) {
+  // These three were guarded with unset() ONLY, which left the very class this guard
+  // exists to close still open: setting the variable to its own DEVELOPMENT DEFAULT -
+  // rather than leaving it absent - booted production unguarded. Each is now rejected by
+  // VALUE as well as by absence, and anything pointing at localhost is rejected too.
+  if (
+    unset("REDIS_URL") ||
+    e.REDIS_URL === DEV_DEFAULT_REDIS_URL ||
+    /^rediss?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/.test(e.REDIS_URL)
+  ) {
     problems.push(
-      "REDIS_URL must be set explicitly in production: the development default is an unauthenticated localhost",
+      "REDIS_URL must be an authenticated production endpoint: the development default is an unauthenticated localhost",
     );
   }
-  if (unset("SMTP_HOST")) {
-    problems.push("SMTP_HOST must be set explicitly in production");
+  if (
+    unset("SMTP_HOST") ||
+    e.SMTP_HOST === DEV_DEFAULT_SMTP_HOST ||
+    /^(localhost|127\.0\.0\.1)$/.test(e.SMTP_HOST)
+  ) {
+    problems.push("SMTP_HOST must be a production mail host, not the development default");
   }
-  if (unset("SMTP_FROM")) {
-    problems.push("SMTP_FROM must be set explicitly in production");
+  if (
+    unset("SMTP_FROM") ||
+    e.SMTP_FROM === DEV_DEFAULT_SMTP_FROM ||
+    e.SMTP_FROM.endsWith(".local")
+  ) {
+    problems.push("SMTP_FROM must be a production sender address, not the development default");
   }
   // Requirement 8's "missing cookie secret".
   if (unset("SESSION_SECRET") || e.SESSION_SECRET.length < 32) {

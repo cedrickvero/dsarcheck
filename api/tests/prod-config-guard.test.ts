@@ -1,5 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { DEV_DEFAULT_APP_DATABASE_URL, DEV_DEFAULT_DATABASE_URL } from "../src/env";
+import {
+  DEV_DEFAULT_APP_DATABASE_URL,
+  DEV_DEFAULT_DATABASE_URL,
+  DEV_DEFAULT_REDIS_URL,
+  DEV_DEFAULT_SMTP_FROM,
+  DEV_DEFAULT_SMTP_HOST,
+} from "../src/env";
 import { describe, expect, it } from "vitest";
 
 const TSX = "node_modules/.bin/tsx";
@@ -251,24 +257,40 @@ describe("production config guard (R3)", () => {
   });
 
   it("refuses the DEVELOPMENT DATABASE_URL (the admin/superuser DSN) - FINDING B", () => {
-    for (const bad of [undefined, DEV_DEFAULT_DATABASE_URL]) {
+    for (const bad of [
+      undefined,
+      DEV_DEFAULT_DATABASE_URL,
+      // a production ADMIN DSN never points at loopback - same rule REDIS_URL/S3_ENDPOINT get
+      "postgres://hermes:whatever@127.0.0.1:5432/hermes_dsar",
+      "postgres://hermes:whatever@localhost:5432/hermes_dsar",
+    ]) {
       const r = load({ DATABASE_URL: bad });
       expect(r.status, `accepted DATABASE_URL=${bad ?? "(unset)"}`).not.toBe(0);
       expect(`${r.stdout}${r.stderr}`).toMatch(/DATABASE_URL must be set explicitly/);
     }
   });
 
-  it("refuses an unset REDIS_URL - the dev default is unauthenticated - FINDING B", () => {
-    const r = load({ REDIS_URL: undefined });
-    expect(r.status).not.toBe(0);
-    expect(`${r.stdout}${r.stderr}`).toMatch(/REDIS_URL must be set explicitly/);
+  it("refuses REDIS_URL that is unset, at its dev default, OR pointing at localhost - FINDING B", () => {
+    // The dev default must be refused by VALUE as well as by absence. Guarding with
+    // unset() alone let `REDIS_URL=redis://127.0.0.1:6379` boot production unguarded -
+    // that was the residual the guardrail found, because these tests only covered unset.
+    for (const bad of [undefined, DEV_DEFAULT_REDIS_URL, "redis://localhost:6379", "redis://127.0.0.1:6380"]) {
+      const r = load({ REDIS_URL: bad });
+      expect(r.status, `accepted REDIS_URL=${bad ?? "(unset)"}`).not.toBe(0);
+      expect(`${r.stdout}${r.stderr}`).toMatch(/REDIS_URL must be an authenticated production endpoint/);
+    }
   });
 
-  it("refuses unset SMTP_HOST / SMTP_FROM - FINDING B", () => {
-    for (const [key, re_] of [["SMTP_HOST", /SMTP_HOST must be set explicitly/], ["SMTP_FROM", /SMTP_FROM must be set explicitly/]] as const) {
-      const r = load({ [key]: undefined });
-      expect(r.status, `accepted unset ${key}`).not.toBe(0);
-      expect(`${r.stdout}${r.stderr}`).toMatch(re_);
+  it("refuses SMTP_HOST / SMTP_FROM that are unset OR at their dev defaults - FINDING B", () => {
+    for (const [key, values, re_] of [
+      ["SMTP_HOST", [undefined, DEV_DEFAULT_SMTP_HOST, "localhost"], /SMTP_HOST must be a production mail host/],
+      ["SMTP_FROM", [undefined, DEV_DEFAULT_SMTP_FROM, "no-reply@anything.local"], /SMTP_FROM must be a production sender address/],
+    ] as const) {
+      for (const bad of values) {
+        const r = load({ [key]: bad });
+        expect(r.status, `accepted ${key}=${bad ?? "(unset)"}`).not.toBe(0);
+        expect(`${r.stdout}${r.stderr}`).toMatch(re_);
+      }
     }
   });
 

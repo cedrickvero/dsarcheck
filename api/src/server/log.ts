@@ -31,19 +31,28 @@ export function safeMessage(message: unknown): string | null {
   return firstLine;
 }
 
+/** A short, safe token for a structural field (error name, driver code, constraint, table). */
+export function safeToken(value: unknown, max = 80): string {
+  const text = String(value ?? "")
+    .replace(CONTROL_CHARS, " ")
+    .trim();
+  if (text === "" || text.length > max || RISKY_MESSAGE.test(text)) return "redacted";
+  return text;
+}
+
 /** A sanitised one-line description. Never the error object, never a stack. */
 export function describeError(error: unknown): string {
   if (!(error instanceof Error)) return `non-error thrown (${typeof error})`;
-  const fields: string[] = [error.name];
+  const fields: string[] = [safeToken(error.name, 40)];
   const direct = error as { code?: unknown };
   if (typeof direct.code === "string" || typeof direct.code === "number") {
-    fields.push(`code=${direct.code}`);
+    fields.push(`code=${safeToken(direct.code, 20)}`);
   }
   const cause = (error as { cause?: { code?: unknown; constraint?: unknown; table?: unknown } })
     .cause;
-  if (typeof cause?.code === "string") fields.push(`cause_code=${cause.code}`);
-  if (typeof cause?.constraint === "string") fields.push(`constraint=${cause.constraint}`);
-  if (typeof cause?.table === "string") fields.push(`table=${cause.table}`);
+  if (typeof cause?.code === "string") fields.push(`cause_code=${safeToken(cause.code, 20)}`);
+  if (typeof cause?.constraint === "string") fields.push(`constraint=${safeToken(cause.constraint)}`);
+  if (typeof cause?.table === "string") fields.push(`table=${safeToken(cause.table)}`);
   const safe = safeMessage(error.message);
   fields.push(safe === null ? "message=redacted" : `message=${safe}`);
   return fields.join(" ");
@@ -55,7 +64,7 @@ export type LogContext = Record<string, string | number | undefined>;
 export function logError(scope: string, error: unknown, context: LogContext = {}): void {
   const extras = Object.entries(context)
     .filter(([, value]) => value !== undefined)
-    .map(([key, value]) => `${key}=${value}`)
+    .map(([key, value]) => `${safeToken(key, 32)}=${safeToken(value, 120)}`)
     .join(" ");
   console.error(`[${scope}] ${describeError(error)}${extras ? ` ${extras}` : ""}`);
 }
