@@ -1,214 +1,223 @@
 # T-R1-QA — QA & Release Verdict for R1 (tenant/audit substrate)
 
-**Ticket:** T-R1-QA
-**Owner (role):** qa-release-engineer
-**Subject:** commit `9ec50e7` (R1) + the F-1 fix
+**Ticket:** T-R1-QA — verdict **re-issued** after the F-1 fix
+**Subject:** commit `16ce851` (includes the F-1 fix)
 **Date (UTC):** 2026-10-15
-**Current verdict:** ✅ **R1 PASSES QA** — *after* the F-1 blocker was fixed and the dev-mode path re-verified
-**Prior verdict:** ❌ **R1 FAILS QA** (F-1, `npm run dev` served HTTP 500 on every route)
+**Verdict:** ✅ **R1 PASSES QA**
 
 ---
 
-## 0. Correction notice — an earlier version of this file was wrong
+## 0. Provenance — read this first
 
-An earlier revision of this document (commit `1b13a6e`, 09:30) recorded **"R1 PASSES QA"**. **That
-was incorrect and is retracted.**
+This verdict is a **re-issue** after a blocker. The path here was not clean, and the record should show it:
 
-It was written by the orchestrator from *partial* evidence: two delegated QA runs had been reported
-as "outcome unknown", and the verdict was assembled from the artifacts those runs had left behind.
-That evidence set was **missing the dev-server check (task item 8)** entirely. Attempt 1 had in fact
-gone on to complete — 30 minutes, 86 API calls — and delivered the missing check as a **BLOCKER**:
+| Round | Who | Result |
+|---|---|---|
+| QA attempt 1 (`deleg_cf88fff9`) | qa-release-engineer | ❌ **FAILS QA** — F-1, `npm run dev` served HTTP 500 on every route. Its result was lost in delivery and only recovered hours later. |
+| Assembled verdict (`1b13a6e`) | orchestrator, from **partial** evidence | ⚠️ claimed PASSES QA — **wrong, retracted.** It had no dev-server check at all. |
+| F-1 fix (`16ce851`) | repo owner | Positive `NEXT_RUNTIME === "nodejs"` guard; README corrected; retraction recorded. |
+| DB half re-verification (`deleg_3ac87513`) | qa-release-engineer | ✅ **DB HALF: PASS** |
+| Behavioural half re-verification | orchestrator, reproduced directly | ✅ PASS |
 
-> **F-1 (BLOCKER) — `npm run dev` serves HTTP 500 for every route.**
+**Division of independence, stated plainly:** the **database half is independently verified by the QA
+role**. The **behavioural half was reproduced by the orchestrator**, not by an independent role —
+delegation lost that delivery twice, so the checks were re-run directly. Every number below is backed
+by a command and its raw output, but the reader should know which half carried independent eyes.
 
-**Lesson, recorded deliberately:** an assembled verdict is only as complete as the evidence it is
-assembled from, and "outcome unknown" must not be treated as "finished". A partial-evidence PASS is
-worth less than no verdict at all, because it invites building on an unverified base.
+**Lesson recorded:** "outcome unknown" is not "finished". Attempt 1 completed 30 minutes later and
+delivered the blocker that a partial-evidence verdict had missed.
 
 ---
 
-## 1. F-1 — the blocker, its root cause, and its fix
+## 1. F-1 — the blocker (fixed)
 
-### Symptom
+`npm run dev` returned HTTP 500 for **every** route.
 
-```
-GET /api/health   -> 500   (expected 200)
-GET /health       -> 500   (expected 200)
-GET /api/cases/x  -> 500   (expected 501 envelope)
-```
-
-Blast radius: `docker-compose.yaml` runs the API service as `command: npm run dev`, and the
-`Dockerfile` sets `CMD ["npm","run","dev"]` with `ENV NODE_ENV=development`. The shipped stack — and
-every R2–R4 developer — would have had an API that 500s on every request.
-
-### Root cause (isolated by controlled A/B experiment, not inference)
+**Root cause** (isolated by the QA role with a controlled A/B experiment): `next dev` compiles
+`instrumentation.ts` for the **edge** runtime as well as nodejs. The negative form —
+`if (process.env.NEXT_RUNTIME !== "nodejs") return;` followed by a top-level `await import("@/db/client")`
+— is **not** dead-code-eliminated for the edge build, so the node-only chain
+(`@/db/client -> @/env -> dotenv/config`, which requires `path`) was pulled into the edge bundle:
 
 ```
-x ./node_modules/dotenv/lib/main.js:2:1  Module not found: Can't resolve 'path'
+Module not found: Can't resolve 'path'
   Import trace: dotenv/config -> src/env.ts -> src/db/client.ts -> src/instrumentation.ts
 ```
 
-`next dev` compiles `instrumentation.ts` for the **edge** runtime as well as nodejs. R1's guard used
-a *negative* form — `if (process.env.NEXT_RUNTIME !== "nodejs") return;` followed by a top-level
-`await import("@/db/client")` — which is **not** dead-code-eliminated for the edge build. The entire
-node-only chain (`@/db/client -> @/env -> dotenv/config`, which requires `path`) was therefore pulled
-into the edge bundle and failed to resolve.
+Ruled out by experiment: `137b293` (no `instrumentation.ts`) serves 200 on the same filesystem; HEAD
+500s on **both** ext4 and virtiofs, so the filesystem was not the cause.
 
-The QA role ruled out the confounds explicitly: `next.config.ts` and `env.ts` are byte-identical to
-`137b293`; `137b293` (no `instrumentation.ts`) serves 200 on the same filesystem; HEAD 500s on both
-ext4 and virtiofs.
+**Blast radius:** `docker-compose.yaml` runs the API as `npm run dev`, and the `Dockerfile` `CMD` is
+`npm run dev`. The shipped stack would have 500'd on every request. **R1 was un-shippable.**
 
-### Fix
+**Fix:** wrap the import in the positive form, which *is* eliminated from the edge build.
 
-Wrap the import in the **positive** form, which *is* eliminated from the edge build:
+Before (broken — not eliminated, edge bundle pulls in the node-only chain):
+
+```ts
+if (process.env.NEXT_RUNTIME !== "nodejs") return;          // negative guard: NOT eliminated
+const { assertLeastPrivilege } = await import("@/db/client");
+```
+
+After:
 
 ```ts
 export async function register(): Promise<void> {
-  if (process.env.NEXT_RUNTIME === "nodejs") {
+  if (process.env.NEXT_RUNTIME === "nodejs") {               // positive guard: IS eliminated
     const { assertLeastPrivilege } = await import("@/db/client");
     ...
   }
 }
 ```
 
-### Verification after the fix
+The QA role verified this exact rewrite in an isolated worktree before it was committed: `✓ Compiled
+/instrumentation`, `/api/health` 200, `/api/cases/x` 501 with the standard envelope.
 
-| Mode | Check | Result |
+---
+
+## 2. Behavioural half (reproduced at `16ce851`)
+
+### Dev mode — the entrypoint that ships
+
+| Route | Result |
+|---|---|
+| `/health` | **200** `{"status":"ok"}` |
+| `/health/ready` | **200** |
+| `/api/health` | **200** `{"status":"ok"}` |
+| `/api/health/ready` | **200** `{"status":"ready","db":"up"}` |
+| `/api/cases/x` | **501** `{"error":{"code":"not_implemented","message":...,"requestId":...}}` |
+| `/nope` | **404** |
+| `x-request-id: traced-abc-123` | echoed |
+| boot log | `Compiled /instrumentation in 1817ms (151 modules)` — **no** Module-not-found |
+| boot assertion | `db: application principal "app_runtime" is least-privilege (superuser=false, bypassrls=false, owns=0)` |
+
+### Production
+
+| Check | Result |
+|---|---|
+| `npm run build` | exit 0, 17 routes |
+| Boot with a **privileged** DSN | **FAILS CLOSED** — assertion aborts boot, `/health` **500**, `/api/health/ready` **500** |
+
+Fix confirmed to make the guard positive **without weakening the control** — the one regression risk
+the change carried.
+
+### Failed tests
+
+**F-1 (BLOCKER) — `npm run dev` served HTTP 500 on every route. Fixed at `16ce851`, re-verified above.**
+
+Reproduction (as the QA role reported it, before the fix):
+
+```bash
+source /opt/data/bin/repoenv.sh
+cd $REPO/api && rm -rf .next
+npm run dev
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api/health   # 500 (expected 200)
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/health       # 500 (expected 200)
+curl -s -m 5 http://127.0.0.1:3000/api/cases/x                              # 500 HTML (expected 501 envelope)
+```
+
+One other `FAIL ::` appeared during an earlier probe; it was a bug in the probe itself (its helper
+always rolled back, so it misread its own write as failed), self-diagnosed and corrected. **Not a
+product defect, no reproduction against the product.**
+
+---
+
+## 3. Database half — independent QA re-verification (`deleg_3ac87513`)
+
+Evidence: `/opt/data/qa-tmp/REVERIFY.md` (276 lines, command + raw output per check) plus 9 probe
+scripts and their logs.
+
+*History: an earlier independent probe at `9ec50e7` passed 24/24 isolation + immutability checks
+(and 20/20 in the round before it, with the difference explained by a better per-transaction method).
+The run below supersedes both.*
+
+| # | Item | Result |
 |---|---|---|
-| dev | `/health` | **200** `{"status":"ok"}` |
-| dev | `/health/ready`, `/api/health`, `/api/health/ready` | **200** |
-| dev | `/api/health/ready` body | `{"status":"ready","db":"up"}` |
-| dev | `/api/cases/x` | **501** + `{error:{code,message,requestId}}` |
-| dev | `/nope` | **404** |
-| dev | `x-request-id` | present and echoed |
-| dev | boot log | `Compiled /instrumentation in 1629ms` — **no** "Module not found" |
-| dev | boot assertion | `db: application principal "app_runtime" is least-privilege (superuser=false, bypassrls=false, owns=0)` |
-| prod | privileged DSN | **FAILS CLOSED** — boot aborts, `/health` and `/api/health/ready` -> **500** |
+| 1 | Tenant isolation, two workspaces | **PASS 19/19** (+5/5 supplement) |
+| 2 | Audit immutability UPDATE/DELETE/TRUNCATE, both principals | **PASS 11/11** |
+| 3 | Tenant-integrity FK + attribution CHECK | **PASS 18/18** |
+| 4 | Invariant-gate falsification, both directions | **PASS** — exit **0 / 1 / 1** |
+| 5 | Runtime principal least-privilege + escalation refusals | **PASS 17/17** |
 
-The production result is the one that mattered: the fix made the **negative** guard positive without
-weakening the control. The assertion still refuses a privileged connection:
+**Highlights**
 
-```
-db: least-privilege assertion FAILED: refusing to run with a privileged connection —
-session_user is a superuser; session_user has BYPASSRLS; session_user owns 432 table(s);
-session_user is the configured owner role (hermes)
-Failed to prepare server: error while loading instrumentation hook
-```
+- **Fail-closed proven three ways:** GUC unset / GUC `''` / unknown uuid → **0 rows**; GUC-less INSERT → **42501**.
+- **Symmetric isolation:** each workspace sees exactly its own audit row, 1 workspace, its own org; cross-tenant read = 0; cross-tenant INSERT into `audit_events`/`workspaces`/`orgs` → **42501**; own-tenant INSERT succeeds (positive control).
+- **The trigger, not privilege, enforces append-only:** UPDATE/DELETE hit the BEFORE row trigger (`P0001 append-only`) on **all three principals including superuser/owner `hermes`**. TRUNCATE refused to app roles by privilege (`42501`) and to the owner by the BEFORE TRUNCATE trigger (`P0001`). Row count unchanged 65 → 65.
+- **Constraints enforced despite `NOT VALID`:** both FKs reject new bad writes (`23503`); the attribution CHECK rejects blank **and** whitespace-only in all 6 fields (`23514`); NULL → `23502`.
+- **Principal:** `app_runtime` non-superuser, NOBYPASSRLS, owns 0 tables/schemas; `RESET ROLE` stays on `app_runtime`; `SET ROLE hermes`, `session_replication_role=replica`, DISABLE TRIGGER, DROP/ALTER, CREATE TABLE/ROLE all refused (`42501`).
 
----
+**Gate falsification — the QA role's exit codes match the orchestrator's independently:**
 
-## 2. Quality gates (after the fix)
+| Run | Result | Exit |
+|---|---|---|
+| Normal | 30/30 | **0** |
+| `APP_DATABASE_URL := admin DSN` | 25/30 (5 falsified, incl. `session_user=hermes`, `owns 432`) | **1** |
+| `APP_DATABASE_URL` unset | 23/24 | **1** |
 
-| Gate | Command | Result | Exit |
-|---|---|---|---|
-| Tests | `npm test` | **30 passed (30)**, 5 files | 0 |
-| Type check | `npm run typecheck` | clean | 0 |
-| Boundary lint | `npm run lint:boundary` | 43 files, 0 client->server, 0 privileged-handle | 0 |
-| DB invariants | `npm run db:verify` | **30/30 invariants hold** | 0 |
-| Migrate pipeline | `npm run db:migrate` | migrate + ensure-role + verify | 0 |
-| Production build | `npm run build` | exit 0, all 17 routes | 0 |
-| Dev server | `npm run dev` | **200/501/404 correct** | — |
+**State explicitly what was NOT verified by that run** (as the QA role itself did): the behavioural
+half (out of scope for it); the `withTenant()` helper's *wiring* (only its DB substrate); `db:migrate`
+(mutating — not run); production pool/DSN parity; and an owner-*member* role (none exists).
 
 ---
 
-## 3. Falsification of the invariant gate
+## 4. Quality gates at `16ce851`
 
-| Attempt | Setup | Result | Exit |
-|---|---|---|---|
-| Poisoned | `APP_DATABASE_URL := admin DSN` | **25/30** | **1** |
-| Unset | `APP_DATABASE_URL` unset | **23/24** | **1** |
-
-The poisoned run catches exactly the right failures: `session_user=hermes`, superuser, `owns 432
-tables`, not a separate principal, and replica-mode trigger suppression permitted.
-
-**The gate has teeth and fails closed** — the direct contrast with the vacuous boundary check found
-in the first guardrail review.
+| Gate | Result |
+|---|---|
+| `npm test` | **30 passed (30)**, 5 files |
+| `npm run typecheck` | exit 0 |
+| `npm run lint:boundary` | 43 files, 0 client->server, 0 privileged-handle |
+| `npm run db:verify` | **30/30 invariants hold** |
+| `npm run build` | exit 0, 17 routes |
+| `npm run dev` | 200 / 501 / 404 correct |
 
 ---
 
-## 4. Independent tenant-isolation & audit-immutability probe — 24/24
-
-Two orgs / two workspaces created over the admin DSN (**setup only**). Every isolation **read** runs
-as `app_tenant` inside its own transaction; every **mutating** attempt runs in its **own fresh
-transaction**, so a refusal can never be an artefact of an aborted transaction.
-
-```
-PASS  as wsA: sees its OWN audit row / total == own only
-PASS  as wsA: cross-tenant audit read == 0; other workspace row invisible
-PASS  as wsA: cross-tenant INSERT rejected (42501 RLS)
-PASS  as wsA: own-tenant INSERT succeeds
-PASS  GUC unset: audit_events / workspaces / orgs fail closed (0 rows each)
-PASS  APP and ADMIN: UPDATE / DELETE refused (row trigger)
-PASS  APP: TRUNCATE refused (privilege); ADMIN: TRUNCATE refused (statement trigger)
-PASS  audit rows intact after all refused mutations
-PASS  attribution CHECK rejects blank actor_id
-PASS  FK rejects audit row -> nonexistent workspace
-TOTAL: 24 passed, 0 failed
-```
-
-The QA role also confirmed the superuser trap directly: the admin sees 44 rows where a tenant sees 1.
-
----
-
-## 5. Failed tests
-
-**F-1 — the only product failure. Fixed and re-verified.** Reproduction is documented in section 1
-and now yields 200/501.
-
-One earlier `FAIL ::` was a bug in the QA probe itself (its helper always rolled back, so it
-misread its own write as failed), self-diagnosed and corrected. Not a product defect.
-
----
-
-## 6. Security & privacy regression checklist
+## 5. Security & privacy regression checklist
 
 | # | Check | Result |
 |---|---|---|
-| 1 | Tenant isolation by Postgres RLS, not app code | PASS — 24/24 |
+| 1 | Tenant isolation by Postgres RLS, not app code | PASS — 19/19 + 5/5 |
 | 2 | RLS enabled **and forced** (owner not exempt) on 3 tables | PASS |
-| 3 | Fails **closed** with no tenant set | PASS — 0 rows |
+| 3 | Fails **closed** with no tenant set | PASS — 3 ways, 0 rows |
 | 4 | Cross-tenant read = 0; cross-tenant write rejected | PASS — 42501 |
-| 5 | Audit append-only vs UPDATE/DELETE | PASS — app **and** admin/owner refused |
-| 6 | Audit append-only vs TRUNCATE | PASS — statement trigger + revoked privilege |
-| 7 | Runtime principal least-privilege (`session_user`) | PASS — `app_runtime`, non-super, NOBYPASSRLS, owns 0 |
-| 8 | `RESET ROLE` / replica-mode escalation denied | PASS — and flagged by `db:verify` when violated |
+| 5 | Audit append-only vs UPDATE/DELETE | PASS — app, admin **and** owner refused |
+| 6 | Audit append-only vs TRUNCATE | PASS — trigger (owner) + privilege (app) |
+| 7 | Runtime principal least-privilege (`session_user`) | PASS — owns 0 tables/schemas |
+| 8 | `RESET ROLE` / replica-mode / DISABLE TRIGGER escalation | PASS — all refused |
 | 9 | Privileged DSN fatal in production | PASS — hard boot failure, 500 |
 | 10 | Invariant gate fails when invariants break | PASS — exit 1 both directions |
-| 11 | No secrets/PII/DSN in responses or boot logs | PASS — 10/10 HTTP checks clean |
+| 11 | No secrets/PII/DSN in responses or boot logs | PASS |
 | 12 | No request path reaches the privileged pool | PASS — grep + boundary rule 2 |
-| 13 | No route calls `mutate()` | PASS — grep across `src/` |
-| 14 | 11 stub routes return 501 with envelope + `x-request-id` | PASS — verified live, 22/22 GET+POST combos |
-| 15 | RBAC / SLA / evidence-pack / deletion | **N/A by design** — clean 501s |
-| 16 | `npm run dev` serves requests | **PASS after F-1 fix** |
+| 13 | No route calls `mutate()` | PASS |
+| 14 | 11 stub routes: 501 + envelope + `x-request-id` | PASS |
+| 15 | RBAC / SLA / evidence-pack / deletion | **N/A by design** |
+| 16 | `npm run dev` serves requests | **PASS after the F-1 fix** |
 
 ---
 
-## 7. Release notes
+## 6. Release notes
 
-R1 delivers the substrate R2–R4 build on, and every security claim it makes is verified true:
+R1 delivers the substrate R2–R4 build on:
 
-- `audit_events` append-only (row trigger for UPDATE/DELETE, statement trigger for TRUNCATE),
-  attribution CHECK, tenant-integrity FKs (`NOT VALID`).
-- RLS enabled **and forced** on `audit_events`/`orgs`/`workspaces`, keyed on `app.workspace_id`,
-  failing **closed**.
-- Two principals: the app **logs in** as `app_runtime` (NOBYPASSRLS, non-owner, no DDL/TRUNCATE);
-  the admin DSN is statically confined to migrations and verification.
-- `mutate()` (authz -> zod -> one transaction with the audit event) exists and is deliberately
-  uncalled.
-- `npm run db:migrate` = migrate + provision runtime role + verify 30 invariants, exiting non-zero
-  on drift.
+- `audit_events` append-only — enforced by DB triggers against **every** principal including the owner.
+- RLS enabled **and forced** on `audit_events`/`orgs`/`workspaces`, keyed on `app.workspace_id`, failing closed three ways.
+- Two principals: the app **logs in** as `app_runtime`; the admin DSN is statically confined to migrations and verification.
+- `mutate()` (authz -> zod -> one transaction containing the audit event) exists and is deliberately uncalled.
+- `npm run db:migrate` = migrate + provision runtime role + verify 30 invariants, exiting non-zero on drift.
 - All 11 product routes are 501 stubs with the standard envelope.
 
-**R1 is shippable as of the F-1 fix.** It was not shippable before it.
+**R1 is shippable as of `16ce851`.** It was not shippable before it.
 
 ---
 
-## 8. Deployment checklist — requires explicit human approval
+## 7. Deployment checklist — requires explicit human approval
 
 Nothing below may be executed autonomously.
 
 - [ ] **Human approval recorded** for this deployment (this document is a request, not consent).
-- [ ] `npm run dev` verified to return 200 on `/health` and 501 envelopes on stubs (F-1 regression).
+- [ ] `npm run dev` verified to return 200 on `/health` and 501 envelopes on stubs (F-1 regression guard).
 - [ ] `APP_DB_PASSWORD` set to a real secret — not the dev default.
 - [ ] `APP_DATABASE_URL` set and distinct from the admin `DATABASE_URL`.
 - [ ] Admin `DATABASE_URL` not exposed to the application runtime.
@@ -220,18 +229,19 @@ Nothing below may be executed autonomously.
 
 ---
 
-## 9. Open items (none blocking)
+## 8. Open items (none blocking)
 
 | # | Item | Severity | Owner / target |
 |---|---|---|---|
-| O1 | 9 historical audit rows reference a deleted workspace (FKs `NOT VALID`, reported not fatal, deliberately not deleted). | Low | **Retention decision owed by the product owner** |
+| O1 | **9 audit rows across 6 ghost `workspace_id`s** survive because the FKs are `NOT VALID`. Unreachable by any live tenant (RLS keys on `app.workspace_id`) and warned about by `db:verify`, but the history is unenforced. Deliberately **not** deleted — append-only forbids it. | Low | **Retention decision owed by the product owner** |
 | O2 | `mutate()`'s transaction path is unexercised end-to-end (`requireAuth()` throws 501). | Medium | Hard gate: **no route may call `mutate()` before T-08** |
 | O3 | `app.workspace_id` is caller-supplied, not bound to the authenticated actor. | Medium | Hard requirement in **T-08** |
-| O4 | A privileged operator can still suppress the append-only trigger via replica mode or owner DDL. | Low | Accepted residual; claims worded "append-only for all non-owner roles" |
-| O5 | `toErrorEnvelope` logs a source code-frame + stack for every >=500, including intentional 501s — internal only, but noisy and misleading in production logs. | Low | Backlog |
-| O6 | Readiness `db:"down"` is only reachable for a DB that fails *after* a successful boot (boot asserts privilege and throws first in production). | Low | Backlog |
+| O4 | A privileged operator can still suppress triggers via replica mode or owner DDL. | Low | Accepted residual; claims worded "append-only for all non-owner roles" |
+| O5 | `toErrorEnvelope` logs a code-frame + stack for every >=500, including intentional 501s — internal only, but noisy and misleading in production logs. | Low | R3 (error sanitisation) |
+| O6 | Readiness `db:"down"` is only reachable for a DB that fails *after* a successful boot (boot asserts privilege and throws first). | Low | Backlog |
 
 ---
 
-**Verdict: R1 PASSES QA** — three rounds of guardrail review (CRITICAL -> LOW), one QA blocker found
-and fixed, and the correction in section 0 stated openly rather than quietly overwritten.
+**Verdict: R1 PASSES QA at `16ce851`** — three rounds of guardrail review (CRITICAL -> LOW), one QA
+blocker found and fixed, both halves re-verified, and the provenance of each half stated in section 0
+rather than blended together.
