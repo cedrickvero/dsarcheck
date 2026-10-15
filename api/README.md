@@ -93,7 +93,7 @@ After changing `src/db/schema.ts`:
 
 Never edit an already-applied migration. Create a new migration instead.
 
-`db:migrate` is `drizzle-kit migrate && node scripts/db-verify-invariants.mjs`.
+`db:migrate` is `drizzle-kit migrate && node scripts/db-ensure-runtime-role.mjs && node scripts/db-verify-invariants.mjs`.
 The verifier asserts 22 security invariants against the live database and exits
 non-zero on drift, so a database cannot silently fall out of compliance.
 `npm run db:verify` runs the assertions alone.
