@@ -86,3 +86,34 @@ was dead code, and defect #1 above, where a verification call site had never onc
   cross-checked before being relayed.
 - QA: `db:migrate` idempotency, `npm test`, `typecheck`, `lint:boundary`, `db:verify`, and
   confirmation that migration 0004 remains applied exactly once.
+
+---
+
+## Guardrail findings and their fixes — all PRODUCT defects
+
+The R2 guardrail review (`deleg_9267ac0c`) returned **APPROVE R2, risk MEDIUM** with eight
+findings, and required changes before T-08 wiring. All were fixed rather than documented.
+
+| Finding | Sev | Fix |
+|---|---|---|
+| **F-1** `objects` was deletable by the application principal — silently, with no audit row | MEDIUM | migrations `0005` + `0006` revoke DELETE from **both** roles; `db-ensure-runtime-role.mjs` no longer re-grants it; asserted by db:verify per-table **and** globally |
+| **F-2** only `AuthorizationDeniedError` was audited — a cross-tenant key, a key/purpose mismatch and an unknown purpose each produced **0** audit rows | MEDIUM | every denial path writes a denial row carrying a `denialCode` |
+| **F-3** `object_id` meant different things on upload vs download events | MEDIUM | `object_id` is the key's uuid on both; the row id moved to `meta.objectRowId` |
+| **F-4** no upper bound on a TTL exception (3600 = 4x the ceiling; 700000 = SigV4 failure at mint, not startup) | MEDIUM-LOW | `EXCEPTION_TTL_HARD_CAP = 3600`, enforced when the config is parsed **and at STARTUP** via the env schema |
+| **F-5** the exception branch skipped the positive-TTL rule (0 → an already-expired URL persisted and audited as success) | LOW | the exception branch applies the same positive/non-finite check as `clampTtl` |
+| **F-6** an invalid reason made the denial's own audit write throw, masking the denial | LOW | the reason is validated before any work begins |
+| **F-7 / F-8** db:verify lacked the objects fail-closed read and a withheld-DELETE assertion | NOTE | both added; the self-test proves them able to fail |
+
+### F-1's real root cause — worth remembering
+
+Revoking the privilege in a migration was **not enough**, for two reasons that only a live
+probe reveals:
+
+1. `db-ensure-runtime-role.mjs` runs **after** migrations in the `db:migrate` chain and
+   re-granted `delete on all tables`, silently undoing the revocation on **every** migrate.
+2. `app_runtime` is a **MEMBER of `app_tenant`**, so it *inherited* that role's blanket
+   DELETE — revoking from the member alone changed nothing.
+
+The new db:verify invariant caught both within seconds of being written, which is the
+whole point of proving a check can fail: `has_table_privilege('app_runtime','objects','DELETE')`
+stayed `true` until the second migration, and the gate said so.
