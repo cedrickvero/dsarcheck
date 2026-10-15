@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { z } from "zod";
+import { EXCEPTION_TTL_HARD_CAP, isPurpose } from "@/server/storage/purpose";
 
 /**
  * Single source of truth for runtime configuration.
@@ -88,8 +89,23 @@ const finalEnvSchema = checkedEnvSchema.refine(
       const parsed: unknown = JSON.parse(raw);
       if (!Array.isArray(parsed)) return false;
       return parsed.every((x) => {
-        const t = (x as { ttlSeconds?: unknown }).ttlSeconds;
-        return Number.isInteger(t) && (t as number) > 0 && (t as number) <= 3600;
+        const entry = x as {
+          name?: unknown;
+          purpose?: unknown;
+          operation?: unknown;
+          ttlSeconds?: unknown;
+        };
+        // Validate the WHOLE entry, not just the TTL. A config with a bogus purpose,
+        // a missing name or a bad operation used to boot cleanly and then fail EVERY
+        // request at runtime - the fail-mid-request shape this guard exists to stop.
+        if (typeof entry.name !== "string" || entry.name.trim() === "") return false;
+        if (typeof entry.purpose !== "string" || !isPurpose(entry.purpose)) return false;
+        if (entry.operation !== "upload" && entry.operation !== "download") return false;
+        return (
+          Number.isInteger(entry.ttlSeconds) &&
+          (entry.ttlSeconds as number) > 0 &&
+          (entry.ttlSeconds as number) <= EXCEPTION_TTL_HARD_CAP
+        );
       });
     } catch {
       return false;
@@ -97,7 +113,9 @@ const finalEnvSchema = checkedEnvSchema.refine(
   },
   {
     message:
-      "SIGNED_URL_TTL_EXCEPTIONS must be a JSON array of {name, purpose, operation, ttlSeconds} with 0 < ttlSeconds <= 3600",
+      `SIGNED_URL_TTL_EXCEPTIONS must be a JSON array of {name, purpose, operation, ttlSeconds} ` +
+      `where purpose is a configured purpose, operation is upload|download, and ` +
+      `0 < ttlSeconds <= ${EXCEPTION_TTL_HARD_CAP}`,
     path: ["SIGNED_URL_TTL_EXCEPTIONS"],
   },
 );

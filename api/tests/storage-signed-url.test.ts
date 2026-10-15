@@ -391,4 +391,75 @@ describe.skipIf(!hasEnv)("signed URL contract", () => {
     expect(a?.objectId).toBe(b?.objectId);
   });
 
+
+  it("audits the purpose/key MISMATCH denial - the path both gates flagged (F-2)", async () => {
+    if (!ready) return;
+    const id = `req-${RUN}-mismatch-audited`;
+    // a valid, in-workspace key whose purpose differs from the one being authorized
+    const key = buildObjectKey({ workspaceId: actor.workspaceId, purpose: "identity_document" });
+    await expect(
+      issueDownloadUrl({
+        actor,
+        purpose: "evidence",
+        objectKey: key,
+        reason: REASON,
+        requestId: id,
+        permissions: allow,
+      }),
+    ).rejects.toBeTruthy();
+
+    const rows = await systemDb.select({ meta: auditEvents.meta }).from(auditEvents);
+    const mine = rows.filter((r) => (r.meta as { requestId?: string } | null)?.requestId === id);
+    expect(mine, "the mismatch denial was NOT audited").toHaveLength(1);
+    const meta = mine[0]!.meta as { outcome?: string; denialCode?: string };
+    expect(meta.outcome).toBe("denied");
+    expect(meta.denialCode).toBe("purpose_key_mismatch");
+  });
+
+  it("audits an unusable TTL exception instead of throwing unaudited (F-2)", async () => {
+    if (!ready) return;
+    const id = `req-${RUN}-ttl-exception`;
+    await expect(
+      issueUploadUrl({
+        actor,
+        purpose: "evidence",
+        contentType: "application/pdf",
+        reason: REASON,
+        requestId: id,
+        permissions: allow,
+        requestedTtlSeconds: 5000, // above the ceiling, so the exception branch is used
+        exceptionName: "not-configured",
+      }),
+    ).rejects.toBeTruthy();
+
+    const rows = await systemDb.select({ meta: auditEvents.meta }).from(auditEvents);
+    const mine = rows.filter((r) => (r.meta as { requestId?: string } | null)?.requestId === id);
+    expect(mine, "the TTL-exception refusal was NOT audited").toHaveLength(1);
+    expect((mine[0]!.meta as { denialCode?: string }).denialCode).toBe("invalid_ttl_exception");
+  });
+
+  it("audits a recordFileAccess cross-tenant refusal (F-2)", async () => {
+    if (!ready) return;
+    const id = `req-${RUN}-access-denied`;
+    const foreign = buildObjectKey({
+      workspaceId: "9a7f5b31-2c4d-4e6f-8a91-0b1c2d3e4f50",
+      purpose: "evidence",
+    });
+    await expect(
+      recordFileAccess({
+        actor,
+        objectKey: foreign,
+        operation: "download",
+        outcome: "granted",
+        requestId: id,
+        reason: REASON,
+      }),
+    ).rejects.toBeTruthy();
+
+    const rows = await systemDb.select({ meta: auditEvents.meta }).from(auditEvents);
+    const mine = rows.filter((r) => (r.meta as { requestId?: string } | null)?.requestId === id);
+    expect(mine, "the access refusal was NOT audited").toHaveLength(1);
+    expect((mine[0]!.meta as { outcome?: string }).outcome).toBe("denied");
+  });
+
 });

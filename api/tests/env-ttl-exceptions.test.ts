@@ -25,4 +25,19 @@ describe("SIGNED_URL_TTL_EXCEPTIONS must fail at STARTUP when misconfigured (gua
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("LOADED");
   });
+
+  it("refuses an entry whose purpose is not a configured purpose", () => {
+    const r = load(JSON.stringify([{ name: "x", purpose: "bogus", operation: "upload", ttlSeconds: 900 }]));
+    expect(r.status).not.toBe(0);
+  });
+
+  it("refuses an entry with a missing name", () => {
+    const r = load(JSON.stringify([{ purpose: "evidence", operation: "upload", ttlSeconds: 900 }]));
+    expect(r.status).not.toBe(0);
+  });
+
+  it("refuses an entry with an invalid operation", () => {
+    const r = load(JSON.stringify([{ name: "x", purpose: "evidence", operation: "sideways", ttlSeconds: 900 }]));
+    expect(r.status).not.toBe(0);
+  });
 });

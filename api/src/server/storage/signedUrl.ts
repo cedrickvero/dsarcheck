@@ -150,9 +150,17 @@ async function auditDenial(args: {
   throw args.error;
 }
 
-/** Audits a refusal raised by the key-validation step, then rethrows it. */
-async function auditKeyDenial(
+/**
+ * Audits a refusal raised by any step of the fixed order, then rethrows it.
+ *
+ * EVERY refusal must go through here. The guardrail found three refusals that threw
+ * outside an audited wrapper - a purpose/key mismatch, an unusable TTL exception and
+ * recordFileAccess' tenant check - so "every denial is audited" was false. A refusal
+ * that is not on the record is the exact failure the audit trail exists to prevent.
+ */
+async function auditRefusal(
   args: { actor: Actor; requestId: string; reason: string; action: string },
+  denialCode: string,
   error: unknown,
   requested: Record<string, unknown>,
 ): Promise<never> {
@@ -162,7 +170,7 @@ async function auditKeyDenial(
     requestId: args.requestId,
     reason: args.reason,
     action: args.action,
-    requested: { denialCode: "invalid_object_key", ...requested },
+    requested: { denialCode, ...requested },
     error: err,
   });
 }
@@ -241,8 +249,9 @@ export async function issueUploadUrl(args: IssueUploadUrlArgs): Promise<IssuedUr
     });
     assertKeyInWorkspace(objectKey, args.actor.workspaceId);
   } catch (error) {
-    return await auditKeyDenial(
+    return await auditRefusal(
       { actor: args.actor, requestId: args.requestId, reason: args.reason, action: "file.upload_url.issued" },
+      "invalid_object_key",
       error,
       { requestedObjectId: args.objectId ?? null },
     );
@@ -251,13 +260,24 @@ export async function issueUploadUrl(args: IssueUploadUrlArgs): Promise<IssuedUr
   // know the key's uuid, so uploads record that too, with the row id kept beside it.
   const keyId = parseObjectKey(objectKey).id;
 
-  // 4. clamp the TTL
-  const { ttlSeconds, exceptionName } = resolveTtl({
-    purpose,
-    operation,
-    requestedTtlSeconds: args.requestedTtlSeconds,
-    exceptionName: args.exceptionName,
-  });
+  // 4. clamp the TTL - a refused exception is a denial and must be on the record
+  let ttl: { ttlSeconds: number; exceptionName?: string };
+  try {
+    ttl = resolveTtl({
+      purpose,
+      operation,
+      requestedTtlSeconds: args.requestedTtlSeconds,
+      exceptionName: args.exceptionName,
+    });
+  } catch (error) {
+    return await auditRefusal(
+      { actor: args.actor, requestId: args.requestId, reason: args.reason, action: "file.upload_url.issued" },
+      "invalid_ttl_exception",
+      error,
+      { purpose, operation, requestedTtlSeconds: args.requestedTtlSeconds ?? null, exceptionName: args.exceptionName ?? null },
+    );
+  }
+  const { ttlSeconds, exceptionName } = ttl;
 
   // 5. SSE + mint. The algorithm comes from configuration only - the caller passes
   //    no encryption parameter, and because the SSE headers are part of the
@@ -350,26 +370,40 @@ export async function issueDownloadUrl(args: IssueDownloadUrlArgs): Promise<Issu
   let parts: ReturnType<typeof assertKeyInWorkspace>;
   try {
     parts = assertKeyInWorkspace(args.objectKey, args.actor.workspaceId);
+    // The mismatch check lives INSIDE this try on purpose: it is a denial, and a
+    // denial thrown outside an audited wrapper leaves no trace.
+    if (parts.purpose !== purpose) {
+      throw new InvalidObjectKeyError(
+        `key purpose (${parts.purpose}) does not match the authorized purpose (${purpose})`,
+      );
+    }
   } catch (error) {
-    return await auditKeyDenial(
+    return await auditRefusal(
       { actor: args.actor, requestId: args.requestId, reason: args.reason, action: "file.download_url.issued" },
+      "purpose_key_mismatch",
       error,
-      { requestedObjectKey: args.objectKey },
-    );
-  }
-  if (parts.purpose !== purpose) {
-    throw new InvalidObjectKeyError(
-      `key purpose (${parts.purpose}) does not match the authorized purpose (${purpose})`,
+      { requestedObjectKey: args.objectKey, authorizedPurpose: purpose },
     );
   }
 
-  // 4. clamp TTL -> 5. mint
-  const { ttlSeconds, exceptionName } = resolveTtl({
-    purpose,
-    operation,
-    requestedTtlSeconds: args.requestedTtlSeconds,
-    exceptionName: args.exceptionName,
-  });
+  // 4. clamp TTL - a refused exception is a denial and must be on the record
+  let ttl: { ttlSeconds: number; exceptionName?: string };
+  try {
+    ttl = resolveTtl({
+      purpose,
+      operation,
+      requestedTtlSeconds: args.requestedTtlSeconds,
+      exceptionName: args.exceptionName,
+    });
+  } catch (error) {
+    return await auditRefusal(
+      { actor: args.actor, requestId: args.requestId, reason: args.reason, action: "file.download_url.issued" },
+      "invalid_ttl_exception",
+      error,
+      { purpose, operation, requestedTtlSeconds: args.requestedTtlSeconds ?? null, exceptionName: args.exceptionName ?? null },
+    );
+  }
+  const { ttlSeconds, exceptionName } = ttl;
 
   const url = await getSignedUrl(s3, getObjectCommand(args.objectKey), { expiresIn: ttlSeconds });
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
@@ -429,8 +463,18 @@ export async function recordFileAccess(args: {
   reason: string;
 }): Promise<void> {
   assertAuditReason(args.reason);
-  const parts = parseObjectKey(args.objectKey);
-  assertKeyInWorkspace(args.objectKey, args.actor.workspaceId);
+  let parts: ReturnType<typeof parseObjectKey>;
+  try {
+    parts = parseObjectKey(args.objectKey);
+    assertKeyInWorkspace(args.objectKey, args.actor.workspaceId);
+  } catch (error) {
+    return await auditRefusal(
+      { actor: args.actor, requestId: args.requestId, reason: args.reason, action: "file.accessed" },
+      "invalid_object_key",
+      error,
+      { requestedObjectKey: args.objectKey },
+    );
+  }
   await withTenant(
     { orgId: args.actor.orgId, workspaceId: args.actor.workspaceId, actorId: args.actor.userId },
     async (tx) => {

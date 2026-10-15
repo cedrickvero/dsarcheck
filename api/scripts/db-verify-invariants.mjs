@@ -66,14 +66,18 @@ async function checkObjectsTable(conn, table) {
   // F-1: the app principal must not hold DELETE. Deleting a DSAR object is a
   // destructive action requiring human approval (R4); until that approved path
   // exists the privilege must be ABSENT, not merely discouraged.
-  const canDelete = (
-    await conn.query(`select has_table_privilege('app_runtime', $1, 'DELETE') as can`, [table])
-  ).rows[0].can;
-  say(
-    !canDelete,
-    `${table}: DELETE withheld from app_runtime`,
-    canDelete ? "app_runtime CAN delete rows" : "",
-  );
+  // Asserted for BOTH principals: app_runtime is a member of app_tenant, so a stray
+  // grant to either role is a real hole, and migration 0006 had to revoke both.
+  for (const principal of ["app_runtime", "app_tenant"]) {
+    const canDelete = (
+      await conn.query(`select has_table_privilege($1, $2, 'DELETE') as can`, [principal, table])
+    ).rows[0].can;
+    say(
+      !canDelete,
+      `${table}: DELETE withheld from ${principal}`,
+      canDelete ? `${principal} CAN delete rows` : "",
+    );
+  }
 
   // and the table must fail closed when no tenant is set
   await conn.query("begin");
@@ -108,7 +112,10 @@ async function runSelfTest() {
   const conn = new pg.Client({ connectionString: url });
   await conn.connect();
   try {
-    await conn.query("begin");
+    // The probe is NOT created inside an outer transaction: checkObjectsTable opens
+    // its own transaction for the fail-closed read, and nesting rolled the outer one
+    // back mid-function. Cleanup is guaranteed by the finally instead.
+    await conn.query("drop table if exists objects_probe");
     await conn.query(`create table objects_probe (
       id uuid primary key default gen_random_uuid(),
       workspace_id uuid not null,
@@ -121,11 +128,11 @@ async function runSelfTest() {
       `insert into objects_probe (workspace_id, object_key, purpose)
        values (gen_random_uuid(), 'ws/probe/evidence/x', 'evidence')`,
     );
-    await conn.query("grant delete on objects_probe to app_runtime");
+    await conn.query("grant delete on objects_probe to app_runtime, app_tenant");
     const probeFails = (await checkObjectsTable(conn, "objects_probe"))
       .filter((r) => !r.pass)
       .map((r) => r.name);
-    await conn.query("rollback");
+    await conn.query("drop table if exists objects_probe");
 
     const expected = [
       "RLS enabled on objects_probe",
@@ -137,6 +144,7 @@ async function runSelfTest() {
       "objects_probe: org FK present",
       "objects_probe: object_key is unique",
       "objects_probe: DELETE withheld from app_runtime",
+      "objects_probe: DELETE withheld from app_tenant",
       "objects_probe: RLS fails closed when app.workspace_id is unset",
     ];
     const missed = expected.filter((name) => !probeFails.includes(name));
@@ -148,7 +156,7 @@ async function runSelfTest() {
       `self-test OK - all ${expected.length} R2 object checks correctly failed against a deliberately broken table`,
     );
   } catch (error) {
-    await conn.query("rollback").catch(() => {});
+    await conn.query("drop table if exists objects_probe").catch(() => {});
     throw error;
   } finally {
     await conn.end().catch(() => {});
