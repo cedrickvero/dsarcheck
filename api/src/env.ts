@@ -36,6 +36,15 @@ const envSchema = z.object({
   DB_POOL_MAX: z.coerce.number().int().positive().default(10),
   DB_OWNER_USER: z.string().default("hermes"),
 
+  // The APPLICATION connects with this DSN: a least-privilege LOGIN role.
+  // DATABASE_URL above is the admin/owner DSN (migrations + test setup only).
+  APP_DATABASE_URL: z
+    .string()
+    .min(1)
+    .default("postgres://app_runtime:app_runtime_dev_password@hermes_dsar_postgres:5432/hermes_dsar"),
+  APP_DB_PASSWORD: z.string().default("app_runtime_dev_password"),
+
+
   APP_BASE_URL: z.string().default("http://localhost:3000"),
 });
 

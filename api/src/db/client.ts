@@ -7,31 +7,26 @@ import * as schema from "./schema";
 /**
  * Database access.
  *
- * IMPORTANT — why there is a `SET ROLE` on every connection:
- * the configured connection user is a superuser *and* the table owner, and
- * PostgreSQL exempts both from row-level security unconditionally. Running the
- * application as that principal makes every RLS policy inert: isolation tests
- * pass, and so does every cross-tenant query. `app_runtime` (NOBYPASSRLS,
- * owns nothing) is what makes the policies in migration 0003 real, so every
- * pooled connection assumes it before application code can use it.
+ * TWO PRINCIPALS, deliberately:
+ *
+ *  - The application pool logs in as APP_DATABASE_URL — a real, login-capable,
+ *    least-privilege role (`app_runtime`: NOBYPASSRLS, non-owner, no TRUNCATE,
+ *    no DDL).
+ *  - The system pool uses DATABASE_URL — the admin/owner DSN. Migrations, test
+ *    setup and the invariant verifier only. Never in request handling.
+ *
+ * Why the application must LOG IN as the restricted role rather than `SET ROLE`
+ * to it: `SET ROLE` changes only `current_user`, leaving `session_user` as the
+ * superuser that authenticated. One `RESET ROLE` — or any pooler that discards
+ * session state — then restores BYPASSRLS and row-level security fails *open*.
+ * A reversible privilege drop is not a control.
  */
 export const pool = new Pool({
-  connectionString: env.DATABASE_URL,
+  connectionString: env.APP_DATABASE_URL,
   max: env.DB_POOL_MAX,
 });
 
-pool.on("connect", (client) => {
-  // pg serialises queries per client, so this SET ROLE is guaranteed to run
-  // before anything the application queues on the same connection.
-  client.query("set role app_runtime").catch((error: unknown) => {
-    // Never hand out a connection that failed to drop privileges.
-    console.error("db: SET ROLE app_runtime failed — destroying connection", error);
-    client.release(error instanceof Error ? error : new Error("role assumption failed"));
-  });
-});
-
-/** A pool that has NOT dropped privileges. Migrations, test setup and the
- *  invariant verifier only. Never use this in request handling. */
+/** Privileged pool. Migrations, test setup and verification ONLY. */
 export const systemPool = new Pool({
   connectionString: env.DATABASE_URL,
   max: 1,
@@ -52,14 +47,10 @@ export interface TenantContext {
 /**
  * Run `fn` inside a transaction that is tenant-scoped *at the database level*.
  *
- * - `app.workspace_id` — the GUC every RLS policy reads. Unset => the policy
- *   evaluates NULL => zero rows (fail closed, never fail open).
- * - `app.actor_id` — attribution available to the same transaction.
- * - `SET LOCAL ROLE app_tenant` — belt and braces on top of the connection-level
- *   `app_runtime`; both are NOBYPASSRLS.
- *
- * Anything touching customer data MUST go through here. Scoping is enforced by
- * PostgreSQL, not by remembering to add a WHERE clause.
+ * `app.workspace_id` is the GUC every RLS policy reads: unset means the policy
+ * evaluates NULL and the table looks empty — it fails closed, never open.
+ * `app.actor_id` carries attribution. `SET LOCAL ROLE app_tenant` is
+ * defence-in-depth on top of the already-restricted login principal.
  */
 export async function withTenant<T>(
   ctx: TenantContext,
@@ -78,20 +69,46 @@ export async function pingDatabase(): Promise<void> {
   await pool.query("select 1");
 }
 
+export interface PrivilegeReport {
+  sessionUser: string;
+  currentUser: string;
+  superuser: boolean;
+  bypassRls: boolean;
+  ownsTables: number;
+}
+
 /**
- * Startup assertion: refuse to serve traffic from a connection that can bypass
- * the tenant policies. Called from the health route and available to scripts.
+ * Assert the application's connection is least-privilege.
+ *
+ * Checks `session_user` — not just `current_user` — because that is the identity
+ * an attacker regains with `RESET ROLE`. Wired into boot (src/instrumentation.ts)
+ * and readiness, so a misconfigured deployment reports unhealthy instead of
+ * silently serving every tenant's rows.
  */
-export async function assertLeastPrivilege(): Promise<{ user: string; superuser: boolean }> {
-  const { rows } = await pool.query<{ user: string; superuser: boolean }>(
-    "select current_user as user, (select rolsuper from pg_roles where rolname = current_user) as superuser",
+export async function assertLeastPrivilege(): Promise<PrivilegeReport> {
+  const { rows } = await pool.query<PrivilegeReport>(
+    `select session_user as "sessionUser",
+            current_user  as "currentUser",
+            (select rolsuper     from pg_roles where rolname = session_user) as "superuser",
+            (select rolbypassrls from pg_roles where rolname = session_user) as "bypassRls",
+            (select count(*)::int from pg_class c
+               where c.relowner = (select oid from pg_roles where rolname = session_user)) as "ownsTables"`,
   );
   const row = rows[0];
   if (!row) throw new Error("db: could not determine the connection identity");
-  if (row.superuser || row.user === env.DB_OWNER_USER) {
+
+  const problems: string[] = [];
+  if (row.superuser) problems.push("session_user is a superuser");
+  if (row.bypassRls) problems.push("session_user has BYPASSRLS");
+  if (row.ownsTables > 0) problems.push(`session_user owns ${row.ownsTables} table(s)`);
+  if (row.sessionUser === env.DB_OWNER_USER) {
+    problems.push(`session_user is the configured owner role (${env.DB_OWNER_USER})`);
+  }
+
+  if (problems.length > 0) {
     throw new Error(
-      `db: refusing to run as a privileged role (current_user=${row.user}); ` +
-        "row-level security would be bypassed",
+      `db: refusing to run with a privileged connection — ${problems.join("; ")}. ` +
+        "Point APP_DATABASE_URL at the least-privilege login role (npm run db:migrate does this).",
     );
   }
   return row;

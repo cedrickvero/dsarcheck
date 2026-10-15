@@ -107,7 +107,7 @@ never describe a rule as "built" when it is only intended.
 |---|---|---|
 | 1 | Every sensitive action requires a reason and writes an immutable audit event | **Partial** — `audit_events` is append-only (UPDATE/DELETE/TRUNCATE rejected), `mutate()` requires a reason and writes the event in the same transaction; no route uses `mutate()` yet |
 | 2 | No autonomous actions | **Enforced by absence** — no code path deletes, closes or sends anything; all 11 product routes return `501` |
-| 3 | Tenant isolation via `workspace_id`/`org_id` + Postgres RLS, not app code alone | **Enforced** — RLS enabled *and forced* on `audit_events`, `orgs`, `workspaces`; policies key on `app.workspace_id` and fail closed; every connection drops to `app_runtime` (NOBYPASSRLS); 9 isolation tests |
+| 3 | Tenant isolation via `workspace_id`/`org_id` + Postgres RLS, not app code alone | **Enforced** — RLS enabled *and forced* on `audit_events`, `orgs`, `workspaces`; policies key on `app.workspace_id` and fail closed; the app **logs in** as `app_runtime` (NOBYPASSRLS, non-owner, no DDL or TRUNCATE), asserted at boot and by `db:verify`; 9 isolation tests |
 | 4 | Privacyspace staff never see case contents without a customer-approved, time-limited grant | **Not enforced** — no grant mechanism exists yet (T-08) |
 | 5 | Role gates enforced server-side | **Not enforced** — `requireAuth()` and `can()` throw `501`; they fail loudly rather than silently (T-08) |
 | 6 | SLA always visible on case lists and the case header | N/A — no UI yet |
@@ -135,6 +135,10 @@ commits or rolls back with the change — proven both ways in
   every non-owner role, but a privileged operator can still
   `SET session_replication_role = replica` or `DISABLE TRIGGER`. Treat those as
   operator-only actions requiring their own audit trail.
+- **9 historical audit rows reference a workspace that no longer exists** — created by an
+  earlier test cleanup, before the tenant-integrity FKs existed. `db:verify` reports them
+  and they are deliberately **not** deleted (append-only forbids it). Because the FKs are
+  `NOT VALID`, that history is unenforced; a retention decision is still owed.
 - **Domain functions are unported.** `src/domain/*` are typed stubs that throw.
   Port them from `design/reference/seed/workspace-seed.js` (T-07).
 - Design tokens are not wired yet: `globals.css` holds neutral fallbacks only.
