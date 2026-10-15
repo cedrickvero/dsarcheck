@@ -1,6 +1,6 @@
 # DSAR API
 
-Privacyspace - GDPR DSAR intake through to a closed case with evidence.
+Privacyspace — GDPR DSAR intake through to a closed case with evidence.
 
 ## Stack
 
@@ -13,7 +13,7 @@ S3-compatible object storage, SMTP email.
 ```bash
 npm install
 npm run dev          # Next.js on :3000 (UI + API route handlers)
-npm run dev:worker   # background worker (BullMQ) - a separate process
+npm run dev:worker   # background worker (BullMQ) — a separate process
 npm run typecheck
 npm test
 npm run build
@@ -31,10 +31,10 @@ drift apart.
 
 | Route | Meaning |
 |---|---|
-| `GET /health` | liveness - always `200 {"status":"ok"}` |
-| `GET /health/ready` | readiness - `200` when Postgres answers, `503` when it does not |
+| `GET /health` | liveness — always `200 {"status":"ok"}` |
+| `GET /health/ready` | readiness — `200` when Postgres answers, `503` when it does not |
 | `GET /api/health` | same as `/health`, API-namespaced |
-| `GET /api/health/ready` | same as `/health/ready`, API-namespaced |
+| `/api/health/ready` | same as `/health/ready`, API-namespaced |
 
 Every JSON error uses one envelope:
 `{"error":{"code","message","requestId"}}`. The `x-request-id` header is echoed
@@ -48,14 +48,15 @@ src/
     page.tsx      placeholder home (real screens come from docs/03-screens.md)
     health/       root-level health routes
     api/          route handlers, one folder per product surface
-  server/         server-only plumbing - never imported by client components
+  server/         server-only plumbing — never imported by client components
     http/         errors, route-handler wrapper, zod validation
+    db/           mutate(): the only sanctioned write path
     auth/         requireAuth
     tenancy/      workspace resolution
     health.ts     shared health logic
   db/             Drizzle client + schema (Postgres, RLS)
-  domain/         pure logic - no I/O, unit-tested
-  auth/           authz: can(user, action, resource)
+  domain/         pure logic — no I/O, unit-tested
+  auth/           authz: can(actor, action, resource)
   jobs/           BullMQ queues + worker bootstrap
   lib/            s3 (signed URLs), mailer, ids
 tests/
@@ -73,52 +74,77 @@ Database, authorization, audit, queue, storage and email logic lives outside
 npm run lint:boundary
 ```
 
+The check resolves both the `@/` alias and relative paths, and catches static,
+dynamic (`import()`) and `require()` forms. **It has positive controls**:
+`tests/server-boundary.test.ts` runs it against fixtures that violate the rule
+and asserts a non-zero exit, so a passing run is meaningful rather than vacuous.
+
 The `server-only` package is deliberately **not** used: it throws outside Next's
 server runtime, which would break both the BullMQ worker (run via tsx) and
 vitest. The boundary is enforced by the check above instead.
 
 ## Database workflow
 
-After changing src/db/schema.ts:
+After changing `src/db/schema.ts`:
 
-1. Run:
-   npm run db:generate
-
-2. Review the generated file in drizzle/migrations/.
-
-3. Apply it with:
-   npm run db:migrate
+1. `npm run db:generate` — write a new migration.
+2. Review the generated file in `drizzle/migrations/`.
+3. `npm run db:migrate` — apply it **and** verify the invariants below.
 
 Never edit an already-applied migration. Create a new migration instead.
 
-## Intended invariants
+`db:migrate` is `drizzle-kit migrate && node scripts/db-verify-invariants.mjs`.
+The verifier asserts 22 security invariants against the live database and exits
+non-zero on drift, so a database cannot silently fall out of compliance.
+`npm run db:verify` runs the assertions alone.
 
-These are the target contract for the product (from AGENTS.md). They are the
-design intent, not yet fully enforced - see Known follow-ups.
+## Non-negotiables
 
-1. **Every sensitive action requires a reason** and writes an immutable audit
-   event (actor, action, category, reason, object, timestamp, IP/session).
-2. **No autonomous actions.** Nothing deletes data, closes a case, or sends a
-   final response without an explicit human click.
-3. **Tenant isolation** - `workspace_id` (and `org_id`) on every customer row,
-   to be enforced by Postgres RLS rather than by application code alone.
-4. **Role gates are enforced server-side.** UI disabling is a convenience only.
-5. Every mutation is shaped `authz -> zod validate -> transaction(change + audit
-   event)`, with the audit row committing in the same transaction as the change.
-6. Audit tables are insert-only (trigger rejects UPDATE/DELETE).
-7. Never write "guaranteed compliance", "automatic legal determination" or
-   "AI-approved", and never imply legal advice.
+The same ten rules as `AGENTS.md`, with their **actual** enforcement status —
+never describe a rule as "built" when it is only intended.
+
+| # | Rule | Status |
+|---|---|---|
+| 1 | Every sensitive action requires a reason and writes an immutable audit event | **Partial** — `audit_events` is append-only (UPDATE/DELETE/TRUNCATE rejected), `mutate()` requires a reason and writes the event in the same transaction; no route uses `mutate()` yet |
+| 2 | No autonomous actions | **Enforced by absence** — no code path deletes, closes or sends anything; all 11 product routes return `501` |
+| 3 | Tenant isolation via `workspace_id`/`org_id` + Postgres RLS, not app code alone | **Enforced** — RLS enabled *and forced* on `audit_events`, `orgs`, `workspaces`; policies key on `app.workspace_id` and fail closed; every connection drops to `app_runtime` (NOBYPASSRLS); 9 isolation tests |
+| 4 | Privacyspace staff never see case contents without a customer-approved, time-limited grant | **Not enforced** — no grant mechanism exists yet (T-08) |
+| 5 | Role gates enforced server-side | **Not enforced** — `requireAuth()` and `can()` throw `501`; they fail loudly rather than silently (T-08) |
+| 6 | SLA always visible on case lists and the case header | N/A — no UI yet |
+| 7 | Status is never colour-only (icon + label + colour) | N/A — no UI yet |
+| 8 | Reuse prototype copy verbatim; never "guaranteed compliance", "automatic legal determination", "AI-approved" | **Enforced by review** — no prohibited wording anywhere in the repo; keep the legal disclaimer in the workspace sidebar |
+| 9 | Accessibility: 44px targets, teal focus ring, Escape closes dialogs, focus trapped/restored, `prefers-reduced-motion` | N/A — no UI yet |
+| 10 | Dates `13 Oct 2026` / `13 Oct 2026, 10:42` (24h); store UTC, display in workspace timezone | N/A — no UI yet |
+
+Mutation shape (supports rules 1, 3 and 5): every write goes
+`authz → zod validate → one transaction(change + audit event)`. The audit row
+commits or rolls back with the change — proven both ways in
+`tests/tenant-isolation.test.ts`.
 
 ## Known follow-ups
 
-- **Invariants are claimed, not enforced.** `schema.ts` currently defines only
-  `orgs` and `workspaces`; there are no RLS policies, no `audit_event` tables and
-  no insert-only triggers, and every domain function plus `authz.can()` throws.
-  Do not describe tenant isolation or audit immutability as "built" until this
-  is done (tracked as T-04).
-- **Migration 0001** adds `workspaces.org_id` as `NOT NULL` with no default -
+- **Authentication is not implemented.** `requireAuth()` and `can()` throw `501`,
+  so `mutate()` cannot yet succeed end-to-end and `app.workspace_id` is still
+  caller-supplied rather than bound to an authenticated actor (T-08).
+- **`mutate()`'s transaction path is unexercised.** The atomicity tests drive
+  `withTenant()` directly; an injectable actor seam is needed to test the
+  authorisation → validation → transaction path itself.
+- **Migration 0001** adds `workspaces.org_id` as `NOT NULL` with no default —
   safe on an empty table, fails if `0000` was already applied with rows.
+- **Append-only is not absolute.** UPDATE, DELETE and TRUNCATE are blocked for
+  every non-owner role, but a privileged operator can still
+  `SET session_replication_role = replica` or `DISABLE TRIGGER`. Treat those as
+  operator-only actions requiring their own audit trail.
 - **Domain functions are unported.** `src/domain/*` are typed stubs that throw.
-  Port them from `design/reference/seed/workspace-seed.js` (tracked as T-07).
+  Port them from `design/reference/seed/workspace-seed.js` (T-07).
 - Design tokens are not wired yet: `globals.css` holds neutral fallbacks only.
   Phase 0 brings in the real tokens from `docs/02-design-system.md`.
+
+## Verification
+
+```bash
+npm run typecheck        # tsc --noEmit
+npm test                 # unit + DB isolation suites
+npm run lint:boundary    # no client -> server imports
+npm run db:verify        # 22 security invariants against the live database
+```
