@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# build output
+dist/
+*.tsbuildinfo
+
+# secrets — never commit
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+
+# coverage / os
+coverage/
+.DS_Store

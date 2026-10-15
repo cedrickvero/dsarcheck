@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/lucide-static@0.460.0/font/lucide.css">
+<style>
+body{margin:0;background:#F7F8FA}
+*{box-sizing:border-box}
+button,input,textarea,select{font-family:inherit;font-size:inherit}
+:focus-visible{outline:2px solid #14919B;outline-offset:2px}
+button{transition:transform 100ms ease-out,background-color 120ms ease-out}
+button:active:not(:disabled){transform:scale(0.97)}
+a{color:#0E7C7B}
+a:hover{color:#0B1F3A}
+[class^="icon-"],[class*=" icon-"]{line-height:1;display:inline-block}
+@media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important}}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#F7F8FA;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#101828;font-size:15px;line-height:1.5">
+<div style="display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh">
+ <aside style="background:#0B1F3A;color:#C7D2E0;position:sticky;z-index:30;top:0;height:100vh;display:flex;flex-direction:column;padding:16px 12px;gap:16px;overflow:auto">
+  <div style="display:flex;align-items:center;gap:10px;padding:4px 8px"><span style="width:30px;height:30px;border-radius:8px;background:#0E7C7B;color:#FFFFFF;display:grid;place-items:center"><i class="icon-shield-check" aria-hidden="true"></i></span><span style="color:#FFFFFF;font-weight:700;flex:1">Privacyspace</span><span style="font-size:11px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;background:#F5C451;color:#0B1F3A;border-radius:4px;padding:2px 6px">Admin</span></div>
+  <div style="font-size:12px;line-height:1.45;color:#9FB0C6;padding:0 8px">Service console for Privacyspace staff. Every action here is logged.</div>
+  <nav aria-label="Admin" style="display:flex;flex-direction:column;gap:2px">
+   <sc-for list="{{ nav }}" as="n" hint-placeholder-count="8">
+    <button onClick="{{ n.go }}" aria-current="{{ n.current }}" style="display:flex;align-items:center;gap:10px;min-height:44px;padding:0 10px;border:none;border-left:3px solid {{ n.bar }};border-radius:6px;background:{{ n.bg }};color:{{ n.fg }};cursor:pointer;font-size:14px;text-align:left" style-hover="background:#173A5E;color:#FFFFFF">
+     <i class="{{ n.icon }}" aria-hidden="true" style="font-size:18px"></i><span style="flex:1">{{ n.label }}</span>
+     <sc-if value="{{ n.hasCount }}"><span style="background:{{ n.countBg }};color:#FFFFFF;border-radius:999px;font-size:12px;padding:1px 8px;font-weight:600">{{ n.count }}</span></sc-if>
+    </button>
+   </sc-for>
+  </nav>
+  <div style="margin-top:auto;display:flex;flex-direction:column;gap:12px">
+   <div style="display:flex;flex-direction:column;gap:6px;padding:0 4px">
+    <span style="font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:#9FB0C6">View as (prototype)</span>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:#173A5E;border-radius:8px;padding:3px;gap:3px">
+     <sc-for list="{{ roles }}" as="r"><button onClick="{{ r.go }}" aria-pressed="{{ r.pressed }}" style="min-height:34px;border:none;border-radius:6px;background:{{ r.bg }};color:{{ r.fg }};cursor:pointer;font-size:13px;font-weight:600">{{ r.label }}</button></sc-for>
+    </div>
+    <span style="font-size:12px;line-height:1.45;color:#C7D2E0;text-wrap:pretty">{{ roleHint }}</span>
+   </div>
+   <div style="display:flex;align-items:center;gap:10px;padding:10px 6px;border-top:1px solid #24507A">
+    <span style="width:32px;height:32px;border-radius:50%;background:#F5C451;color:#0B1F3A;display:grid;place-items:center;font-size:13px;font-weight:700">{{ me.initials }}</span>
+    <span style="display:flex;flex-direction:column"><span style="color:#FFFFFF;font-size:14px;font-weight:600">{{ me.name }}</span><span style="font-size:12px;color:#9FB0C6">{{ me.role }}</span></span>
+   </div>
+  </div>
+ </aside>
+ <main style="min-width:0">
+  <div style="max-width:1440px;margin:0 auto;padding:28px 32px 48px;display:flex;flex-direction:column;gap:20px">
+
+  <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+   <div><h1 style="margin:0;font-size:26px;font-weight:650;letter-spacing:-0.01em;color:#0B1F3A">Overview</h1><p style="margin:4px 0 0;color:#667085">All organizations on Privacyspace · 13 Oct 2026</p></div>
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+    <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4"><div style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:16px 20px;display:flex;flex-direction:column;gap:4px"><span style="font-size:13px;color:#475467">{{ k.label }}</span><span style="font-size:26px;font-weight:700;color:#0B1F3A;font-variant-numeric:tabular-nums">{{ k.val }}</span><span style="font-size:12px;color:#667085">{{ k.sub }}</span></div></sc-for>
+   </div>
+   <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+    <section style="flex:999 1 560px;min-width:0;background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;overflow:hidden">
+     <div style="padding:16px 20px;border-bottom:1px solid #EEF1F4"><h2 style="margin:0;font-size:18px;color:#0B1F3A">Needs attention</h2><span style="font-size:14px;color:#475467">Items waiting on Privacyspace staff, oldest first.</span></div>
+     <sc-for list="{{ attention }}" as="a" hint-placeholder-count="4"><button onClick="{{ a.go }}" style="width:100%;display:flex;gap:12px;align-items:center;text-align:left;padding:12px 20px;border:none;border-bottom:1px solid #EEF1F4;background:#FFFFFF;cursor:pointer;color:#101828" style-hover="background:#F7F8FA">
+      <span style="width:32px;height:32px;border-radius:8px;background:{{ a.bg }};color:{{ a.fg }};display:grid;place-items:center;flex:none"><i class="{{ a.icon }}" aria-hidden="true"></i></span>
+      <span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-weight:600;color:#0B1F3A">{{ a.title }}</span><span style="font-size:13px;color:#475467">{{ a.sub }}</span></span>
+      <span style="font-size:13px;color:#667085;white-space:nowrap">{{ a.age }}</span><i class="icon-chevron-right" aria-hidden="true" style="color:#98A2B3"></i>
+     </button></sc-for>
+     <sc-if value="{{ noAttention }}"><div style="padding:28px 20px;text-align:center;color:#667085">Nothing is waiting on staff.</div></sc-if>
+    </section>
+    <section style="flex:1 1 300px;min-width:0;background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+     <h2 style="margin:0;font-size:18px;color:#0B1F3A">Service status</h2>
+     <sc-for list="{{ services }}" as="x" hint-placeholder-count="5"><div style="display:flex;gap:10px;align-items:center;font-size:14px;min-height:32px"><span style="width:8px;height:8px;border-radius:50%;background:{{ x.dot }};flex:none"></span><span style="flex:1">{{ x.name }}</span><span style="color:{{ x.fg }};font-weight:500">{{ x.state }}</span></div></sc-for>
+     <div style="font-size:12px;color:#667085;border-top:1px solid #EEF1F4;padding-top:10px">Data region: EU (Frankfurt). Request contents are encrypted per workspace. Staff see metadata only unless a customer grants access.</div>
+    </section>
+   </div>
+  </sc-if>
+
+  <sc-if value="{{ isOrgs }}">
+   <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap"><div style="flex:1"><h1 style="margin:0;font-size:26px;font-weight:650;letter-spacing:-0.01em;color:#0B1F3A">Organizations</h1><p style="margin:4px 0 0;color:#667085">Customers and agencies, their plans, workspaces and portal state.</p></div></div>
+   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <div style="display:flex;align-items:center;gap:8px;border:1px solid #D0D5DD;border-radius:8px;background:#FFFFFF;padding:0 12px;min-height:40px;flex:0 1 300px"><i class="icon-search" aria-hidden="true" style="color:#667085"></i><input value="{{ orgQ }}" onChange="{{ onOrgQ }}" aria-label="Search organizations" placeholder="Search name or admin email" style="border:none;outline:none;flex:1;min-width:0;background:transparent"></div>
+    <div role="group" aria-label="Filter" style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ orgFilters }}" as="f"><button onClick="{{ f.go }}" aria-pressed="{{ f.pressed }}" style="min-height:36px;padding:0 14px;border-radius:999px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};cursor:pointer;font-size:14px;font-weight:500">{{ f.label }}</button></sc-for></div>
+   </div>
+   <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+    <section style="flex:999 1 620px;min-width:0;background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;overflow:auto">
+     <table style="width:100%;border-collapse:collapse;font-size:14px;min-width:720px">
+      <thead><tr style="background:#F7F8FA;color:#475467;text-align:left;font-size:13px"><th style="padding:10px 16px;font-weight:600">Organization</th><th style="padding:10px 12px;font-weight:600">Plan</th><th style="padding:10px 12px;font-weight:600">Workspaces</th><th style="padding:10px 12px;font-weight:600">Portals</th><th style="padding:10px 12px;font-weight:600">MFA</th><th style="padding:10px 16px;font-weight:600">Status</th></tr></thead>
+      <tbody><sc-for list="{{ orgRows }}" as="o" hint-placeholder-count="6"><tr onClick="{{ o.go }}" style="border-top:1px solid #EEF1F4;height:60px;cursor:pointer;background:{{ o.bg }}" style-hover="background:#F2F7F7">
+       <td style="padding:8px 16px"><div style="display:flex;gap:10px;align-items:center"><span style="width:30px;height:30px;border-radius:6px;background:#EEF1F4;color:#0B1F3A;display:grid;place-items:center;font-weight:700;font-size:13px;flex:none">{{ o.initial }}</span><div style="display:flex;flex-direction:column;min-width:0"><span style="font-weight:600;color:#0B1F3A">{{ o.name }}</span><span style="font-size:12px;color:#667085">{{ o.kind }} · {{ o.adminEmail }}</span></div></div></td>
+       <td style="padding:8px 12px">{{ o.plan }}</td>
+       <td style="padding:8px 12px;font-variant-numeric:tabular-nums">{{ o.wsCount }}</td>
+       <td style="padding:8px 12px;font-variant-numeric:tabular-nums">{{ o.liveLabel }}</td>
+       <td style="padding:8px 12px"><span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;background:{{ o.mfa.bg }};color:{{ o.mfa.fg }};font-size:12px;font-weight:600"><i class="{{ o.mfa.icon }}" aria-hidden="true"></i>{{ o.mfa.label }}</span></td>
+       <td style="padding:8px 16px"><span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;background:{{ o.st.bg }};color:{{ o.st.fg }};font-size:12px;font-weight:600"><i class="{{ o.st.icon }}" aria-hidden="true"></i>{{ o.st.label }}</span></td>
+      </tr></sc-for></tbody>
+     </table>
+     <sc-if value="{{ noOrgs }}"><div style="padding:28px;text-align:center;color:#667085">No organizations match.</div></sc-if>
+    </section>
+    <sc-if value="{{ hasOrg }}">
+    <section style="flex:1 1 360px;min-width:0;background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:16px">
+     <div style="display:flex;gap:12px;align-items:flex-start">
+      <span style="width:40px;height:40px;border-radius:8px;background:#0B1F3A;color:#FFFFFF;display:grid;place-items:center;font-weight:700;flex:none">{{ od.initial }}</span>
+      <div style="flex:1;min-width:0"><h2 style="margin:0;font-size:20px;color:#0B1F3A;letter-spacing:-0.01em">{{ od.name }}</h2><span style="font-size:13px;color:#667085">{{ od.kind }} · since {{ od.created }} · {{ od.region }}</span></div>
+      <span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;background:{{ od.st.bg }};color:{{ od.st.fg }};font-size:12px;font-weight:600">{{ od.st.label }}</span>
+     </div>
+     <sc-if value="{{ od.hasNote }}"><div style="display:flex;gap:8px;align-items:flex-start;background:{{ od.noteBg }};color:{{ od.noteFg }};border-radius:8px;padding:10px 12px;font-size:14px"><i class="icon-info" aria-hidden="true" style="margin-top:3px"></i><span>{{ od.note }}</span></div></sc-if>
+     <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px">
+      <span style="color:#667085">Owner</span><span>{{ od.admin }} · {{ od.adminEmail }}</span>
+      <span style="color:#667085">Seats</span><span style="font-variant-numeric:tabular-nums">{{ od.seats }}</span>
+      <span style="color:#667085">Open requests</span><span style="font-variant-numeric:tabular-nums">{{ od.openReq }} <span style="color:#667085">(count only)</span></span>
+      <span style="color:#667085">MFA</span><span>{{ od.mfaText }}</span>
+      <span style="color:#667085">Billing</span><span style="display:flex;gap:8px;flex-wrap:wrap;align-items:baseline"><span style="font-variant-numeric:tabular-nums">{{ od.billLine }}</span><button onClick="{{ od.toBilling }}" style="border:none;background:transparent;padding:0;color:#0E7C7B;font-weight:600;cursor:pointer;font-size:14px">View billing</button></span>
+     </div>
+     <div style="display:flex;flex-direction:column;gap:6px">
+      <span style="font-size:13px;font-weight:600;color:#475467">Workspaces</span>
+      <div style="border:1px solid #EEF1F4;border-radius:10px">
+       <sc-for list="{{ od.ws }}" as="w"><div style="display:flex;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid #EEF1F4;font-size:14px"><span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-weight:500">{{ w.name }}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#667085">{{ w.host }}</span></span><span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;background:{{ w.p.bg }};color:{{ w.p.fg }};font-size:12px;font-weight:600;white-space:nowrap">{{ w.p.label }}</span></div></sc-for>
+      </div>
+     </div>
+     <div style="display:flex;flex-direction:column;gap:8px">
+      <span style="font-size:13px;font-weight:600;color:#475467">Plan</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><select value="{{ od.planDraft }}" onChange="{{ od.onPlan }}" disabled="{{ notAdmin }}" aria-label="Plan" style="height:40px;border:1px solid #D0D5DD;border-radius:8px;padding:0 10px;background:#FFFFFF;flex:1 1 160px"><sc-for list="{{ planOpts }}" as="p"><option value="{{ p }}">{{ p }}</option></sc-for></select><button onClick="{{ od.savePlan }}" disabled="{{ od.planSame }}" style="min-height:40px;padding:0 14px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer">Change plan</button></div>
+     </div>
+     <div style="display:flex;flex-direction:column;gap:8px;border-top:1px solid #EEF1F4;padding-top:16px">
+      <sc-if value="{{ od.hasGrant }}"><a href="DSAR Workspace.dc.html" target="_blank" style="min-height:44px;border-radius:8px;background:#0E7C7B;color:#FFFFFF;font-weight:600;display:inline-flex;gap:8px;align-items:center;justify-content:center;text-decoration:none"><i class="icon-external-link" aria-hidden="true"></i>Open {{ od.grantWs }} · support view, {{ od.grantLeft }}</a></sc-if>
+      <sc-if value="{{ od.canRequest }}"><button onClick="{{ od.requestAccess }}" style="min-height:44px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center"><i class="icon-key-round" aria-hidden="true"></i>Request support access</button></sc-if>
+      <sc-if value="{{ od.pendingGrant }}"><div style="font-size:13px;color:#475467;display:flex;gap:6px;align-items:center"><i class="icon-hourglass" aria-hidden="true"></i>Support access requested. Waiting for {{ od.admin }} to approve.</div></sc-if>
+      <sc-if value="{{ od.needsMfa }}"><button onClick="{{ od.enforceMfa }}" disabled="{{ notAdmin }}" style="min-height:44px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center"><i class="icon-shield-check" aria-hidden="true"></i>Require MFA for all members</button></sc-if>
+      <sc-if value="{{ od.canSuspend }}"><button onClick="{{ od.suspend }}" disabled="{{ notAdmin }}" style="min-height:44px;border-radius:8px;border:1px solid #FDA29B;background:#FFFFFF;color:#B42318;font-weight:600;cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center"><i class="icon-ban" aria-hidden="true"></i>Suspend organization</button></sc-if>
+      <sc-if value="{{ od.canReactivate }}"><button onClick="{{ od.reactivate }}" disabled="{{ notAdmin }}" style="min-height:44px;border-radius:8px;border:none;background:#0E7C7B;color:#FFFFFF;font-weight:600;cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center"><i class="icon-rotate-ccw" aria-hidden="true"></i>Reactivate organization</button></sc-if>
+      <sc-if value="{{ notAdmin }}"><span style="font-size:12px;color:#667085">Plan, MFA and suspension changes need a Platform admin.</span></sc-if>
+     </div>
+    </section>
+    </sc-if>
+   </div>
+  </sc-if>
+
+  <sc-if value="{{ isBilling }}">
+   <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap"><div style="flex:1;min-width:280px"><h1 style="margin:0;font-size:26px;font-weight:650;letter-spacing:-0.01em;color:#0B1F3A">Billing &amp; revenue</h1><p style="margin:4px 0 0;color:#667085">Subscriptions, payments and invoices for every organization. Amounts in EUR, excluding VAT.</p></div><button onClick="{{ exportBilling }}" style="min-height:44px;padding:0 16px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer;display:inline-flex;gap:6px;align-items:center;white-space:nowrap"><i class="icon-download" aria-hidden="true"></i>Export CSV</button></div>
+   <div role="tablist" aria-label="Billing sections" style="display:flex;gap:4px;border-bottom:1px solid #E4E7EC;overflow:auto"><sc-for list="{{ billTabs }}" as="t" hint-placeholder-count="5"><button role="tab" aria-selected="{{ t.sel }}" onClick="{{ t.go }}" style="min-height:48px;padding:0 12px;border:none;border-bottom:2px solid {{ t.bd }};background:transparent;color:{{ t.fg }};font-weight:{{ t.w }};cursor:pointer;font-size:14px;white-space:nowrap;display:inline-flex;gap:6px;align-items:center">{{ t.label }}<sc-if value="{{ t.hasBadge }}"><span style="background:#FEE4E2;color:#B42318;border-radius:999px;font-size:11px;padding:1px 7px;font-weight:600">{{ t.badge }}</span></sc-if></button></sc-for></div>
+   <sc-if value="{{ notBill }}"><div style="font-size:13px;color:#475467;display:flex;gap:6px;align-items:center"><i class="icon-lock" aria-hidden="true"></i>Read-only. Billing changes need a Platform admin or Billing.</div></sc-if>
+
+   <sc-if value="{{ btRevenue }}" hint-placeholder-val="{{ true }}">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+     <sc-for list="{{ billKpis }}" as="k" hint-placeholder-count="4"><div style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:16px 20px;display:flex;flex-direction:column;gap:4px"><span style="font-size:13px;color:#475467">{{ k.label }}</span><span style="font-size:26px;font-weight:700;color:{{ k.fg }};font-variant-numeric:tabular-nums">{{ k.val }}</span><span style="font-size:12px;color:#667085">{{ k.sub }}</span></div></sc-for>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:stretch">
+     <section style="flex:999 1 520px;min-width:0;background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:16px 20px 20px;display:flex;flex-direction:column;gap:12px">
+      <div><h2 style="margin:0;font-size:18px;color:#0B1F3A">Cash received by month</h2><span style="font-size:13px;color:#667085">Successful payments minus refunds. October is month to date.</span></div>
+      <div role="img" aria-label="{{ cashAria }}" style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;height:200px;align-items:end;border-bottom:1px solid #E4E7EC;padding-top:8px">
+       <sc-for list="{{ cashBars }}" as="b" hint-placeholder-count="6"><div style="height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px"><span style="font-size:12px;font-weight:600;color:#344054;font-variant-numeric:tabular-nums">{{ b.label }}</span><div style="width:100%;max-width:56px;height:{{ b.h }};background:{{ b.bg }};border:1px {{ b.bdStyle }} #0E7C7B;border-bottom:none;border-radius:6px 6px 0 0"></div></div></sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-top:-6px"><sc-for list="{{ cashBars }}" as="b"><span style="text-align:center;font-size:12px;color:#667085">{{ b.m }}</span></sc-for></div>
+      <span style="font-size:12px;color:#667085">June includes Halden Bikes’ annual renewal (€1,990).</span>
+     </section>
+     <section style="flex:1 1 300px;min-width:0;background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:16px 20px;display:flex;flex-direction:column;gap:14px">
+      <h2 style="margin:0;font-size:18px;color:#0B1F3A">MRR by plan</h2>
+      <sc-for list="{{ mrrPlans }}" as="p" hint-placeholder-count="3"><div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;gap:8px;align-items:baseline;font-size:14px"><span style="font-weight:600;color:#0B1F3A">{{ p.name }}</span><span style="color:#667085;font-size:13px;flex:1">{{ p.sub }}</span><span style="font-weight:600;font-variant-numeric:tabular-nums">{{ p.val }}</span></div><div style="height:6px;border-radius:999px;background:#EEF1F4;overflow:hidden"><div style="height:100%;width:{{ p.pct }};background:#0E7C7B;border-radius:999px"></div></div></div></sc-for>
+      <div style="font-size:12px;color:#667085;border-top:1px solid #EEF1F4;padding-top:10px">Annual plans count as one twelfth per month. Trials and past-due subscriptions are excluded.</div>
+     </section>
+    </div>
+    <section style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;overflow:hidden">
+     <div style="padding:16px 20px;border-bottom:1px solid #EEF1F4"><h2 style="margin:0;font-size:18px;color:#0B1F3A">Needs attention</h2><span style="font-size:14px;color:#475467">Failed payments, trials ending and usage over plan.</span></div>
+     <sc-for list="{{ billAttention }}" as="a" hint-placeholder-count="3"><button onClick="{{ a.go }}" style="width:100%;display:flex;gap:12px;align-items:center;text-align:left;padding:12px 20px;border:none;border-bottom:1px solid #EEF1F4;background:#FFFFFF;cursor:pointer;color:#101828" style-hover="background:#F7F8FA"><span style="width:32px;height:32px;border-radius:8px;background:{{ a.bg }};color:{{ a.fg }};display:grid;place-items:center;flex:none"><i class="{{ a.icon }}" aria-hidden="true"></i></span><span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-weight:600;color:#0B1F3A">{{ a.title }}</span><span style="font-size:13px;color:#475467">{{ a.sub }}</span></span><i class="icon-chevron-right" aria-hidden="true" style="color:#98A2B3"></i></button></sc-for>
+     <sc-if value="{{ noBillAttention }}"><div style="padding:28px 20px;text-align:center;color:#667085">Every subscription is paid and within its plan.</div></sc-if>
+    </section>
+   </sc-if>
+
+   <sc-if value="{{ btSubs }}">
+    <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+     <section style="flex:999 1 620px;min-width:0;background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;overflow:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:14px;min-width:760px">
+       <thead><tr style="background:#F7F8FA;color:#475467;text-align:left;font-size:13px"><th style="padding:10px 16px;font-weight:600">Organization</th><th style="padding:10px 12px;font-weight:600">Plan</th><th style="padding:10px 12px;font-weight:600">Billing</th><th style="padding:10px 12px;font-weight:600;text-align:right">MRR</th><th style="padding:10px 12px;font-weight:600">DSARs this period</th><th style="padding:10px 12px;font-weight:600">Next invoice</th><th style="padding:10px 16px;font-weight:600">Status</th></tr></thead>
+       <tbody><sc-for list="{{ subRows }}" as="r" hint-placeholder-count="6"><tr onClick="{{ r.go }}" style="border-top:1px solid #EEF1F4;height:60px;cursor:pointer;background:{{ r.bg }}" style-hover="background:#F2F7F7">
+        <td style="padding:8px 16px"><div style="display:flex;flex-direction:column"><span style="font-weight:600;color:#0B1F3A">{{ r.name }}</span><span style="font-size:12px;color:#667085">{{ r.kind }}</span></div></td>
+        <td style="padding:8px 12px">{{ r.plan }}</td>
+        <td style="padding:8px 12px">{{ r.cycle }}</td>
+        <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600">{{ r.mrr }}</td>
+        <td style="padding:8px 12px;font-variant-numeric:tabular-nums;color:{{ r.useFg }};font-weight:{{ r.useW }}">{{ r.usage }}</td>
+        <td style="padding:8px 12px;white-space:nowrap">{{ r.next }}</td>
+        <td style="padding:8px 16px"><span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;background:{{ r.st.bg }};color:{{ r.st.fg }};font-size:12px;font-weight:600;white-space:nowrap"><i class="{{ r.st.icon }}" aria-hidden="true"></i>{{ r.st.label }}</span></td>
+       </tr></sc-for></tbody>
+      </table>
+     </section>
+     <section style="flex:1 1 360px;min-width:0;background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;gap:12px;align-items:flex-start"><div style="flex:1;min-width:0"><h2 style="margin:0;font-size:20px;color:#0B1F3A;letter-spacing:-0.01em">{{ sd.name }}</h2><span style="font-size:13px;color:#667085">{{ sd.plan }} plan · {{ sd.cycle }} · since {{ sd.started }}</span></div><span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;background:{{ sd.st.bg }};color:{{ sd.st.fg }};font-size:12px;font-weight:600;white-space:nowrap"><i class="{{ sd.st.icon }}" aria-hidden="true"></i>{{ sd.st.label }}</span></div>
+      <sc-if value="{{ sd.hasNote }}"><div style="display:flex;gap:8px;align-items:flex-start;background:{{ sd.noteBg }};color:{{ sd.noteFg }};border-radius:8px;padding:10px 12px;font-size:14px"><i class="icon-info" aria-hidden="true" style="margin-top:3px"></i><span style="text-wrap:pretty">{{ sd.note }}</span></div></sc-if>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px">
+       <span style="color:#667085">Price</span><span style="font-variant-numeric:tabular-nums">{{ sd.priceLine }}</span>
+       <span style="color:#667085">Payment method</span><span>{{ sd.method }}</span>
+       <span style="color:#667085">Current period</span><span>{{ sd.period }}</span>
+       <span style="color:#667085">Next invoice</span><span style="font-variant-numeric:tabular-nums">{{ sd.nextLine }}</span>
+       <span style="color:#667085">Credit balance</span><span style="font-variant-numeric:tabular-nums">{{ sd.credit }}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font-size:13px"><span style="font-weight:600;color:#475467">DSARs this period</span><span style="font-variant-numeric:tabular-nums;color:#344054">{{ sd.usage }}</span></div><div style="height:6px;border-radius:999px;background:#EEF1F4;overflow:hidden"><div style="height:100%;width:{{ sd.usePct }};background:{{ sd.useBar }};border-radius:999px"></div></div><span style="font-size:12px;color:#667085">{{ sd.overLine }}</span></div>
+      <div style="display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;font-weight:600;color:#475467">Invoices</span><div style="border:1px solid #EEF1F4;border-radius:10px"><sc-for list="{{ sd.invoices }}" as="i"><div style="display:flex;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid #EEF1F4;font-size:14px"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#344054">{{ i.no }}</span><span style="flex:1;color:#475467;font-size:13px">{{ i.period }}</span><span style="font-variant-numeric:tabular-nums">{{ i.amt }}</span><span style="display:inline-flex;padding:2px 8px;border-radius:999px;background:{{ i.st.bg }};color:{{ i.st.fg }};font-size:12px;font-weight:600">{{ i.st.label }}</span></div></sc-for></div></div>
+      <div style="display:flex;flex-direction:column;gap:8px;border-top:1px solid #EEF1F4;padding-top:16px">
+       <sc-if value="{{ sd.canRetry }}"><button onClick="{{ sd.retry }}" disabled="{{ notBill }}" style="min-height:44px;border-radius:8px;border:none;background:#0E7C7B;color:#FFFFFF;font-weight:600;cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center"><i class="icon-refresh-cw" aria-hidden="true"></i>Retry payment</button></sc-if>
+       <sc-if value="{{ sd.canExtend }}"><button onClick="{{ sd.extend }}" disabled="{{ notBill }}" style="min-height:44px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center"><i class="icon-calendar-plus" aria-hidden="true"></i>Extend trial</button></sc-if>
+       <sc-if value="{{ sd.canCredit }}"><button onClick="{{ sd.credit2 }}" disabled="{{ notBill }}" style="min-height:44px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center"><i class="icon-badge-euro" aria-hidden="true"></i>Apply credit</button></sc-if>
+       <button onClick="{{ sd.toOrg }}" style="min-height:44px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center"><i class="icon-building-2" aria-hidden="true"></i>Change plan in Organizations</button>
+       <sc-if value="{{ sd.canCancel }}"><button onClick="{{ sd.cancel }}" disabled="{{ notBill }}" style="min-height:44px;border-radius:8px;border:1px solid #FDA29B;background:#FFFFFF;color:#B42318;font-weight:600;cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center"><i class="icon-circle-x" aria-hidden="true"></i>Cancel at period end</button></sc-if>
+       <sc-if value="{{ sd.canResume }}"><button onClick="{{ sd.resume }}" disabled="{{ notBill }}" style="min-height:44px;border-radius:8px;border:none;background:#0E7C7B;color:#FFFFFF;font-weight:600;cursor:pointer;display:inline-flex;gap:8px;align-items:center;justify-content:center"><i class="icon-rotate-ccw" aria-hidden="true"></i>Resume subscription</button></sc-if>
+      </div>
+     </section>
+    </div>
+   </sc-if>
+
+   <sc-if value="{{ btPayments }}">
+    <div role="group" aria-label="Filter payments" style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ payFilters }}" as="f"><button onClick="{{ f.go }}" aria-pressed="{{ f.pressed }}" style="min-height:36px;padding:0 14px;border-radius:999px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};cursor:pointer;font-size:14px;font-weight:500">{{ f.label }}</button></sc-for></div>
+    <section style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;overflow:auto">
+     <table style="width:100%;border-collapse:collapse;font-size:14px;min-width:900px">
+      <thead><tr style="background:#F7F8FA;color:#475467;text-align:left;font-size:13px"><th style="padding:10px 16px;font-weight:600">Date</th><th style="padding:10px 12px;font-weight:600">Organization</th><th style="padding:10px 12px;font-weight:600">Invoice</th><th style="padding:10px 12px;font-weight:600">Method</th><th style="padding:10px 12px;font-weight:600;text-align:right">Amount</th><th style="padding:10px 12px;font-weight:600">Status</th><th style="padding:10px 16px;font-weight:600"></th></tr></thead>
+      <tbody><sc-for list="{{ payRows }}" as="p" hint-placeholder-count="8"><tr style="border-top:1px solid #EEF1F4;height:60px">
+       <td style="padding:8px 16px;white-space:nowrap;color:#475467">{{ p.at }}</td>
+       <td style="padding:8px 12px"><div style="display:flex;flex-direction:column"><span style="font-weight:600;color:#0B1F3A">{{ p.orgName }}</span><sc-if value="{{ p.hasNote }}"><span style="font-size:12px;color:{{ p.noteFg }}">{{ p.note }}</span></sc-if></div></td>
+       <td style="padding:8px 12px;font-family:'IBM Plex Mono',monospace;font-size:13px">{{ p.inv }}</td>
+       <td style="padding:8px 12px;color:#475467">{{ p.method }}</td>
+       <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600;color:{{ p.amtFg }}">{{ p.amt }}</td>
+       <td style="padding:8px 12px"><span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;background:{{ p.st.bg }};color:{{ p.st.fg }};font-size:12px;font-weight:600;white-space:nowrap"><i class="{{ p.st.icon }}" aria-hidden="true"></i>{{ p.st.label }}</span></td>
+       <td style="padding:8px 16px;text-align:right"><sc-if value="{{ p.canRefund }}"><button onClick="{{ p.refund }}" disabled="{{ notBill }}" style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer;font-size:13px">Refund</button></sc-if></td>
+      </tr></sc-for></tbody>
+     </table>
+     <sc-if value="{{ noPays }}"><div style="padding:28px;text-align:center;color:#667085">No payments match this filter.</div></sc-if>
+     <div style="display:flex;gap:24px;flex-wrap:wrap;padding:14px 16px;border-top:1px solid #E4E7EC;background:#F7F8FA;font-size:14px;font-variant-numeric:tabular-nums"><span style="color:#475467">Received <strong style="color:#0B1F3A">{{ payTotals.rec }}</strong></span><span style="color:#475467">Refunded <strong style="color:#0B1F3A">{{ payTotals.ref }}</strong></span><span style="color:#475467">Net <strong style="color:#0B1F3A">{{ payTotals.net }}</strong></span><span style="color:#475467">Failed attempts <strong style="color:#B42318">{{ payTotals.fail }}</strong></span></div>
+    </section>
+   </sc-if>
+
+   <sc-if value="{{ btInvoices }}">
+    <div role="group" aria-label="Filter invoices" style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ invFilters }}" as="f"><button onClick="{{ f.go }}" aria-pressed="{{ f.pressed }}" style="min-height:36px;padding:0 14px;border-radius:999px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};cursor:pointer;font-size:14px;font-weight:500">{{ f.label }}</button></sc-for></div>
+    <section style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;overflow:auto">
+     <table style="width:100%;border-collapse:collapse;font-size:14px;min-width:940px">
+      <thead><tr style="background:#F7F8FA;color:#475467;text-align:left;font-size:13px"><th style="padding:10px 16px;font-weight:600">Invoice</th><th style="padding:10px 12px;font-weight:600">Organization</th><th style="padding:10px 12px;font-weight:600">Period</th><th style="padding:10px 12px;font-weight:600">Due</th><th style="padding:10px 12px;font-weight:600;text-align:right">Amount</th><th style="padding:10px 12px;font-weight:600">Status</th><th style="padding:10px 16px;font-weight:600"></th></tr></thead>
+      <tbody><sc-for list="{{ invRows }}" as="i" hint-placeholder-count="8"><tr style="border-top:1px solid #EEF1F4;height:60px">
+       <td style="padding:8px 16px;font-family:'IBM Plex Mono',monospace;font-size:13px;color:#0B1F3A">{{ i.no }}</td>
+       <td style="padding:8px 12px"><div style="display:flex;flex-direction:column"><span style="font-weight:600;color:#0B1F3A">{{ i.orgName }}</span><sc-if value="{{ i.hasNote }}"><span style="font-size:12px;color:#667085">{{ i.note }}</span></sc-if></div></td>
+       <td style="padding:8px 12px;color:#475467">{{ i.period }}</td>
+       <td style="padding:8px 12px;white-space:nowrap;color:#475467">{{ i.due }}</td>
+       <td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600">{{ i.amt }}</td>
+       <td style="padding:8px 12px"><span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;background:{{ i.st.bg }};color:{{ i.st.fg }};font-size:12px;font-weight:600;white-space:nowrap"><i class="{{ i.st.icon }}" aria-hidden="true"></i>{{ i.st.label }}</span></td>
+       <td style="padding:8px 16px"><div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap"><sc-if value="{{ i.canPdf }}"><button onClick="{{ i.pdf }}" aria-label="Download {{ i.no }} as PDF" style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer;font-size:13px;display:inline-flex;gap:6px;align-items:center"><i class="icon-file-down" aria-hidden="true"></i>PDF</button></sc-if><sc-if value="{{ i.canRemind }}"><button onClick="{{ i.remind }}" disabled="{{ notBill }}" style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer;font-size:13px">Send reminder</button><button onClick="{{ i.void }}" disabled="{{ notBill }}" style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #FDA29B;background:#FFFFFF;color:#B42318;font-weight:600;cursor:pointer;font-size:13px">Void</button></sc-if></div></td>
+      </tr></sc-for></tbody>
+     </table>
+     <sc-if value="{{ noInvs }}"><div style="padding:28px;text-align:center;color:#667085">No invoices match this filter.</div></sc-if>
+    </section>
+   </sc-if>
+
+   <sc-if value="{{ btPlans }}">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+     <sc-for list="{{ planCards }}" as="p" hint-placeholder-count="3"><section style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;align-items:baseline;gap:8px"><h2 style="margin:0;font-size:20px;color:#0B1F3A;letter-spacing:-0.01em;flex:1">{{ p.name }}</h2><span style="font-size:13px;color:#667085">{{ p.count }}</span></div>
+      <div style="display:flex;flex-direction:column"><span style="font-size:28px;font-weight:700;color:#0B1F3A;font-variant-numeric:tabular-nums;letter-spacing:-0.01em">{{ p.m }}<span style="font-size:15px;font-weight:500;color:#667085"> / month</span></span><span style="font-size:13px;color:#667085">{{ p.y }} / year billed annually</span></div>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px;border-top:1px solid #EEF1F4;padding-top:12px"><span style="color:#667085">Included</span><span>{{ p.incl }}</span><span style="color:#667085">Workspaces</span><span>{{ p.ws }}</span><span style="color:#667085">Overage</span><span>{{ p.over }}</span><span style="color:#667085">Also</span><span style="text-wrap:pretty">{{ p.extra }}</span></div>
+     </section></sc-for>
+    </div>
+    <div style="font-size:13px;color:#475467;max-width:760px;text-wrap:pretty">Evidence packs are included on every plan. Overage is billed at the end of each period and never blocks new requests. Trials last 14 days with one sample request. Prices change in the payment provider and apply to new subscriptions only.</div>
+   </sc-if>
+  </sc-if>
+
+  <sc-if value="{{ isReviews }}">
+   <div><h1 style="margin:0;font-size:26px;font-weight:650;letter-spacing:-0.01em;color:#0B1F3A">Subdomain reviews</h1><p style="margin:4px 0 0;color:#667085">Portal names that don’t match the customer’s verified email domain. Approve only when the name clearly belongs to them.</p></div>
+   <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+    <div style="flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:12px">
+     <sc-for list="{{ reviewCards }}" as="r" hint-placeholder-count="3"><div style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:20px 24px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:0"><div style="font-family:'IBM Plex Mono',monospace;font-size:17px;font-weight:600;color:#0B1F3A">{{ r.host }}</div><div style="font-size:13px;color:#667085">{{ r.orgName }} · requested by {{ r.by }} · {{ r.at }}</div></div><span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;background:{{ r.p.bg }};color:{{ r.p.fg }};font-size:12px;font-weight:600">{{ r.p.label }}</span></div>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:14px"><span style="color:#667085">Verified domain</span><span style="font-family:'IBM Plex Mono',monospace;font-size:13px">{{ r.vdom }}</span><span style="color:#667085">Customer’s note</span><span style="text-wrap:pretty">{{ r.note }}</span></div>
+      <sc-if value="{{ r.hasFlag }}"><div style="display:flex;gap:8px;align-items:flex-start;background:#FEE4E2;color:#B42318;border-radius:8px;padding:10px 12px;font-size:14px"><i class="icon-triangle-alert" aria-hidden="true" style="margin-top:3px"></i><span>{{ r.flag }}</span></div></sc-if>
+      <sc-if value="{{ r.pending }}"><div style="display:flex;gap:8px;flex-wrap:wrap"><button onClick="{{ r.approve }}" style="min-height:44px;padding:0 18px;border-radius:8px;border:none;background:#0E7C7B;color:#FFFFFF;font-weight:600;cursor:pointer">Approve name</button><button onClick="{{ r.reject }}" style="min-height:44px;padding:0 18px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#B42318;font-weight:600;cursor:pointer">Reject</button><button onClick="{{ r.reserve }}" disabled="{{ notAdmin }}" style="min-height:44px;padding:0 18px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer">Reject and reserve</button></div></sc-if>
+      <sc-if value="{{ r.decided }}"><div style="font-size:13px;background:#F7F8FA;border-radius:8px;padding:10px 12px;color:#344054">{{ r.decision }}</div></sc-if>
+     </div></sc-for>
+    </div>
+    <section style="flex:1 1 300px;min-width:0;background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px">
+     <div><h2 style="margin:0;font-size:18px;color:#0B1F3A">Reserved names</h2><span style="font-size:13px;color:#667085">No customer can claim these. Applies to every new claim.</span></div>
+     <div style="display:flex;gap:6px;flex-wrap:wrap"><sc-for list="{{ reservedChips }}" as="c"><span style="display:inline-flex;gap:4px;align-items:center;padding:0 4px 0 10px;min-height:30px;border-radius:999px;background:#EEF1F4;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#344054">{{ c.name }}<button onClick="{{ c.remove }}" disabled="{{ notAdmin }}" aria-label="Remove {{ c.name }}" style="width:24px;height:24px;border:none;background:transparent;border-radius:50%;cursor:pointer;color:#667085;display:grid;place-items:center"><i class="icon-x" aria-hidden="true" style="font-size:13px"></i></button></span></sc-for></div>
+     <div style="display:flex;gap:8px"><input value="{{ newRes }}" onChange="{{ onNewRes }}" disabled="{{ notAdmin }}" aria-label="Add reserved name" placeholder="e.g. klarna" style="flex:1;min-width:0;height:40px;border:1px solid #D0D5DD;border-radius:8px;padding:0 10px;font-family:'IBM Plex Mono',monospace;font-size:13px"><button onClick="{{ addRes }}" disabled="{{ notAdmin }}" style="min-height:40px;padding:0 14px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer">Add</button></div>
+     <sc-if value="{{ notAdmin }}"><span style="font-size:12px;color:#667085">Only a Platform admin can change reserved names.</span></sc-if>
+    </section>
+   </div>
+  </sc-if>
+
+  <sc-if value="{{ isDomains }}">
+   <div><h1 style="margin:0;font-size:26px;font-weight:650;letter-spacing:-0.01em;color:#0B1F3A">Domains &amp; email</h1><p style="margin:4px 0 0;color:#667085">Custom portal domains and sending domains across all workspaces. Failing senders fall back to no-reply@privacyspace.com.</p></div>
+   <section style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:14px;min-width:860px">
+     <thead><tr style="background:#F7F8FA;color:#475467;text-align:left;font-size:13px"><th style="padding:10px 16px;font-weight:600">Domain</th><th style="padding:10px 12px;font-weight:600">Used for</th><th style="padding:10px 12px;font-weight:600">Workspace</th><th style="padding:10px 12px;font-weight:600">Status</th><th style="padding:10px 12px;font-weight:600">Last check</th><th style="padding:10px 16px;font-weight:600"></th></tr></thead>
+     <tbody><sc-for list="{{ domainRows }}" as="d" hint-placeholder-count="5"><tr style="border-top:1px solid #EEF1F4;height:64px">
+      <td style="padding:8px 16px"><div style="display:flex;flex-direction:column"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:#0B1F3A">{{ d.domain }}</span><sc-if value="{{ d.hasIssue }}"><span style="font-size:12px;color:#B42318">{{ d.issue }}</span></sc-if></div></td>
+      <td style="padding:8px 12px">{{ d.kind }}</td>
+      <td style="padding:8px 12px">{{ d.ws }}</td>
+      <td style="padding:8px 12px"><span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;background:{{ d.p.bg }};color:{{ d.p.fg }};font-size:12px;font-weight:600;white-space:nowrap"><i class="{{ d.p.icon }}" aria-hidden="true"></i>{{ d.p.label }}</span></td>
+      <td style="padding:8px 12px;color:#475467;white-space:nowrap">{{ d.checked }}</td>
+      <td style="padding:8px 16px"><div style="display:flex;gap:6px;justify-content:flex-end"><sc-if value="{{ d.canCheck }}"><button onClick="{{ d.recheck }}" style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer;font-size:13px">Re-check DNS</button><button onClick="{{ d.remind }}" style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer;font-size:13px">Email owner</button></sc-if></div></td>
+     </tr></sc-for></tbody>
+    </table>
+   </section>
+  </sc-if>
+
+  <sc-if value="{{ isAccess }}">
+   <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap"><div style="flex:1;min-width:280px"><h1 style="margin:0;font-size:26px;font-weight:650;letter-spacing:-0.01em;color:#0B1F3A">Support access</h1><p style="margin:4px 0 0;color:#667085;text-wrap:pretty">Staff can only open a customer workspace after the customer’s owner approves. Access is time-limited and shown in the customer’s own audit log.</p></div></div>
+   <section style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:14px;min-width:900px">
+     <thead><tr style="background:#F7F8FA;color:#475467;text-align:left;font-size:13px"><th style="padding:10px 16px;font-weight:600">Workspace</th><th style="padding:10px 12px;font-weight:600">Staff member</th><th style="padding:10px 12px;font-weight:600">Scope</th><th style="padding:10px 12px;font-weight:600">Reason</th><th style="padding:10px 12px;font-weight:600">Status</th><th style="padding:10px 16px;font-weight:600"></th></tr></thead>
+     <tbody><sc-for list="{{ grantRows }}" as="g" hint-placeholder-count="3"><tr style="border-top:1px solid #EEF1F4;height:64px">
+      <td style="padding:8px 16px"><div style="display:flex;flex-direction:column"><span style="font-weight:600;color:#0B1F3A">{{ g.ws }}</span><span style="font-size:12px;color:#667085">{{ g.org }}</span></div></td>
+      <td style="padding:8px 12px">{{ g.staff }}</td>
+      <td style="padding:8px 12px">{{ g.scope }}</td>
+      <td style="padding:8px 12px;max-width:260px;text-wrap:pretty">{{ g.reason }}</td>
+      <td style="padding:8px 12px"><div style="display:flex;flex-direction:column;gap:2px"><span style="align-self:flex-start;display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;background:{{ g.p.bg }};color:{{ g.p.fg }};font-size:12px;font-weight:600;white-space:nowrap">{{ g.p.label }}</span><span style="font-size:12px;color:#667085">{{ g.detail }}</span></div></td>
+      <td style="padding:8px 16px"><div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap"><sc-if value="{{ g.isPending }}"><button onClick="{{ g.simApprove }}" style="min-height:36px;padding:0 12px;border-radius:8px;border:1px dashed #98A2B3;background:#FFFFFF;color:#475467;font-weight:600;cursor:pointer;font-size:13px">Simulate customer approval</button></sc-if><sc-if value="{{ g.isActive }}"><button onClick="{{ g.revoke }}" style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #FDA29B;background:#FFFFFF;color:#B42318;font-weight:600;cursor:pointer;font-size:13px">End access now</button></sc-if></div></td>
+     </tr></sc-for></tbody>
+    </table>
+   </section>
+   <div style="font-size:13px;color:#667085">To request access, open the organization and choose Request support access.</div>
+  </sc-if>
+
+  <sc-if value="{{ isStaff }}">
+   <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap"><div style="flex:1"><h1 style="margin:0;font-size:26px;font-weight:650;letter-spacing:-0.01em;color:#0B1F3A">Staff</h1><p style="margin:4px 0 0;color:#667085">Privacyspace employees with console access. MFA with a security key is required.</p></div><button onClick="{{ inviteStaff }}" disabled="{{ notAdmin }}" style="min-height:44px;padding:0 16px;border-radius:8px;border:none;background:#0E7C7B;color:#FFFFFF;font-weight:600;cursor:pointer;display:inline-flex;gap:6px;align-items:center"><i class="icon-user-plus" aria-hidden="true"></i>Invite staff</button></div>
+   <section style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:14px;min-width:720px">
+     <thead><tr style="background:#F7F8FA;color:#475467;text-align:left;font-size:13px"><th style="padding:10px 16px;font-weight:600">Name</th><th style="padding:10px 12px;font-weight:600">Role</th><th style="padding:10px 12px;font-weight:600">Security key</th><th style="padding:10px 12px;font-weight:600">Last active</th><th style="padding:10px 16px;font-weight:600"></th></tr></thead>
+     <tbody><sc-for list="{{ staffRows }}" as="p" hint-placeholder-count="5"><tr style="border-top:1px solid #EEF1F4;height:56px">
+      <td style="padding:8px 16px"><div style="display:flex;gap:10px;align-items:center"><span style="width:30px;height:30px;border-radius:50%;background:#EEF1F4;color:#0B1F3A;display:grid;place-items:center;font-size:12px;font-weight:600">{{ p.initials }}</span><div style="display:flex;flex-direction:column"><span style="font-weight:600">{{ p.name }}</span><span style="font-size:12px;color:#667085">{{ p.email }}</span></div></div></td>
+      <td style="padding:8px 12px"><select value="{{ p.role }}" onChange="{{ p.onRole }}" disabled="{{ p.lock }}" aria-label="Role for {{ p.name }}" style="height:36px;border:1px solid #D0D5DD;border-radius:8px;padding:0 8px;background:#FFFFFF"><sc-for list="{{ staffRoles }}" as="r"><option value="{{ r }}">{{ r }}</option></sc-for></select></td>
+      <td style="padding:8px 12px"><span style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px;border-radius:999px;background:{{ p.key.bg }};color:{{ p.key.fg }};font-size:12px;font-weight:600"><i class="{{ p.key.icon }}" aria-hidden="true"></i>{{ p.key.label }}</span></td>
+      <td style="padding:8px 12px;color:#475467">{{ p.last }}</td>
+      <td style="padding:8px 16px;text-align:right"><sc-if value="{{ p.canRemove }}"><button onClick="{{ p.remove }}" style="min-height:36px;padding:0 12px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#B42318;font-weight:600;cursor:pointer;font-size:13px">Remove</button></sc-if></td>
+     </tr></sc-for></tbody>
+    </table>
+   </section>
+  </sc-if>
+
+  <sc-if value="{{ isPolicy }}">
+   <div><h1 style="margin:0;font-size:26px;font-weight:650;letter-spacing:-0.01em;color:#0B1F3A">Platform policies</h1><p style="margin:4px 0 0;color:#667085">Defaults for every organization. Customers can be stricter, never looser.</p></div>
+   <section style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:8px 24px;display:flex;flex-direction:column;max-width:820px">
+    <sc-for list="{{ policies }}" as="p" hint-placeholder-count="4"><div style="display:flex;gap:16px;align-items:center;padding:16px 0;border-bottom:1px solid #EEF1F4;flex-wrap:wrap">
+     <div style="flex:1 1 320px;min-width:0"><div style="font-weight:600;color:#0B1F3A">{{ p.label }}</div><div style="font-size:13px;color:#667085;text-wrap:pretty">{{ p.help }}</div></div>
+     <select value="{{ p.val }}" onChange="{{ p.onChange }}" disabled="{{ notAdmin }}" aria-label="{{ p.label }}" style="height:40px;border:1px solid #D0D5DD;border-radius:8px;padding:0 10px;background:#FFFFFF;min-width:180px"><sc-for list="{{ p.opts }}" as="o"><option value="{{ o.v }}">{{ o.l }}</option></sc-for></select>
+    </div></sc-for>
+    <sc-if value="{{ notAdmin }}"><div style="font-size:12px;color:#667085;padding:12px 0">Only a Platform admin can change platform policies.</div></sc-if>
+   </section>
+  </sc-if>
+
+  <sc-if value="{{ isAudit }}">
+   <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap"><div style="flex:1"><h1 style="margin:0;font-size:26px;font-weight:650;letter-spacing:-0.01em;color:#0B1F3A">Staff audit log</h1><p style="margin:4px 0 0;color:#667085">Every console action, with who did it and why. Entries can’t be edited or deleted.</p></div><button onClick="{{ exportAudit }}" style="min-height:44px;padding:0 16px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer;display:inline-flex;gap:6px;align-items:center"><i class="icon-download" aria-hidden="true"></i>Export CSV</button></div>
+   <div role="group" aria-label="Filter by category" style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ auditFilters }}" as="f"><button onClick="{{ f.go }}" aria-pressed="{{ f.pressed }}" style="min-height:36px;padding:0 14px;border-radius:999px;border:1px solid {{ f.bd }};background:{{ f.bg }};color:{{ f.fg }};cursor:pointer;font-size:14px;font-weight:500">{{ f.label }}</button></sc-for></div>
+   <ol style="list-style:none;margin:0;padding:0;background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px">
+    <sc-for list="{{ auditRows }}" as="a" hint-placeholder-count="6"><li style="display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:16px;padding:12px 20px;border-bottom:1px solid #EEF1F4;font-size:14px;align-items:baseline">
+     <span style="color:#667085;font-size:13px;font-variant-numeric:tabular-nums">{{ a.t }}</span>
+     <span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span><strong style="font-weight:600">{{ a.actor }}</strong> · {{ a.action }}</span><sc-if value="{{ a.hasReason }}"><span style="font-size:13px;color:#475467">Reason: {{ a.reason }}</span></sc-if></span>
+     <span style="font-size:12px;color:#475467;background:#F2F4F7;border-radius:999px;padding:2px 10px">{{ a.cat }}</span>
+    </li></sc-for>
+   </ol>
+  </sc-if>
+
+  </div>
+ </main>
+</div>
+
+<sc-if value="{{ hasModal }}">
+ <div style="position:fixed;inset:0;background:rgba(11,31,58,0.45);z-index:50;display:grid;place-items:center;padding:16px" onClick="{{ closeModal }}">
+  <div role="dialog" aria-modal="true" aria-label="{{ md.title }}" onClick="{{ stop }}" style="background:#FFFFFF;border-radius:14px;max-width:480px;width:100%;padding:24px;display:flex;flex-direction:column;gap:14px;box-shadow:0 24px 48px rgba(11,31,58,0.25)">
+   <h2 style="margin:0;font-size:20px;color:#0B1F3A;letter-spacing:-0.01em">{{ md.title }}</h2>
+   <p style="margin:0;color:#475467;font-size:14px;text-wrap:pretty">{{ md.desc }}</p>
+   <sc-if value="{{ md.hasOptions }}"><div role="radiogroup" aria-label="{{ md.optionLabel }}" style="display:flex;flex-direction:column;gap:8px"><span style="font-size:13px;font-weight:600">{{ md.optionLabel }}</span><sc-for list="{{ md.options }}" as="o"><button role="radio" aria-checked="{{ o.checked }}" onClick="{{ o.pick }}" style="display:flex;gap:10px;align-items:center;text-align:left;min-height:44px;padding:0 12px;border-radius:8px;border:1.5px solid {{ o.bd }};background:{{ o.bg }};cursor:pointer;font-size:14px"><span style="width:16px;height:16px;border-radius:50%;border:2px solid {{ o.dotB }};background:{{ o.dot }};box-shadow:inset 0 0 0 3px #FFFFFF;flex:none"></span>{{ o.label }}</button></sc-for><sc-if value="{{ md.optErr }}"><span role="alert" style="color:#B42318;font-size:13px">Choose an option.</span></sc-if></div></sc-if>
+   <label style="display:flex;flex-direction:column;gap:6px"><span style="font-size:13px;font-weight:600">{{ md.reasonLabel }}</span><textarea rows="3" value="{{ mReason }}" onChange="{{ onReason }}" placeholder="{{ md.placeholder }}" style="border:1px solid #D0D5DD;border-radius:8px;padding:10px;resize:vertical"></textarea></label>
+   <sc-if value="{{ md.hasErr }}"><span role="alert" style="color:#B42318;font-size:13px">Add a reason of at least 5 characters. It’s saved in the staff audit log.</span></sc-if>
+   <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button onClick="{{ closeModal }}" style="min-height:44px;padding:0 16px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer">Cancel</button><button onClick="{{ confirmModal }}" style="min-height:44px;padding:0 16px;border-radius:8px;border:none;background:{{ md.btnBg }};color:#FFFFFF;font-weight:600;cursor:pointer">{{ md.confirmLabel }}</button></div>
+  </div>
+ </div>
+</sc-if>
+<sc-if value="{{ hasToast }}"><div role="status" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0B1F3A;color:#FFFFFF;border-radius:10px;padding:12px 18px;font-size:14px;z-index:60;box-shadow:0 8px 24px rgba(11,31,58,0.25);max-width:calc(100vw - 32px)">{{ toast }}</div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;overview&quot;,&quot;orgs&quot;,&quot;billing&quot;,&quot;reviews&quot;,&quot;domains&quot;,&quot;access&quot;,&quot;staff&quot;,&quot;policy&quot;,&quot;audit&quot;],&quot;default&quot;:&quot;overview&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;defaultRole&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Platform admin&quot;,&quot;Support&quot;,&quot;Billing&quot;],&quot;default&quot;:&quot;Platform admin&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const T={gray:['#EEF1F4','#344054'],info:['#D9E8FF','#175CD3'],teal:['#D7F0EF','#0A6463'],warn:['#FDF0DC','#B54708'],ok:['#D9F2E7','#0E6B4D'],bad:['#FEE4E2','#B42318']};
+const pill=(label,tone,icon)=>({label,bg:T[tone][0],fg:T[tone][1],icon:'icon-'+(icon||'circle')});
+const WSP={live:['Live','ok'],setup:['Setup in progress','warn'],none:['Not started','gray'],review:['Name in review','info'],off:['Offline','bad']};
+const ORGS=[
+ {key:'northlight',name:'Northlight Privacy',kind:'Agency',plan:'Agency',admin:'Mara Voss',adminEmail:'mara@northlight.eu',seats:'9 of 15',openReq:14,mfa:true,status:'Active',created:'Mar 2025',region:'EU (Frankfurt)',
+  ws:[{name:'Lumen Analytics',host:'lumen.privacyspace.com',p:'setup'},{name:'Fernwood Commerce',host:'privacy.fernwood.shop',p:'live'},{name:'Kesto Health',host:'kesto-health.privacyspace.com',p:'review'},{name:'Ardent Labs',host:'ardent.privacyspace.com',p:'live'}]},
+ {key:'halden',name:'Halden Bikes',kind:'Direct',plan:'Growth',admin:'Ola Berg',adminEmail:'ola@halden.bike',seats:'4 of 10',openReq:3,mfa:true,status:'Active',created:'Jun 2025',region:'EU (Frankfurt)',ws:[{name:'Halden Bikes',host:'halden.privacyspace.com',p:'live'}]},
+ {key:'okto',name:'Okto Payments',kind:'Direct',plan:'Growth',admin:'Rhea Patel',adminEmail:'rhea@okto.com',seats:'7 of 10',openReq:6,mfa:true,status:'Active',created:'Jan 2026',region:'EU (Frankfurt)',ws:[{name:'Okto Payments',host:'privacy.okto.com',p:'live'}]},
+ {key:'vesna',name:'Vesna Clinics',kind:'Direct',plan:'Growth',admin:'Tina Kovač',adminEmail:'tina@vesnaklinik.si',seats:'3 of 10',openReq:0,mfa:true,status:'Active',created:'Sep 2026',region:'EU (Frankfurt)',ws:[{name:'Vesna Clinics',host:'vesna-care.privacyspace.com',p:'review'}]},
+ {key:'corvid',name:'Corvid Travel',kind:'Direct',plan:'Starter',admin:'Sam Doyle',adminEmail:'sam@corvidtravel.com',seats:'2 of 3',openReq:1,mfa:false,status:'Trial',trialEnds:'21 Oct 2026',created:'Oct 2026',region:'EU (Frankfurt)',ws:[{name:'Corvid Travel',host:'Not claimed',p:'none'}]},
+ {key:'mirabel',name:'Mirabel Studio',kind:'Direct',plan:'Starter',admin:'Lea Marchand',adminEmail:'lea@mirabel.studio',seats:'2 of 3',openReq:1,mfa:true,status:'Suspended',suspendReason:'Suspended automatically on 12 Oct for non-payment: INV-2026-0141 was unpaid 3 days after the final failed attempt. Portal shows a notice and still accepts requests.',created:'Feb 2026',region:'EU (Frankfurt)',ws:[{name:'Mirabel Studio',host:'mirabel.privacyspace.com',p:'live'}]}
+];
+const REVIEWS=[
+ {id:'r1',sub:'vesna-care',org:'vesna',orgName:'Vesna Clinics',vdom:'vesnaklinik.si',by:'Tina Kovač',at:'13 Oct, 09:14',age:'2 h',note:'Our patient-facing brand is Vesna Care. The domain is older.',flag:'',status:'pending'},
+ {id:'r2',sub:'kesto-health',org:'northlight',orgName:'Northlight Privacy · Kesto Health',vdom:'kesto.fi',by:'Jakob Lund',at:'12 Oct, 16:40',age:'19 h',note:'Agency setting up the client portal. Kesto Health verified kesto.fi themselves.',flag:'',status:'pending'},
+ {id:'r3',sub:'paypa1-support',org:'corvid',orgName:'Corvid Travel',vdom:'corvidtravel.com',by:'Sam Doyle',at:'12 Oct, 11:02',age:'1 d',note:'Testing.',flag:'Looks like a protected brand (paypal). Name has no link to corvidtravel.com.',status:'pending'}
+];
+const DOMAINS=[
+ {id:'d1',domain:'privacy.ardentlabs.io',kind:'Custom portal domain',ws:'Ardent Labs · Northlight',status:'waiting',issue:'CNAME not found after 3 days',checked:'13 Oct, 10:00'},
+ {id:'d2',domain:'halden.bike',kind:'Sending domain',ws:'Halden Bikes',status:'failing',issue:'DKIM record ps2._domainkey removed on 9 Oct',checked:'13 Oct, 10:00'},
+ {id:'d3',domain:'privacy.fernwood.shop',kind:'Custom portal domain',ws:'Fernwood Commerce · Northlight',status:'ok',issue:'',checked:'13 Oct, 10:00'},
+ {id:'d4',domain:'fernwood.shop',kind:'Sending domain',ws:'Fernwood Commerce · Northlight',status:'ok',issue:'',checked:'13 Oct, 10:00'},
+ {id:'d5',domain:'privacy.okto.com',kind:'Custom portal domain',ws:'Okto Payments',status:'ok',issue:'',checked:'13 Oct, 10:00'}
+];
+const GRANTS=[
+ {id:'g1',org:'northlight',orgName:'Northlight Privacy',ws:'Ardent Labs',staff:'Elif Demir',scope:'Settings and portal only',reason:'Ticket #4821 · custom domain not verifying',status:'active',approvedBy:'Mara Voss',left:'5 h left'},
+ {id:'g2',org:'halden',orgName:'Halden Bikes',ws:'Halden Bikes',staff:'Tom Ruiz',scope:'Settings and portal only',reason:'Ticket #4830 · DKIM failing, emails using fallback sender',status:'pending',approvedBy:'',left:''},
+ {id:'g3',org:'okto',orgName:'Okto Payments',ws:'Okto Payments',staff:'Elif Demir',scope:'Read-only case view',reason:'Ticket #4777 · evidence pack export error',status:'ended',approvedBy:'Rhea Patel',left:'Ended 8 Oct, 17:20'}
+];
+const STAFF=[
+ {name:'Noor Haddad',email:'noor@privacyspace.com',role:'Platform admin',key:true,last:'Active now'},
+ {name:'Elif Demir',email:'elif@privacyspace.com',role:'Support',key:true,last:'Active now'},
+ {name:'Tom Ruiz',email:'tom@privacyspace.com',role:'Support',key:true,last:'25 min ago'},
+ {name:'Kai Nieminen',email:'kai@privacyspace.com',role:'Security',key:true,last:'Yesterday'},
+ {name:'Ines Farah',email:'ines@privacyspace.com',role:'Billing',key:true,last:'Active now'}
+];
+const SUBS={
+ northlight:{cycle:'Monthly',price:499,method:'SEPA Direct Debit · DE89 ••• 3000',started:'1 Mar 2025',period:'1–31 Oct 2026',next:'1 Nov 2026',used:38,incl:100,over:8,status:'active',credit:0},
+ halden:{cycle:'Annual',price:1990,method:'Visa •••• 4417',started:'12 Jun 2025',period:'12 Jun 2026 – 11 Jun 2027',next:'12 Jun 2027',used:7,incl:25,over:10,status:'active',credit:0},
+ okto:{cycle:'Monthly',price:199,method:'Mastercard •••• 8820',started:'1 Jan 2026',period:'1–31 Oct 2026',next:'1 Nov 2026',used:31,incl:25,over:10,status:'active',credit:0},
+ vesna:{cycle:'Monthly',price:199,method:'Visa •••• 2051',started:'22 Sep 2026',period:'22 Sep – 21 Oct 2026',next:'22 Oct 2026',used:2,incl:25,over:10,status:'active',credit:0},
+ corvid:{cycle:'Monthly',price:79,method:'None on file',started:'7 Oct 2026',period:'Trial, 7–21 Oct 2026',next:'21 Oct 2026, if a payment method is added',used:1,incl:5,over:15,status:'trial',credit:0},
+ mirabel:{cycle:'Monthly',price:79,method:'Visa •••• 9034 · declined',started:'1 Feb 2026',period:'1–31 Oct 2026',next:'Held until INV-2026-0141 is paid',used:1,incl:5,over:15,status:'past_due',credit:0,failed:3}
+};
+const PAYMENTS=[
+ {id:'py_1093',at:'9 Oct 2026',org:'mirabel',inv:'INV-2026-0141',method:'Visa •••• 9034',amount:79,status:'failed',note:'Card declined · attempt 3 of 3'},
+ {id:'py_1091',at:'5 Oct 2026',org:'mirabel',inv:'INV-2026-0141',method:'Visa •••• 9034',amount:79,status:'failed',note:'Card declined · attempt 2 of 3'},
+ {id:'py_1089',at:'1 Oct 2026',org:'mirabel',inv:'INV-2026-0141',method:'Visa •••• 9034',amount:79,status:'failed',note:'Card declined · attempt 1 of 3'},
+ {id:'py_1088',at:'1 Oct 2026',org:'okto',inv:'INV-2026-0140',method:'Mastercard •••• 8820',amount:239,status:'succeeded',note:'Includes 4 overage DSARs from September'},
+ {id:'py_1087',at:'1 Oct 2026',org:'northlight',inv:'INV-2026-0139',method:'SEPA ••• 3000',amount:499,status:'succeeded',note:''},
+ {id:'py_1080',at:'22 Sep 2026',org:'vesna',inv:'INV-2026-0137',method:'Visa •••• 2051',amount:199,status:'succeeded',note:'First payment after trial'},
+ {id:'py_1074',at:'18 Sep 2026',org:'okto',inv:'INV-2026-0134',method:'Mastercard •••• 8820',amount:-20,status:'refund',note:'Overage billed twice'},
+ {id:'py_1071',at:'1 Sep 2026',org:'okto',inv:'INV-2026-0134',method:'Mastercard •••• 8820',amount:219,status:'succeeded',note:''},
+ {id:'py_1070',at:'1 Sep 2026',org:'northlight',inv:'INV-2026-0133',method:'SEPA ••• 3000',amount:499,status:'succeeded',note:''},
+ {id:'py_1069',at:'1 Sep 2026',org:'mirabel',inv:'INV-2026-0132',method:'Visa •••• 9034',amount:79,status:'succeeded',note:''}
+];
+const INVOICES=[
+ {no:'Upcoming',org:'okto',period:'Nov 2026',due:'1 Nov 2026',amount:259,status:'upcoming',note:'Estimate · includes 6 overage DSARs'},
+ {no:'Upcoming',org:'northlight',period:'Nov 2026',due:'1 Nov 2026',amount:499,status:'upcoming',note:''},
+ {no:'Upcoming',org:'vesna',period:'22 Oct – 21 Nov 2026',due:'22 Oct 2026',amount:199,status:'upcoming',note:''},
+ {no:'INV-2026-0141',org:'mirabel',period:'Oct 2026',due:'1 Oct 2026',amount:79,status:'overdue',note:'3 failed attempts'},
+ {no:'INV-2026-0140',org:'okto',period:'Oct 2026',due:'1 Oct 2026',amount:239,status:'paid',paid:'1 Oct',note:''},
+ {no:'INV-2026-0139',org:'northlight',period:'Oct 2026',due:'1 Oct 2026',amount:499,status:'paid',paid:'1 Oct',note:''},
+ {no:'INV-2026-0137',org:'vesna',period:'22 Sep – 21 Oct 2026',due:'22 Sep 2026',amount:199,status:'paid',paid:'22 Sep',note:''},
+ {no:'INV-2026-0134',org:'okto',period:'Sep 2026',due:'1 Sep 2026',amount:219,status:'paid',paid:'1 Sep',note:'€20 refunded on 18 Sep'},
+ {no:'INV-2026-0133',org:'northlight',period:'Sep 2026',due:'1 Sep 2026',amount:499,status:'paid',paid:'1 Sep',note:''},
+ {no:'INV-2026-0132',org:'mirabel',period:'Sep 2026',due:'1 Sep 2026',amount:79,status:'paid',paid:'1 Sep',note:''},
+ {no:'INV-2026-0098',org:'halden',period:'12 Jun 2026 – 11 Jun 2027',due:'12 Jun 2026',amount:1990,status:'paid',paid:'12 Jun',note:'Annual'}
+];
+const CASH=[['May',777],['Jun',2767],['Jul',797],['Aug',797],['Sep',976]];
+const PLANS=[{name:'Starter',m:79,y:790,incl:'5 DSARs / month',ws:'1 workspace',over:15,extra:'3 data-source checklists, evidence export'},{name:'Growth',m:199,y:1990,incl:'25 DSARs / month',ws:'3 workspaces',over:10,extra:'Unlimited checklists, approvals, API'},{name:'Agency',m:499,y:4990,incl:'100 DSARs / month',ws:'15 client workspaces',over:8,extra:'White-label portal, priority support'}];
+const E=n=>(n<0?'−€':'€')+Math.abs(Math.round(n)).toLocaleString('en-IE');
+const AUDIT=[
+ {t:'13 Oct 2026, 10:00',actor:'System',action:'DNS checks ran for 5 domains · 2 not passing',cat:'Domains',reason:''},
+ {t:'13 Oct 2026, 09:14',actor:'Tina Kovač (customer)',action:'Claimed vesna-care.privacyspace.com · sent to review',cat:'Subdomains',reason:''},
+ {t:'13 Oct 2026, 05:12',actor:'Mara Voss (customer)',action:'Approved support access for Elif Demir · Ardent Labs · 24 h',cat:'Access',reason:''},
+ {t:'12 Oct 2026, 09:00',actor:'System',action:'Suspended Mirabel Studio automatically for non-payment',cat:'Billing',reason:'INV-2026-0141 unpaid 3 days after the final failed attempt on 9 Oct.'},
+ {t:'11 Oct 2026, 14:22',actor:'Noor Haddad',action:'Invited Ines Farah as Billing',cat:'Staff',reason:'New billing operations hire.'}
+];
+const ROLES_INFO={'Platform admin':'Platform admin: manages organizations, plans, suspensions, reserved names, staff and policies.','Support':'Support: reviews subdomains, checks domains and requests time-limited access to customer workspaces. Can’t change plans, policies or staff.','Billing':'Billing: manages subscriptions, payments, refunds and invoices. Can’t open customer workspaces, change policies or manage staff.'};
+class Component extends DCLogic {
+ state={screen:this.props.startScreen||'overview',role:this.props.defaultRole||'Platform admin',orgs:ORGS,orgSel:'northlight',orgQ:'',orgF:'All',planDraft:null,reviews:REVIEWS,reserved:['google','apple','microsoft','amazon','meta','paypal','stripe','admin','www','api','app','status','support','help','login','mail','privacyspace'],newRes:'',domains:DOMAINS,grants:GRANTS,staff:STAFF,audit:AUDIT,policy:{mfa:'new',retention:'24',access:'24',fallback:'on',dunning:'3'},auditF:'All',modal:null,mReason:'',mOpt:null,mTried:false,toast:null,clock:10*60+42,billTab:'revenue',subs:SUBS,payments:PAYMENTS,invoices:INVOICES,subSel:'mirabel',payF:'All',invF:'All'};
+ stamp(){const c=this.state.clock,h=Math.floor(c/60),m=c%60;return '13 Oct 2026, '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');}
+ me(){const r=this.state.role;return r==='Platform admin'?{name:'Noor Haddad',role:'Platform admin',initials:'NH'}:r==='Billing'?{name:'Ines Farah',role:'Billing',initials:'IF'}:{name:'Elif Demir',role:'Support',initials:'ED'};}
+ show(msg){this.setState({toast:msg});clearTimeout(this._t);this._t=setTimeout(()=>this.setState({toast:null}),4000);}
+ log(action,cat,reason){this.setState(s=>({clock:s.clock+1,audit:[{t:this.stamp(),actor:this.me().name,action,cat,reason:reason||''},...s.audit]}));}
+ ask(m){this.setState({modal:m,mReason:'',mOpt:m.option||null,mTried:false});}
+ setSub(k,fn){this.setState(s=>({subs:{...s.subs,[k]:fn({...s.subs[k]})}}));}
+ go(screen){this.setState({screen});if(typeof window!=='undefined')window.scrollTo(0,0);}
+ setOrg(key,fn){this.setState(s=>({orgs:s.orgs.map(o=>o.key===key?fn({...o}):o)}));}
+ componentDidMount(){this._k=e=>{if(e.key==='Escape'&&this.state.modal)this.setState({modal:null});};window.addEventListener('keydown',this._k);}
+ componentWillUnmount(){window.removeEventListener('keydown',this._k);clearTimeout(this._t);}
+ renderVals(){
+  const s=this.state,v={},isAdmin=s.role==='Platform admin';
+  v.notAdmin=!isAdmin;v.me=this.me();v.roleHint=ROLES_INFO[s.role];
+  v.roles=['Platform admin','Support','Billing'].map(r=>({label:r==='Platform admin'?'Admin':r,bg:r===s.role?'#FFFFFF':'transparent',fg:r===s.role?'#0B1F3A':'#C7D2E0',pressed:r===s.role?'true':'false',go:()=>this.setState({role:r})}));
+  const pendRev=s.reviews.filter(r=>r.status==='pending');
+  const badDom=s.domains.filter(d=>d.status!=='ok');
+  const pendGr=s.grants.filter(g=>g.status==='pending');
+  const overdueInv=s.invoices.filter(i=>i.status==='overdue');
+  const NAV=[['overview','Overview','icon-layout-dashboard',0],['orgs','Organizations','icon-building-2',0],['billing','Billing & revenue','icon-receipt',overdueInv.length],['reviews','Subdomain reviews','icon-badge-check',pendRev.length],['domains','Domains & email','icon-globe',badDom.length],['access','Support access','icon-key-round',pendGr.length],['staff','Staff','icon-users',0],['policy','Platform policies','icon-sliders-horizontal',0],['audit','Staff audit log','icon-scroll-text',0]];
+  v.nav=NAV.map(([k,label,icon,n])=>{const a=s.screen===k;return {label,icon,hasCount:n>0,count:n,countBg:k==='domains'||k==='billing'?'#B42318':'#24507A',bg:a?'#173A5E':'transparent',fg:a?'#FFFFFF':'#C7D2E0',bar:a?'#14919B':'transparent',current:a?'page':'false',go:()=>this.go(k)};});
+  ['overview','orgs','billing','reviews','domains','access','staff','policy','audit'].forEach(k=>v['is'+{overview:'Overview',orgs:'Orgs',billing:'Billing',reviews:'Reviews',domains:'Domains',access:'Access',staff:'Staff',policy:'Policy',audit:'Audit'}[k]]=s.screen===k);
+  const orgName=k=>(s.orgs.find(o=>o.key===k)||{}).name||k;
+  const mrrOf=k=>{const b=s.subs[k];if(b.status==='trial'||b.status==='past_due')return 0;return b.cycle==='Annual'?b.price/12:b.price;};
+  const subKeys=Object.keys(s.subs);const mrr=subKeys.reduce((a,k)=>a+mrrOf(k),0);
+  const atRisk=subKeys.filter(k=>s.subs[k].status==='past_due').reduce((a,k)=>a+s.subs[k].price,0);
+  // overview
+  const allWs=s.orgs.reduce((a,o)=>a+o.ws.length,0),live=s.orgs.reduce((a,o)=>a+o.ws.filter(w=>w.p==='live').length,0);
+  v.kpis=[{label:'Organizations',val:s.orgs.length,sub:s.orgs.filter(o=>o.kind==='Agency').length+' agency · '+s.orgs.filter(o=>o.status==='Trial').length+' on trial'},{label:'Workspaces',val:allWs,sub:'Across all organizations'},{label:'Live portals',val:live,sub:(allWs-live)+' not live yet'},{label:'Open requests',val:s.orgs.reduce((a,o)=>a+o.openReq,0),sub:'Counts only. Contents stay private.'},{label:'Monthly recurring revenue',val:E(mrr),sub:atRisk?E(atRisk)+' at risk · '+overdueInv.length+' overdue':'Nothing overdue'}];
+  const att=[];
+  pendRev.forEach(r=>att.push({icon:'icon-badge-check',tone:r.flag?'bad':'info',title:'Review '+r.sub+'.privacyspace.com',sub:r.orgName+(r.flag?' · looks like a protected brand':''),age:r.age,go:()=>this.go('reviews')}));
+  badDom.forEach(d=>att.push({icon:'icon-globe',tone:d.status==='failing'?'bad':'warn',title:(d.status==='failing'?'Sender failing · ':'Waiting for DNS · ')+d.domain,sub:d.issue,age:d.status==='failing'?'4 d':'3 d',go:()=>this.go('domains')}));
+  overdueInv.forEach(i=>att.push({icon:'icon-credit-card',tone:'bad',title:'Payment failed · '+orgName(i.org),sub:i.no+' · '+E(i.amount)+' overdue since '+i.due.slice(0,6)+' · '+i.note,age:'',go:()=>{this.setState({billTab:'subs',subSel:i.org});this.go('billing');}}));
+  s.orgs.filter(o=>!o.mfa&&o.status!=='Suspended').forEach(o=>att.push({icon:'icon-shield-alert',tone:'warn',title:o.name+' hasn’t turned on MFA',sub:'Trial ends '+(o.trialEnds||'—')+'. Required before going to a paid plan.',age:'',go:()=>{this.setState({orgSel:o.key,planDraft:null});this.go('orgs');}}));
+  v.attention=att.map(a=>({...a,bg:T[a.tone][0],fg:T[a.tone][1]}));v.noAttention=!att.length;
+  v.services=[['Request portals','ok'],['Email sending','ok'],['Evidence pack exports','ok'],['DNS checks','ok'],['Public API','degraded']].map(([name,st])=>({name,state:st==='ok'?'Operational':'Slower than usual',dot:st==='ok'?'#12B76A':'#F79009',fg:st==='ok'?'#0E6B4D':'#B54708'}));
+  // orgs
+  const q=s.orgQ.trim().toLowerCase();
+  const rows=s.orgs.filter(o=>(!q||(o.name+' '+o.adminEmail).toLowerCase().indexOf(q)>-1)&&(s.orgF==='All'||(s.orgF==='Needs attention'?(o.status!=='Active'||!o.mfa):o.kind===s.orgF)));
+  v.orgQ=s.orgQ;v.onOrgQ=e=>this.setState({orgQ:e.target.value});
+  v.orgFilters=['All','Agency','Direct','Needs attention'].map(f=>{const a=s.orgF===f;return {label:f,pressed:a?'true':'false',bg:a?'#0B1F3A':'#FFFFFF',fg:a?'#FFFFFF':'#344054',bd:a?'#0B1F3A':'#D0D5DD',go:()=>this.setState({orgF:f})};});
+  const stP=o=>o.status==='Active'?pill('Active','ok','circle-check'):o.status==='Trial'?pill('Trial · ends '+o.trialEnds.slice(0,6),'info','clock'):pill('Suspended','bad','ban');
+  v.orgRows=rows.map(o=>{const lv=o.ws.filter(w=>w.p==='live').length;return {name:o.name,initial:o.name[0],kind:o.kind,adminEmail:o.adminEmail,plan:o.plan,wsCount:o.ws.length,liveLabel:lv+' of '+o.ws.length+' live',mfa:o.mfa?pill('Required','ok','shield-check'):pill('Optional','warn','shield-alert'),st:stP(o),bg:o.key===s.orgSel?'#F2F7F7':'#FFFFFF',go:()=>this.setState({orgSel:o.key,planDraft:null})};});
+  v.noOrgs=!rows.length;
+  const o=s.orgs.find(x=>x.key===s.orgSel);v.hasOrg=!!o;v.planOpts=['Starter','Growth','Agency'];
+  if(o){
+   const gr=s.grants.find(g=>g.org===o.key&&g.status==='active'),pg=s.grants.find(g=>g.org===o.key&&g.status==='pending');
+   const pd=s.planDraft||o.plan;
+   const note=o.status==='Suspended'?o.suspendReason:o.status==='Trial'?'Trial ends '+o.trialEnds+'. MFA is optional for this organization.':'';
+   const sb=s.subs[o.key];
+   v.od={...o,initial:o.name[0],st:stP(o),billLine:sb?(sb.status==='trial'?'Trial · no payment method':sb.status==='past_due'?'Past due · '+E(sb.price)+' unpaid':E(sb.price)+(sb.cycle==='Annual'?' / year':' / month')+' · next invoice '+sb.next.split(',')[0]):'—',toBilling:()=>{this.setState({billTab:'subs',subSel:o.key});this.go('billing');},hasNote:!!note,note,noteBg:o.status==='Suspended'?'#FEE4E2':'#D9E8FF',noteFg:o.status==='Suspended'?'#B42318':'#175CD3',
+    mfaText:o.mfa?'Required for every member':'Optional. Members can sign in without it.',
+    ws:o.ws.map(w=>({...w,p:pill(WSP[w.p][0],WSP[w.p][1])})),
+    planDraft:pd,planSame:pd===o.plan||!isAdmin,onPlan:e=>this.setState({planDraft:e.target.value}),
+    savePlan:()=>this.ask({title:'Change plan to '+pd,desc:o.name+' moves from '+o.plan+' to '+pd+'. Billing changes on the next invoice. The owner, '+o.admin+', gets an email.',confirmLabel:'Change plan',run:r=>{this.setOrg(o.key,x=>{x.plan=pd;return x;});this.setState({planDraft:null});this.log('Changed plan for '+o.name+': '+o.plan+' → '+pd,'Organizations',r);this.show('Plan changed');}}),
+    hasGrant:!!gr,grantWs:gr?gr.ws:'',grantLeft:gr?gr.left:'',pendingGrant:!gr&&!!pg,canRequest:!gr&&!pg&&o.status!=='Suspended',
+    requestAccess:()=>this.ask({title:'Request support access',desc:'Asks '+o.admin+' to let '+this.me().name+' open '+o.ws[0].name+' for 24 hours with settings and portal access only. Request contents stay hidden. The customer sees this request in their audit log.',confirmLabel:'Send request',reasonLabel:'Reason shown to the customer',placeholder:'e.g. Ticket #4840 · portal shows the wrong logo',run:r=>{this.setState(st=>({grants:[{id:'g'+Date.now(),org:o.key,orgName:o.name,ws:o.ws[0].name,staff:this.me().name,scope:'Settings and portal only',reason:r,status:'pending',approvedBy:'',left:''},...st.grants]}));this.log('Requested support access to '+o.ws[0].name+' · '+o.name,'Access',r);this.show('Request sent to '+o.admin);}}),
+    needsMfa:!o.mfa,enforceMfa:()=>this.ask({title:'Require MFA',desc:'Every member of '+o.name+' must set up MFA at their next sign-in. Members without it are blocked until they do.',confirmLabel:'Require MFA',run:r=>{this.setOrg(o.key,x=>{x.mfa=true;return x;});this.log('Required MFA for '+o.name,'Organizations',r);this.show('MFA now required');}}),
+    canSuspend:o.status!=='Suspended',canReactivate:o.status==='Suspended',
+    suspend:()=>this.ask({danger:true,title:'Suspend '+o.name,desc:'Members can’t sign in. Portals stay online and keep accepting requests so requesters aren’t blocked, and statutory deadlines keep running. The owner is told by email.',confirmLabel:'Suspend organization',run:r=>{this.setOrg(o.key,x=>{x.status='Suspended';x.suspendReason=r;return x;});this.log('Suspended '+o.name,'Organizations',r);this.show(o.name+' suspended');}}),
+    reactivate:()=>this.ask({title:'Reactivate '+o.name,desc:'Members can sign in again straight away.',confirmLabel:'Reactivate',run:r=>{this.setOrg(o.key,x=>{x.status='Active';x.suspendReason='';return x;});this.log('Reactivated '+o.name,'Organizations',r);this.show(o.name+' reactivated');}})};
+  }
+  // billing
+  const canBill=isAdmin||s.role==='Billing';v.canBill=canBill;v.notBill=!canBill;
+  const overdueN=overdueInv.length;
+  v.billTabs=[['revenue','Revenue',''],['subs','Subscriptions',''],['payments','Payments',''],['invoices','Invoices',overdueN?String(overdueN):''],['plans','Plans & prices','']].map(([k,label,b])=>{const a=s.billTab===k;return {label,badge:b,hasBadge:!!b,sel:a?'true':'false',fg:a?'#0B1F3A':'#667085',bd:a?'#0E7C7B':'transparent',w:a?'600':'500',go:()=>this.setState({billTab:k})};});
+  v.btRevenue=s.billTab==='revenue';v.btSubs=s.billTab==='subs';v.btPayments=s.billTab==='payments';v.btInvoices=s.billTab==='invoices';v.btPlans=s.billTab==='plans';
+  const octPays=s.payments.filter(p=>p.at.indexOf('Oct 2026')>-1&&p.status!=='failed');const recOct=octPays.reduce((a,p)=>a+p.amount,0);
+  const outstanding=overdueInv.reduce((a,i)=>a+i.amount,0);const paying=subKeys.filter(k=>mrrOf(k)>0).length;
+  const trials=subKeys.filter(k=>s.subs[k].status==='trial');
+  v.billKpis=[{label:'Monthly recurring revenue',val:E(mrr),fg:'#0B1F3A',sub:paying+' paying organizations · ARR '+E(mrr*12)},{label:'Received in October',val:E(recOct),fg:'#0B1F3A',sub:octPays.filter(p=>p.amount>0).length+' payments · to 13 Oct'},{label:'Outstanding',val:E(outstanding),fg:outstanding?'#B42318':'#0B1F3A',sub:overdueN?overdueN+' overdue invoice'+(overdueN===1?'':'s'):'Nothing overdue'},{label:'On trial',val:String(trials.length),fg:'#0B1F3A',sub:trials.map(k=>orgName(k)+' · ends '+String(s.orgs.find(o=>o.key===k).trialEnds||'').slice(0,6)).join(' · ')||'No trials running'}];
+  const cash=[...CASH,['Oct',recOct]];const cmax=Math.max(...cash.map(c=>c[1]));
+  v.cashBars=cash.map(([m,val],i)=>{const cur=i===cash.length-1;return {m:cur?m+' (to date)':m,label:E(val),h:Math.max(3,Math.round(val/cmax*100))+'%',bg:cur?'#D7F0EF':'#0E7C7B',bdStyle:cur?'dashed':'solid'};});
+  v.cashAria='Cash received by month: '+cash.map(c=>c[0]+' '+E(c[1])).join(', ');
+  v.mrrPlans=['Agency','Growth','Starter'].map(pl=>{const ks=subKeys.filter(k=>(s.orgs.find(o=>o.key===k)||{}).plan===pl);const val=ks.reduce((a,k)=>a+mrrOf(k),0);const pay=ks.filter(k=>mrrOf(k)>0).length;return {name:pl,val:E(val),sub:pay+' paying'+(ks.length>pay?' · '+(ks.length-pay)+' trial or past due':''),pct:(mrr?Math.round(val/mrr*100):0)+'%'};});
+  const ba=[];
+  subKeys.forEach(k=>{const b=s.subs[k],o=s.orgs.find(x=>x.key===k);const sel=()=>this.setState({billTab:'subs',subSel:k});
+   if(b.status==='past_due')ba.push({icon:'icon-credit-card',tone:'bad',title:'Payment failed · '+o.name,sub:(b.failed||0)+' failed attempts · '+E(b.price)+' overdue since 1 Oct'+(o.status==='Suspended'?' · organization suspended':''),go:sel});
+   if(b.status==='trial')ba.push({icon:'icon-clock',tone:'warn',title:'Trial ends '+String(o.trialEnds||'').slice(0,6)+' · '+o.name,sub:b.method==='None on file'?'No payment method on file. Moves to '+o.plan+' at '+E(b.price)+' / month once one is added.':'Converts to '+o.plan+' at '+E(b.price)+' / month.',go:sel});
+   if(b.used>b.incl)ba.push({icon:'icon-trending-up',tone:'info',title:o.name+' is over its included DSARs',sub:b.used+' of '+b.incl+' this period · '+E((b.used-b.incl)*b.over)+' overage on the next invoice',go:sel});});
+  const rank={bad:0,warn:1,info:2};ba.sort((a,b)=>rank[a.tone]-rank[b.tone]);v.billAttention=ba.map(a=>({...a,bg:T[a.tone][0],fg:T[a.tone][1]}));v.noBillAttention=!ba.length;
+  const subSt=b=>b.status==='active'?pill('Active','ok','circle-check'):b.status==='trial'?pill('Trial','info','clock'):b.status==='past_due'?pill('Past due','bad','credit-card'):pill('Cancels '+b.next.split(',')[0],'warn','circle-x');
+  const invSt=i=>i.status==='paid'?pill('Paid '+i.paid,'ok','circle-check'):i.status==='overdue'?pill('Overdue','bad','circle-alert'):i.status==='void'?pill('Void','gray','ban'):pill('Upcoming','gray','calendar');
+  v.subRows=subKeys.map(k=>{const b=s.subs[k],o=s.orgs.find(x=>x.key===k),over=b.used>b.incl;return {name:o.name,kind:o.kind,plan:o.plan,cycle:b.cycle,mrr:mrrOf(k)?E(mrrOf(k)):'—',usage:b.used+' of '+b.incl,useFg:over?'#B54708':'#101828',useW:over?'600':'400',next:b.status==='past_due'?'Held':b.next.split(',')[0],st:subSt(b),bg:k===s.subSel?'#F2F7F7':'#FFFFFF',go:()=>this.setState({subSel:k})};});
+  {const k=s.subSel,b=s.subs[k],o=s.orgs.find(x=>x.key===k);const over=Math.max(0,b.used-b.incl);const overAmt=over*b.over;
+   const nextAmt=Math.max(0,(b.cycle==='Annual'?b.price:b.price+overAmt)-b.credit);
+   const note=b.status==='past_due'?(b.failed||0)+' payment attempts failed. '+(o.status==='Suspended'?'Suspended automatically for non-payment; portals still accept requests. Paying the invoice reactivates it automatically.':'Suspends automatically '+s.policy.dunning+' days after the final failed attempt.'):b.status==='trial'?'Trial ends '+o.trialEnds+'. '+(b.method==='None on file'?'No payment method yet.':''):b.status==='canceling'?'Cancels at the end of the current period. Portals keep running until then.':'';
+   v.sd={name:o.name,plan:o.plan,cycle:b.cycle,started:b.started,st:subSt(b),hasNote:!!note,note,noteBg:b.status==='past_due'?'#FEE4E2':b.status==='canceling'?'#FDF0DC':'#D9E8FF',noteFg:b.status==='past_due'?'#B42318':b.status==='canceling'?'#B54708':'#175CD3',
+    priceLine:E(b.price)+(b.cycle==='Annual'?' / year':' / month')+(b.cycle==='Annual'?' · '+E(b.price/12)+' MRR':''),method:b.method,period:b.period,
+    nextLine:b.status==='past_due'?b.next:b.status==='canceling'?'None. Ends '+b.next.split(',')[0]:b.next.split(',')[0]+' · '+E(nextAmt)+(over&&b.cycle!=='Annual'?' incl. '+E(overAmt)+' overage':'')+(b.credit?' after '+E(b.credit)+' credit':''),
+    credit:b.credit?E(b.credit):'€0',usage:b.used+' of '+b.incl,usePct:Math.min(100,Math.round(b.used/b.incl*100))+'%',useBar:over?'#B54708':'#0E7C7B',
+    overLine:over?over+' over × '+E(b.over)+' = '+E(overAmt)+(b.cycle==='Annual'?', billed monthly in arrears':', added to the next invoice'):(b.incl-b.used)+' left this period. Overage is '+E(b.over)+' per DSAR.',
+    invoices:s.invoices.filter(i=>i.org===k).slice(0,4).map(i=>({no:i.no,period:i.period,amt:E(i.amount),st:invSt(i)})),
+    canRetry:b.status==='past_due',canExtend:b.status==='trial',canCredit:b.status!=='trial',canCancel:b.status==='active',canResume:b.status==='canceling',
+    toOrg:()=>{this.setState({orgSel:k,planDraft:null});this.go('orgs');},
+    retry:()=>this.ask({title:'Retry payment for '+o.name,desc:'Charges '+b.method.split(' · ')[0]+' for '+E(b.price)+' (INV-2026-0141) now. If it succeeds the invoice is marked paid and, if the organization was suspended for non-payment, it’s reactivated automatically.',confirmLabel:'Retry payment',run:r=>{this.setState(st=>({payments:[{id:'py_'+Date.now(),at:'13 Oct 2026',org:k,inv:'INV-2026-0141',method:b.method.split(' · ')[0],amount:b.price,status:'succeeded',note:'Manual retry by '+this.me().name},...st.payments],invoices:st.invoices.map(i=>i.org===k&&i.status==='overdue'?{...i,status:'paid',paid:'13 Oct',note:'Paid on manual retry'}:i),subs:{...st.subs,[k]:{...st.subs[k],status:'active',method:b.method.split(' · ')[0],failed:0,next:'1 Nov 2026'}}}));const wasSusp=o.status==='Suspended';if(wasSusp)this.setOrg(k,x=>{x.status='Active';x.suspendReason='';return x;});this.log('Retried payment for '+o.name+' · '+E(b.price)+' succeeded','Billing',r);if(wasSusp)this.setState(st=>({audit:[{t:this.stamp(),actor:'System',action:'Reactivated '+o.name+' automatically after payment',cat:'Billing',reason:''},...st.audit]}));this.show(wasSusp?'Payment received. '+o.name+' reactivated automatically.':'Payment received.');}}),
+    extend:()=>this.ask({title:'Extend trial for '+o.name,desc:'The trial end date moves. The owner, '+o.admin+', gets an email with the new date.',confirmLabel:'Extend trial',options:['7 days','14 days'],optionLabel:'Extend by',run:(r,opt)=>{const nd=opt==='7 days'?'28 Oct 2026':'4 Nov 2026';this.setOrg(k,x=>{x.trialEnds=nd;return x;});this.setSub(k,x=>{x.period='Trial, 7 Oct – '+nd.slice(0,6)+' 2026';x.next=nd+', if a payment method is added';return x;});this.log('Extended trial for '+o.name+' by '+opt+' to '+nd,'Billing',r);this.show('Trial extended to '+nd);}}),
+    credit2:()=>this.ask({title:'Apply credit to '+o.name,desc:'The credit is taken off the next invoice. It shows on the customer’s invoice with your reason.',confirmLabel:'Apply credit',options:['€25','€50','€100'],optionLabel:'Amount',reasonLabel:'Reason shown on the invoice',placeholder:'e.g. Goodwill credit for the 9 Oct export outage',run:(r,opt)=>{const n=Number(opt.slice(1));this.setSub(k,x=>{x.credit=(x.credit||0)+n;return x;});this.log('Applied '+opt+' credit to '+o.name,'Billing',r);this.show(opt+' credit applied to the next invoice');}}),
+    cancel:()=>this.ask({danger:true,title:'Cancel '+o.name+' at period end',desc:'The subscription ends on '+b.next.split(',')[0]+'. Until then nothing changes. After that, members lose access; open cases and evidence packs stay downloadable for 30 days.',confirmLabel:'Cancel subscription',run:r=>{this.setSub(k,x=>{x.status='canceling';return x;});this.log('Set '+o.name+' to cancel at period end ('+b.next.split(',')[0]+')','Billing',r);this.show('Subscription will cancel on '+b.next.split(',')[0]);}}),
+    resume:()=>this.ask({title:'Resume subscription',desc:o.name+' continues on '+o.plan+' with no gap.',confirmLabel:'Resume',run:r=>{this.setSub(k,x=>{x.status='active';return x;});this.log('Resumed subscription for '+o.name,'Billing',r);this.show('Subscription resumed');}})};
+  }
+  const pf=s.payF;const prow=s.payments.filter(p=>pf==='All'||(pf==='Succeeded'&&p.status==='succeeded')||(pf==='Failed'&&p.status==='failed')||(pf==='Refunds'&&p.status==='refund'));
+  v.payFilters=['All','Succeeded','Failed','Refunds'].map(f=>{const a=pf===f;return {label:f,pressed:a?'true':'false',bg:a?'#0B1F3A':'#FFFFFF',fg:a?'#FFFFFF':'#344054',bd:a?'#0B1F3A':'#D0D5DD',go:()=>this.setState({payF:f})};});
+  const refunded=id=>s.payments.some(x=>x.refundOf===id)||false;
+  v.payRows=prow.map(p=>({at:p.at,orgName:orgName(p.org),inv:p.inv,method:p.method,note:p.note,hasNote:!!p.note,noteFg:p.status==='failed'?'#B42318':'#667085',amt:E(p.amount),amtFg:p.status==='failed'?'#98A2B3':p.amount<0?'#475467':'#0B1F3A',
+   st:p.status==='succeeded'?pill(refunded(p.id)?'Refunded':'Succeeded',refunded(p.id)?'gray':'ok',refunded(p.id)?'undo-2':'circle-check'):p.status==='failed'?pill('Failed','bad','circle-x'):pill('Refund','gray','undo-2'),
+   canRefund:p.status==='succeeded'&&!refunded(p.id),
+   refund:()=>this.ask({danger:true,title:'Refund '+E(p.amount)+' to '+orgName(p.org),desc:'Returns the full payment for '+p.inv+' to '+p.method+'. It can take 5–10 business days to arrive. The invoice shows the refund.',confirmLabel:'Refund payment',reasonLabel:'Reason shown to the customer',run:r=>{this.setState(st=>({payments:[{id:'py_'+Date.now(),at:'13 Oct 2026',org:p.org,inv:p.inv,method:p.method,amount:-p.amount,status:'refund',note:r,refundOf:p.id},...st.payments]}));this.log('Refunded '+E(p.amount)+' to '+orgName(p.org)+' · '+p.inv,'Billing',r);this.show('Refund issued');}})}));
+  v.noPays=!prow.length;
+  const rec=prow.filter(p=>p.status==='succeeded').reduce((a,p)=>a+p.amount,0),ref=prow.filter(p=>p.status==='refund').reduce((a,p)=>a-p.amount,0);
+  v.payTotals={rec:E(rec),ref:E(ref),net:E(rec-ref),fail:String(prow.filter(p=>p.status==='failed').length)};
+  const inf=s.invF;const irow=s.invoices.filter(i=>inf==='All'||i.status===inf.toLowerCase());
+  v.invFilters=['All','Upcoming','Overdue','Paid','Void'].map(f=>{const a=inf===f;return {label:f,pressed:a?'true':'false',bg:a?'#0B1F3A':'#FFFFFF',fg:a?'#FFFFFF':'#344054',bd:a?'#0B1F3A':'#D0D5DD',go:()=>this.setState({invF:f})};});
+  v.invRows=irow.map(i=>({no:i.no,orgName:orgName(i.org),period:i.period,due:i.status==='upcoming'?'Issues '+i.due:i.due,amt:E(i.amount),note:i.note,hasNote:!!i.note,st:invSt(i),canPdf:i.status!=='upcoming',canRemind:i.status==='overdue',
+   pdf:()=>this.show(i.no+'.pdf prepared'),
+   remind:()=>{this.log('Sent payment reminder for '+i.no+' to '+orgName(i.org),'Billing');this.show('Reminder sent to '+(s.orgs.find(o=>o.key===i.org)||{}).adminEmail);},
+   void:()=>this.ask({danger:true,title:'Void '+i.no,desc:'The invoice is cancelled and no longer owed. This can’t be undone; issue a new invoice if needed.',confirmLabel:'Void invoice',run:r=>{this.setState(st=>({invoices:st.invoices.map(x=>x.no===i.no?{...x,status:'void',note:'Voided by '+this.me().name}:x),subs:st.subs[i.org]&&st.subs[i.org].status==='past_due'?{...st.subs,[i.org]:{...st.subs[i.org],status:'active',failed:0,next:'1 Nov 2026'}}:st.subs}));this.log('Voided '+i.no+' for '+orgName(i.org),'Billing',r);this.show(i.no+' voided');}})}));
+  v.noInvs=!irow.length;
+  v.planCards=PLANS.map(p=>{const n=s.orgs.filter(o=>o.plan===p.name).length;return {name:p.name,m:E(p.m),y:E(p.y),incl:p.incl,ws:p.ws,over:E(p.over)+' per extra DSAR',extra:p.extra,count:n+(n===1?' organization':' organizations')};});
+  v.exportBilling=()=>{this.log('Exported billing data ('+s.billTab+')','Billing');this.show('Billing CSV exported');};
+  // reviews
+  v.reviewCards=s.reviews.map(r=>{const setR=(status,decision,extra)=>this.setState(st=>({reviews:st.reviews.map(x=>x.id===r.id?{...x,status,decision}:x),...(extra?extra(st):{})}));const host=r.sub+'.privacyspace.com';
+   return {...r,host,hasFlag:!!r.flag,pending:r.status==='pending',decided:r.status!=='pending',p:r.status==='pending'?(r.flag?pill('Flagged','bad'):pill('Waiting','info')):r.status==='approved'?pill('Approved','ok'):pill('Rejected','gray'),
+    approve:()=>this.ask({title:'Approve '+host,desc:r.orgName+' can publish their portal at this address. The requester is told by email.',confirmLabel:'Approve name',run:x=>{setR('approved','Approved by '+this.me().name+' · '+x,st=>({orgs:st.orgs.map(o=>o.key===r.org?{...o,ws:o.ws.map(w=>w.host===host?{...w,p:'setup'}:w)}:o)}));this.log('Approved subdomain '+host+' for '+r.orgName,'Subdomains',x);this.show('Name approved');}}),
+    reject:()=>this.ask({danger:true,title:'Reject '+host,desc:'The customer is asked to choose another name. Your reason is shown to them.',confirmLabel:'Reject',reasonLabel:'Reason shown to the customer',run:x=>{setR('rejected','Rejected by '+this.me().name+' · '+x);this.log('Rejected subdomain '+host,'Subdomains',x);this.show('Name rejected');}}),
+    reserve:()=>this.ask({danger:true,title:'Reject and reserve “'+r.sub+'”',desc:'Rejects this claim and adds the name to the reserved list so no one else can claim it.',confirmLabel:'Reject and reserve',run:x=>{setR('rejected','Rejected and reserved by '+this.me().name+' · '+x,st=>({reserved:[...st.reserved,r.sub]}));this.log('Rejected and reserved '+r.sub,'Subdomains',x);this.show('Rejected and reserved');}})};});
+  v.reservedChips=s.reserved.map(n=>({name:n,remove:()=>this.ask({title:'Remove “'+n+'” from reserved names',desc:'Any customer could then claim '+n+'.privacyspace.com.',confirmLabel:'Remove',run:x=>{this.setState(st=>({reserved:st.reserved.filter(y=>y!==n)}));this.log('Removed reserved name '+n,'Subdomains',x);}})}));
+  v.newRes=s.newRes;v.onNewRes=e=>this.setState({newRes:e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'')});
+  v.addRes=()=>{const n=s.newRes;if(n.length<3)return this.show('Use at least 3 characters');if(s.reserved.includes(n))return this.show(n+' is already reserved');this.ask({title:'Reserve “'+n+'”',desc:'New claims for '+n+'.privacyspace.com are blocked. Existing portals aren’t affected.',confirmLabel:'Reserve name',run:x=>{this.setState(st=>({reserved:[...st.reserved,n],newRes:''}));this.log('Reserved name '+n,'Subdomains',x);}});};
+  // domains
+  v.domainRows=s.domains.map(d=>({...d,hasIssue:!!d.issue,canCheck:d.status!=='ok',p:d.status==='ok'?pill('Verified','ok','circle-check'):d.status==='failing'?pill('Failing','bad','circle-x'):pill('Waiting for DNS','warn','hourglass'),
+   recheck:()=>{this.setState(st=>({clock:st.clock+1,domains:st.domains.map(x=>x.id===d.id?{...x,checked:'13 Oct, '+this.stamp().slice(-5)}:x)}));this.log('Re-checked DNS for '+d.domain+' · still not passing','Domains');this.show('Checked. Records still not found.');},
+   remind:()=>{this.log('Emailed owner about '+d.domain+' with the records to add','Domains');this.show('Email sent with the DNS records');}}));
+  // access
+  v.grantRows=s.grants.map(g=>({...g,ws:g.ws,org:g.orgName,isPending:g.status==='pending',isActive:g.status==='active',
+   p:g.status==='active'?pill('Active','ok'):g.status==='pending'?pill('Waiting for customer','warn'):pill('Ended','gray'),
+   detail:g.status==='active'?'Approved by '+g.approvedBy+' · '+g.left:g.status==='pending'?'Sent to the owner':g.left,
+   simApprove:()=>{const o2=s.orgs.find(x=>x.key===g.org);this.setState(st=>({grants:st.grants.map(x=>x.id===g.id?{...x,status:'active',approvedBy:o2.admin,left:'24 h left'}:x)}));this.log(o2.admin+' (customer) approved support access for '+g.staff+' · '+g.ws+' · 24 h','Access');this.show('Access approved for 24 hours');},
+   revoke:()=>this.ask({danger:true,title:'End support access',desc:g.staff+' loses access to '+g.ws+' immediately. The customer is told.',confirmLabel:'End access',run:x=>{this.setState(st=>({grants:st.grants.map(y=>y.id===g.id?{...y,status:'ended',left:'Ended '+this.stamp().slice(0,6)+', '+this.stamp().slice(-5)}:y)}));this.log('Ended support access for '+g.staff+' · '+g.ws,'Access',x);this.show('Access ended');}})}));
+  // staff
+  v.staffRoles=['Platform admin','Support','Security','Billing'];
+  v.staffRows=s.staff.map(p=>{const self=p.name===v.me.name;return {...p,initials:p.name.split(' ').map(x=>x[0]).join(''),key:p.key?pill('Registered','ok','key-round'):pill('Not set up','warn','shield-alert'),lock:!isAdmin||self,canRemove:isAdmin&&!self,
+   onRole:e=>{const r2=e.target.value;this.ask({title:'Change role for '+p.name,desc:p.name+' becomes '+r2+'. Permissions change at their next action.',confirmLabel:'Change role',run:x=>{this.setState(st=>({staff:st.staff.map(y=>y.name===p.name?{...y,role:r2}:y)}));this.log('Changed '+p.name+' from '+p.role+' to '+r2,'Staff',x);}});},
+   remove:()=>this.ask({danger:true,title:'Remove '+p.name,desc:'Their console access and any active support access end immediately.',confirmLabel:'Remove',run:x=>{this.setState(st=>({staff:st.staff.filter(y=>y.name!==p.name),grants:st.grants.map(g=>g.staff===p.name&&g.status==='active'?{...g,status:'ended',left:'Ended on removal'}:g)}));this.log('Removed staff member '+p.name,'Staff',x);}})};});
+  v.inviteStaff=()=>this.show('Invitation sent. A security key is required at first sign-in.');
+  // policy
+  const PL=[['mfa','Multi-factor authentication','Who must use MFA. Agencies and paid plans always require it.',[['new','Required for new organizations'],['all','Required for every organization'],['paid','Required on paid plans only']]],
+   ['retention','Delete closed cases after','Default for new workspaces. Customers can choose a shorter period.',[['12','12 months'],['24','24 months'],['36','36 months']]],
+   ['access','Longest support access','Maximum length a customer can approve per request.',[['4','4 hours'],['24','24 hours'],['72','72 hours']]],
+   ['dunning','Suspend for non-payment','Automatic. Members are locked out this long after the final failed payment attempt. Portals keep accepting requests and deadlines keep running. Paying reactivates the organization.',[['3','3 days after final attempt'],['7','7 days after final attempt'],['14','14 days after final attempt']]],
+   ['fallback','Fallback sender','When a customer’s sending domain fails, send from no-reply@privacyspace.com so requesters still get emails.',[['on','Use fallback sender'],['off','Hold emails until fixed']]]];
+  v.policies=PL.map(([k,label,help,opts])=>({label,help,val:s.policy[k],opts:opts.map(([v2,l])=>({v:v2,l})),onChange:e=>{const nv=e.target.value,nl=opts.find(x=>x[0]===nv)[1],ol=opts.find(x=>x[0]===s.policy[k])[1];this.ask({title:'Change “'+label+'”',desc:ol+' → '+nl+'. Applies to every organization from now on.',confirmLabel:'Change policy',run:x=>{this.setState(st=>({policy:{...st.policy,[k]:nv}}));this.log('Policy “'+label+'”: '+ol+' → '+nl,'Policy',x);this.show('Policy updated');}});}}));
+  // audit
+  const cats=['All','Organizations','Billing','Subdomains','Domains','Access','Staff','Policy'];
+  v.auditFilters=cats.map(f=>{const a=s.auditF===f;return {label:f,pressed:a?'true':'false',bg:a?'#0B1F3A':'#FFFFFF',fg:a?'#FFFFFF':'#344054',bd:a?'#0B1F3A':'#D0D5DD',go:()=>this.setState({auditF:f})};});
+  v.auditRows=s.audit.filter(a=>s.auditF==='All'||a.cat===s.auditF).map(a=>({...a,hasReason:!!a.reason}));
+  v.exportAudit=()=>{this.log('Exported staff audit log','Staff');this.show('Audit log exported as CSV');};
+  // modal
+  const m=s.modal;v.hasModal=!!m;v.mReason=s.mReason;
+  v.md=m?{title:m.title,desc:m.desc,confirmLabel:m.confirmLabel,reasonLabel:m.reasonLabel||'Reason (required, saved in the audit log)',placeholder:m.placeholder||'Why are you doing this?',btnBg:m.danger?'#B42318':'#0E7C7B',hasErr:s.mTried&&s.mReason.trim().length<5,hasOptions:!!m.options,optionLabel:m.optionLabel||'Option',optErr:s.mTried&&!!m.options&&!s.mOpt,options:(m.options||[]).map(o=>{const a=s.mOpt===o;return {label:o,checked:a?'true':'false',bg:a?'#D7F0EF':'#FFFFFF',bd:a?'#0E7C7B':'#D0D5DD',dot:a?'#0E7C7B':'#FFFFFF',dotB:a?'#0E7C7B':'#98A2B3',pick:()=>this.setState({mOpt:o})};})}:{};
+  v.onReason=e=>this.setState({mReason:e.target.value});v.closeModal=()=>this.setState({modal:null});v.stop=e=>e.stopPropagation();
+  v.confirmModal=()=>{const r=s.mReason.trim();if(r.length<5||(m.options&&!s.mOpt))return this.setState({mTried:true});const run=m.run,opt=s.mOpt;this.setState({modal:null});run(r,opt);};
+  v.hasToast=!!s.toast;v.toast=s.toast;
+  return v;
+ }
+}
+</script>
+</body>
+</html>

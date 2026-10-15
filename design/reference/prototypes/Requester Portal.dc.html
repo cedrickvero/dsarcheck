@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/lucide-static@0.460.0/font/lucide.css">
+<style>
+body{margin:0;background:#F2F4F7}
+*{box-sizing:border-box}
+button,input,textarea,select{font-family:inherit;font-size:inherit}
+:focus-visible{outline:2px solid #14919B;outline-offset:2px}
+button{transition:transform 100ms ease-out,background-color 120ms ease-out}
+button:active:not(:disabled){transform:scale(0.97)}
+a{color:#0E7C7B}
+a:hover{color:#0B1F3A}
+[class^="icon-"],[class*=" icon-"]{line-height:1;display:inline-block}
+@media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important}}
+</style>
+</helmet>
+<div style="min-height:100vh;background:#F2F4F7;display:flex;flex-direction:column;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#101828;font-size:15px;line-height:1.5">
+ <header style="background:#FFFFFF;border-bottom:1px solid #E4E7EC">
+  <div style="max-width:1040px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+   <span style="width:36px;height:36px;border-radius:8px;background:{{ brand }};color:#FFFFFF;display:grid;place-items:center;font-weight:700;font-size:17px;flex:none">{{ initial }}</span>
+   <div style="display:flex;flex-direction:column;flex:1;min-width:160px"><span style="font-weight:700;color:#101828">{{ company }}</span><span style="font-size:13px;color:#667085">Privacy request centre</span></div>
+   <sc-if value="{{ signedIn }}"><div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><span style="font-size:13px;color:#475467;display:inline-flex;gap:6px;align-items:center"><i class="icon-circle-user" aria-hidden="true"></i>{{ email }}</span><button onClick="{{ signOut }}" style="min-height:40px;padding:0 14px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#344054;font-weight:600;cursor:pointer;white-space:nowrap">Sign out</button></div></sc-if>
+  </div>
+ </header>
+ <main style="flex:1;padding:40px 24px 64px">
+
+  <sc-if value="{{ isSignin }}" hint-placeholder-val="{{ true }}">
+  <div style="max-width:440px;margin:0 auto;display:flex;flex-direction:column;gap:20px">
+   <div><h1 style="font-size:28px;line-height:1.25;margin:0 0 8px;color:#101828;letter-spacing:-0.01em">Track your privacy request</h1><p style="margin:0;color:#475467;text-wrap:pretty">Enter the email address you used to make your request. We’ll send you a sign-in link and a code. No password needed.</p></div>
+   <div style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:16px">
+    <label style="display:flex;flex-direction:column;gap:6px"><span style="font-weight:600;font-size:14px">Email address</span>
+     <input type="email" value="{{ emailDraft }}" onChange="{{ onEmail }}" onKeyDown="{{ emailKey }}" autoComplete="email" placeholder="name@example.com" style="height:44px;border:1px solid {{ emailBd }};border-radius:8px;padding:0 12px;background:#FFFFFF">
+     <sc-if value="{{ emailErr }}"><span role="alert" style="color:#B42318;font-size:13px;display:flex;gap:6px;align-items:center"><i class="icon-circle-alert" aria-hidden="true"></i>{{ emailErr }}</span></sc-if>
+    </label>
+    <button onClick="{{ sendLink }}" style="min-height:48px;border:none;border-radius:8px;background:{{ brand }};color:#FFFFFF;font-weight:600;cursor:pointer;font-size:15px">Email me a sign-in link</button>
+    <span style="font-size:13px;color:#667085;text-wrap:pretty">For your security, we never show whether an email address has a request. If it does, the email arrives within a minute.</span>
+   </div>
+   <p style="margin:0;font-size:14px;color:#475467">Haven’t made a request yet? <a href="Intake Form.dc.html">Make a data protection request</a></p>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isCode }}">
+  <div style="max-width:440px;margin:0 auto;display:flex;flex-direction:column;gap:20px">
+   <span style="width:48px;height:48px;border-radius:50%;background:#D9E8FF;color:#175CD3;display:grid;place-items:center;font-size:22px"><i class="icon-mail-check" aria-hidden="true"></i></span>
+   <div><h1 style="font-size:28px;line-height:1.25;margin:0 0 8px;color:#101828;letter-spacing:-0.01em">Check your email</h1><p style="margin:0;color:#475467;text-wrap:pretty">We sent a sign-in link to <strong style="color:#101828">{{ email }}</strong>. Open it on this device, or enter the 6-digit code from the same email.</p></div>
+   <div style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:16px">
+    <label style="display:flex;flex-direction:column;gap:6px"><span style="font-weight:600;font-size:14px">Sign-in code</span>
+     <input value="{{ code }}" onChange="{{ onCode }}" onKeyDown="{{ codeKey }}" inputMode="numeric" autoComplete="one-time-code" maxLength="6" placeholder="000000" style="height:52px;border:1px solid {{ codeBd }};border-radius:8px;padding:0 14px;background:#FFFFFF;font-family:'IBM Plex Mono',monospace;font-size:22px;letter-spacing:0.3em">
+     <sc-if value="{{ codeErr }}"><span role="alert" style="color:#B42318;font-size:13px;display:flex;gap:6px;align-items:center"><i class="icon-circle-alert" aria-hidden="true"></i>{{ codeErr }}</span></sc-if>
+    </label>
+    <button onClick="{{ verifyCode }}" style="min-height:48px;border:none;border-radius:8px;background:{{ brand }};color:#FFFFFF;font-weight:600;cursor:pointer;font-size:15px">Sign in</button>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:14px"><button onClick="{{ resend }}" style="border:none;background:transparent;padding:0;color:#0E7C7B;font-weight:600;cursor:pointer">Send a new code</button><button onClick="{{ changeEmail }}" style="border:none;background:transparent;padding:0;color:#0E7C7B;font-weight:600;cursor:pointer">Use a different email</button></div>
+    <sc-if value="{{ resent }}"><span role="status" style="font-size:13px;color:#0E6B4D;display:flex;gap:6px;align-items:center"><i class="icon-circle-check" aria-hidden="true"></i>New code sent. Earlier codes no longer work.</span></sc-if>
+   </div>
+   <span style="font-size:13px;color:#667085">The link and code expire after 15 minutes and work once. <button onClick="{{ openLink }}" style="border:1px dashed #98A2B3;background:#FFFFFF;border-radius:6px;padding:2px 8px;color:#475467;cursor:pointer;font-size:12px">Open link (prototype)</button></span>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isList }}">
+  <div style="max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:20px">
+   <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap"><div style="flex:1;min-width:240px"><h1 style="font-size:28px;line-height:1.25;margin:0 0 4px;color:#101828;letter-spacing:-0.01em">Your requests</h1><p style="margin:0;color:#475467">Requests made with {{ email }}</p></div><a href="Intake Form.dc.html" style="min-height:44px;padding:0 16px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;font-weight:600;color:#0B1F3A;display:inline-flex;gap:8px;align-items:center;text-decoration:none"><i class="icon-plus" aria-hidden="true"></i>Make a new request</a></div>
+   <sc-for list="{{ reqCards }}" as="r" hint-placeholder-count="2"><button onClick="{{ r.open }}" style="text-align:left;background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:20px 24px;cursor:pointer;display:flex;flex-direction:column;gap:14px;color:#101828" style-hover="border-color:#98A2B3">
+    <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:2px"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#475467">{{ r.id }}</span><span style="font-size:18px;font-weight:600;color:#101828">{{ r.title }}</span></div><span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:{{ r.st.bg }};color:{{ r.st.fg }};font-size:12px;font-weight:600"><i class="{{ r.st.icon }}" aria-hidden="true"></i>{{ r.st.label }}</span></div>
+    <sc-if value="{{ r.action }}"><div style="display:flex;gap:8px;align-items:center;background:#FDF0DC;color:#B54708;border-radius:8px;padding:8px 12px;font-size:14px;font-weight:600"><i class="icon-circle-alert" aria-hidden="true"></i>We need something from you</div></sc-if>
+    <div style="display:flex;gap:28px;flex-wrap:wrap;font-size:14px"><div><div style="font-size:12px;color:#667085;font-weight:500">Received</div><div>{{ r.received }}</div></div><div><div style="font-size:12px;color:#667085;font-weight:500">{{ r.dueLabel }}</div><div style="font-weight:600">{{ r.due }}</div></div><div style="flex:1;min-width:160px;display:flex;align-items:flex-end;justify-content:flex-end;gap:6px;color:#0E7C7B;font-weight:600">View request<i class="icon-chevron-right" aria-hidden="true"></i></div></div>
+   </button></sc-for>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isDetail }}">
+  <div style="max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:20px">
+   <div style="display:flex;gap:8px;align-items:center;font-size:14px;color:#667085"><button onClick="{{ toList }}" style="border:none;background:transparent;padding:0;color:#0E7C7B;font-weight:600;cursor:pointer;display:inline-flex;gap:4px;align-items:center"><i class="icon-chevron-left" aria-hidden="true"></i>Your requests</button><span>/</span><span style="font-family:'IBM Plex Mono',monospace;color:#344054">{{ rq.id }}</span></div>
+   <div style="display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start">
+    <div style="flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:16px">
+     <section style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><h1 style="flex:1;min-width:220px;font-size:26px;line-height:1.25;margin:0;color:#101828;letter-spacing:-0.01em">{{ rq.title }}</h1><span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;background:{{ rq.st.bg }};color:{{ rq.st.fg }};font-size:13px;font-weight:600"><i class="{{ rq.st.icon }}" aria-hidden="true"></i>{{ rq.st.label }}</span></div>
+      <p style="margin:0;color:#344054;text-wrap:pretty">{{ rq.summary }}</p>
+      <div role="status" style="display:flex;flex-direction:column;gap:8px;background:#F7F8FA;border-radius:10px;padding:14px 16px">
+       <div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap"><span style="font-size:13px;color:#667085;font-weight:500">{{ rq.dueLabel }}</span><span style="font-weight:600;color:#101828">{{ rq.due }}</span><span style="font-size:13px;color:#475467;flex:1;text-align:right">{{ rq.dueNote }}</span></div>
+       <div aria-hidden="true" style="height:4px;border-radius:999px;background:#E4E7EC;overflow:hidden"><div style="height:100%;width:{{ rq.pct }};background:{{ brand }};border-radius:999px"></div></div>
+      </div>
+     </section>
+
+     <sc-if value="{{ needsInfo }}">
+     <section aria-labelledby="need-h" style="background:#FFFFFF;border:1.5px solid #F5B66B;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:14px">
+      <div style="display:flex;gap:12px;align-items:flex-start"><span style="width:36px;height:36px;border-radius:8px;background:#FDF0DC;color:#B54708;display:grid;place-items:center;flex:none"><i class="icon-file-up" aria-hidden="true"></i></span><div><h2 id="need-h" style="margin:0;font-size:18px;color:#101828">We need one more thing to confirm it’s you</h2><p style="margin:4px 0 0;color:#475467;font-size:14px;text-wrap:pretty">The name on your account doesn’t match the name on your request. Please upload a recent document showing your name and address, such as a utility bill or bank statement from the last 3 months. You can cover anything else on it.</p></div></div>
+      <sc-if value="{{ noUpload }}"><div style="border:1.5px dashed #D0D5DD;border-radius:10px;padding:16px;display:flex;gap:12px;align-items:center;color:#475467;flex-wrap:wrap"><i class="icon-upload" aria-hidden="true" style="font-size:20px"></i><span style="font-size:14px;flex:1;min-width:200px">PDF, JPG or PNG, up to 10 MB. Only our privacy team can open it.</span><button onClick="{{ pickFile }}" style="min-height:44px;padding:0 16px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;cursor:pointer;font-weight:600;color:#344054;white-space:nowrap">Choose file</button></div></sc-if>
+      <sc-if value="{{ hasUpload }}"><div style="display:flex;gap:10px;align-items:center;border:1px solid #E4E7EC;border-radius:10px;padding:12px 14px;font-size:14px"><i class="icon-file-text" aria-hidden="true" style="color:#475467"></i><span style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:13px">proof_of_address.pdf · 412 KB</span><button onClick="{{ clearFile }}" aria-label="Remove file" style="width:36px;height:36px;border:none;background:transparent;border-radius:8px;cursor:pointer;color:#667085"><i class="icon-x" aria-hidden="true"></i></button></div></sc-if>
+      <label style="display:flex;flex-direction:column;gap:6px"><span style="font-weight:600;font-size:14px">Anything we should know? (optional)</span><textarea rows="2" value="{{ infoNote }}" onChange="{{ onInfoNote }}" placeholder="e.g. My account is under my married name" style="border:1px solid #D0D5DD;border-radius:8px;padding:10px 12px;resize:vertical;line-height:1.5"></textarea></label>
+      <sc-if value="{{ uploadErr }}"><span role="alert" style="color:#B42318;font-size:13px;display:flex;gap:6px;align-items:center"><i class="icon-circle-alert" aria-hidden="true"></i>Choose a file before sending.</span></sc-if>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><button onClick="{{ sendInfo }}" style="min-height:48px;padding:0 22px;border:none;border-radius:8px;background:{{ brand }};color:#FFFFFF;font-weight:600;cursor:pointer">Send to {{ company }}</button><span style="font-size:13px;color:#667085">This doesn’t change your response date.</span></div>
+     </section>
+     </sc-if>
+
+     <sc-if value="{{ infoSent }}"><div role="status" style="display:flex;gap:10px;align-items:flex-start;background:#D9F2E7;color:#0E6B4D;border-radius:10px;padding:12px 16px;font-size:14px"><i class="icon-circle-check" aria-hidden="true" style="margin-top:3px"></i><span>Document received on 13 Oct 2026. We’ll review it within 2 business days and email you either way.</span></div></sc-if>
+
+     <sc-if value="{{ isExtended }}"><div style="display:flex;gap:12px;align-items:flex-start;background:#D9E8FF;color:#175CD3;border-radius:10px;padding:14px 16px;font-size:14px"><i class="icon-calendar-clock" aria-hidden="true" style="margin-top:3px"></i><span style="text-wrap:pretty"><strong style="font-weight:600">We need more time.</strong> Your request involves a large volume of support history, so we’ve extended the deadline by one month, to 24 Nov 2026. The law allows this for complex requests. You’ll still get everything you asked for.</span></div></sc-if>
+
+     <sc-if value="{{ isDone }}">
+     <section aria-labelledby="docs-h" style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:14px">
+      <div><h2 id="docs-h" style="margin:0;font-size:18px;color:#101828">Your documents</h2><p style="margin:4px 0 0;color:#475467;font-size:14px;text-wrap:pretty">Some information has been removed because it relates to other people or contains confidential internal notes.</p></div>
+      <sc-for list="{{ docs }}" as="d"><div style="display:flex;gap:12px;align-items:center;border:1px solid #E4E7EC;border-radius:10px;padding:12px 14px;flex-wrap:wrap"><span style="width:36px;height:36px;border-radius:8px;background:#F2F4F7;color:#344054;display:grid;place-items:center;flex:none"><i class="{{ d.icon }}" aria-hidden="true"></i></span><span style="flex:1;min-width:180px;display:flex;flex-direction:column"><span style="font-weight:600;font-size:14px">{{ d.label }}</span><span style="font-size:12px;color:#667085"><span style="font-family:'IBM Plex Mono',monospace">{{ d.file }}</span> · {{ d.size }}</span></span><button onClick="{{ d.dl }}" style="min-height:44px;padding:0 16px;border-radius:8px;border:none;background:{{ brand }};color:#FFFFFF;font-weight:600;cursor:pointer;display:inline-flex;gap:8px;align-items:center"><i class="icon-download" aria-hidden="true"></i>Download</button></div></sc-for>
+      <span style="font-size:13px;color:#667085">{{ dlNote }}</span>
+     </section>
+     </sc-if>
+
+     <sc-if value="{{ isPurged }}">
+     <section aria-labelledby="purged-h" style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:24px;display:flex;gap:12px;align-items:flex-start">
+      <span style="width:36px;height:36px;border-radius:8px;background:#F2F4F7;color:#475467;display:grid;place-items:center;flex:none"><i class="icon-archive" aria-hidden="true"></i></span>
+      <div><h2 id="purged-h" style="margin:0;font-size:18px;color:#101828">Your documents</h2><p style="margin:4px 0 0;color:#475467;font-size:14px;text-wrap:pretty">{{ purgedNote }}</p></div>
+     </section>
+     </sc-if>
+
+     <section aria-labelledby="tl-h" style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:4px">
+      <h2 id="tl-h" style="margin:0 0 12px;font-size:18px;color:#101828">Progress</h2>
+      <ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column">
+       <sc-for list="{{ steps }}" as="st" hint-placeholder-count="5"><li style="display:grid;grid-template-columns:28px minmax(0,1fr);gap:14px">
+        <div style="display:flex;flex-direction:column;align-items:center"><span aria-hidden="true" style="width:28px;height:28px;border-radius:50%;border:2px solid {{ st.bd }};background:{{ st.bg }};color:{{ st.fg }};display:grid;place-items:center;font-size:12px;font-weight:700;flex:none"><sc-if value="{{ st.done }}"><i class="icon-check" aria-hidden="true"></i></sc-if><sc-if value="{{ st.notDone }}">{{ st.n }}</sc-if></span><sc-if value="{{ st.line }}"><span style="width:2px;flex:1;min-height:20px;background:{{ st.lineBg }};margin:4px 0"></span></sc-if></div>
+        <div style="padding:2px 0 18px;display:flex;flex-direction:column;gap:2px"><span style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap"><span style="font-weight:{{ st.w }};color:{{ st.lfg }}">{{ st.label }}</span><span style="font-size:13px;color:#667085">{{ st.date }}</span><span style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">{{ st.state }}</span></span><span style="font-size:14px;color:#475467;text-wrap:pretty">{{ st.desc }}</span></div>
+       </li></sc-for>
+      </ol>
+     </section>
+
+     <section aria-labelledby="msg-h" style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:14px">
+      <div><h2 id="msg-h" style="margin:0;font-size:18px;color:#101828">Messages</h2><p style="margin:4px 0 0;color:#475467;font-size:14px">Everything we’ve sent you about this request, and your replies.</p></div>
+      <ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px">
+       <sc-for list="{{ msgs }}" as="m" hint-placeholder-count="3"><li style="display:flex;flex-direction:column;gap:4px;align-self:{{ m.align }};max-width:88%;background:{{ m.bg }};border:1px solid {{ m.bd }};border-radius:12px;padding:12px 14px">
+        <span style="font-size:12px;color:#667085">{{ m.who }} · {{ m.at }}</span>
+        <span style="font-weight:600;font-size:14px;color:#101828">{{ m.subject }}</span>
+        <sc-if value="{{ m.hasBody }}"><span style="font-size:14px;color:#344054;text-wrap:pretty">{{ m.body }}</span></sc-if>
+       </li></sc-for>
+      </ol>
+      <label style="display:flex;flex-direction:column;gap:6px;border-top:1px solid #EEF1F4;padding-top:14px"><span style="font-weight:600;font-size:14px">Send a message</span><textarea rows="3" value="{{ msgDraft }}" onChange="{{ onMsg }}" placeholder="Ask a question about this request" style="border:1px solid #D0D5DD;border-radius:8px;padding:10px 12px;resize:vertical;line-height:1.5"></textarea></label>
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap"><button onClick="{{ sendMsg }}" disabled="{{ msgEmpty }}" style="min-height:44px;padding:0 18px;border-radius:8px;border:1px solid #D0D5DD;background:#FFFFFF;color:#0B1F3A;font-weight:600;cursor:pointer">Send message</button><span style="font-size:13px;color:#667085">We usually reply within 2 business days. Don’t send identity documents here unless we ask.</span></div>
+     </section>
+    </div>
+
+    <aside style="flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:16px">
+     <section style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:12px">
+      <h2 style="margin:0;font-size:16px;color:#101828">Request details</h2>
+      <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px">
+       <span style="color:#667085">Reference</span><span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600">{{ rq.id }}</span>
+       <span style="color:#667085">Type</span><span>{{ rq.type }}</span>
+       <span style="color:#667085">Received</span><span>{{ rq.received }}</span>
+       <span style="color:#667085">{{ rq.dueLabel }}</span><span>{{ rq.due }}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid #EEF1F4;padding-top:12px"><span style="font-size:13px;color:#667085">What you asked for</span><span style="font-size:14px;color:#344054;text-wrap:pretty">“{{ rq.details }}”</span></div>
+      <span style="font-size:12px;color:#667085">Quote {{ rq.id }} if you contact us about this request.</span>
+     </section>
+     <section style="background:#FFFFFF;border:1px solid #E4E7EC;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:8px">
+      <h2 style="margin:0;font-size:16px;color:#101828">Your rights</h2>
+      <p style="margin:0;font-size:14px;color:#475467;text-wrap:pretty">If you’re unhappy with how we handled your request, you can complain to a data protection supervisory authority. In Sweden that’s IMY (Integritetsskyddsmyndigheten).</p>
+     </section>
+    </aside>
+   </div>
+  </div>
+  </sc-if>
+ </main>
+ <footer style="border-top:1px solid #E4E7EC;background:#FFFFFF">
+  <div style="max-width:1040px;margin:0 auto;padding:16px 24px;display:flex;flex-direction:column;gap:6px;font-size:12px;color:#667085">
+   <span style="text-wrap:pretty">Operated by Privacyspace on behalf of {{ company }}. {{ company }} decides how your request is handled. Questions: {{ privacyEmail }}</span>
+   <sc-if value="{{ signedIn }}"><span>For your security, you’re signed out after 30 minutes without activity.</span></sc-if>
+   <sc-if value="{{ poweredBy }}"><span>Request handling powered by Privacyspace</span></sc-if>
+  </div>
+ </footer>
+ <sc-if value="{{ hasToast }}"><div role="status" aria-live="polite" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#0B1F3A;color:#FFFFFF;padding:12px 18px;border-radius:10px;box-shadow:0 10px 30px rgba(11,31,58,0.3);font-size:14px;z-index:60;max-width:90vw">{{ toast }}</div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;scenario&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;progress&quot;,&quot;info&quot;,&quot;extended&quot;,&quot;done&quot;],&quot;default&quot;:&quot;progress&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Prototype&quot;},&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;signin&quot;,&quot;list&quot;,&quot;detail&quot;],&quot;default&quot;:&quot;signin&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Prototype&quot;},&quot;brandColor&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#3B4CCA&quot;,&quot;options&quot;:[&quot;#3B4CCA&quot;,&quot;#0E7C7B&quot;,&quot;#B8432F&quot;,&quot;#1F2937&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Branding&quot;},&quot;companyName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Lumen Analytics&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Branding&quot;},&quot;privacyEmail&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;privacy@lumen.io&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Branding&quot;},&quot;poweredBy&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Branding&quot;}}">
+const SC_STATUS={
+ info:{label:'Confirming your identity',bg:'#FDF0DC',fg:'#B54708',icon:'icon-circle-alert'},
+ progress:{label:'Collecting your data',bg:'#D7F0EF',fg:'#0A6463',icon:'icon-circle-dot'},
+ extended:{label:'Extended',bg:'#D9E8FF',fg:'#175CD3',icon:'icon-calendar-clock'},
+ review:{label:'Final review',bg:'#D9E8FF',fg:'#175CD3',icon:'icon-lock'},
+ done:{label:'Completed',bg:'#D9F2E7',fg:'#0E6B4D',icon:'icon-circle-check'}
+};
+class Component extends DCLogic {
+ state={screen:null,emailDraft:'',email:'maya.lindqvist@fjordmail.se',emailErr:'',code:'',codeErr:'',resent:false,sel:'DSAR-2026-00418',upload:false,uploadErr:false,infoNote:'',infoSent:false,extra:[],msgDraft:'',toast:null};
+ componentDidMount(){if(typeof window!=='undefined')window.__rp=this;}
+ componentWillUnmount(){clearTimeout(this._t);}
+ show(m){this.setState({toast:m});clearTimeout(this._t);this._t=setTimeout(()=>this.setState({toast:null}),4000);}
+ go(screen,o){this.setState({screen,...(o||{})});if(typeof window!=='undefined')window.scrollTo(0,0);}
+ renderVals(){
+  const s=this.state,p=this.props;
+  const brand=p.brandColor||'#3B4CCA',company=p.companyName||'Lumen Analytics',privacyEmail=p.privacyEmail||'privacy@lumen.io';
+  const scen=s.scen||p.scenario||'progress';
+  const screen=s.screen||p.startScreen||'signin';
+  const v={brand,company,privacyEmail,initial:company.charAt(0),poweredBy:p.poweredBy??true,email:s.email,toast:s.toast,hasToast:!!s.toast};
+  v.isSignin=screen==='signin';v.isCode=screen==='code';v.isList=screen==='list';v.isDetail=screen==='detail';v.signedIn=v.isList||v.isDetail;
+  v.emailDraft=s.emailDraft;v.onEmail=e=>this.setState({emailDraft:e.target.value,emailErr:''});v.emailErr=s.emailErr;v.emailBd=s.emailErr?'#B42318':'#D0D5DD';
+  v.sendLink=()=>{const e=s.emailDraft.trim();if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e))return this.setState({emailErr:'Enter a valid email address, like name@example.com.'});this.go('code',{email:e,code:'',codeErr:'',resent:false});};
+  v.emailKey=e=>{if(e.key==='Enter')v.sendLink();};
+  v.code=s.code;v.onCode=e=>this.setState({code:e.target.value.replace(/\D/g,'').slice(0,6),codeErr:''});v.codeErr=s.codeErr;v.codeBd=s.codeErr?'#B42318':'#D0D5DD';
+  v.verifyCode=()=>{if(s.code.length!==6)return this.setState({codeErr:'Enter the 6-digit code from the email.'});this.go('list');};
+  v.codeKey=e=>{if(e.key==='Enter')v.verifyCode();};
+  v.openLink=()=>this.go('list');v.resent=s.resent;v.resend=()=>this.setState({resent:true,code:''});v.changeEmail=()=>this.go('signin',{emailErr:''});
+  v.signOut=()=>this.go('signin',{emailDraft:'',code:''});
+  const st=scen==='info'&&s.infoSent?'info':scen;
+  const due=scen==='extended'?'24 Nov 2026':'24 Oct 2026';
+  const r418={id:'DSAR-2026-00418',type:'Access',title:'Copy of your personal data',received:'24 Sep 2026',st:SC_STATUS[st],
+   dueLabel:scen==='done'?'Completed':'Response due by',due:scen==='done'?'13 Oct 2026':due,
+   details:'Please send me a copy of all personal data you hold about me, including support conversations and billing records, and tell me who it has been shared with.'};
+  const r287={id:'DSAR-2026-00287',type:'Rectification',title:'Correct your personal data',received:'3 Jun 2026',st:SC_STATUS.done,dueLabel:'Completed',due:'11 Jun 2026'};
+  v.reqCards=[r418,r287].map(r=>({...r,action:r.id===r418.id&&scen==='info'&&!s.infoSent,open:()=>{this.go('detail',{sel:r.id});}}));
+  v.toList=()=>this.go('list');
+  const isOld=s.sel==='DSAR-2026-00287';
+  const cur=isOld?{...r287,details:'My billing address is wrong. Please correct it to Storgatan 14, 211 34 Malmö.'}:r418;
+  const sumMap={info:s.infoSent?'Thanks for sending your document. We’re checking it now.':'We need one more document from you before we can start collecting your data.',progress:'Your identity is confirmed. We’re now checking every place your data may be held.',extended:'Your identity is confirmed and we’re still collecting your data. We’ve extended the deadline.',done:'Your request is complete. Your documents are ready to download below.'};
+  const pctMap={info:40,progress:63,extended:32,done:100};
+  const leftMap={info:'11 days left',progress:'11 days left',extended:'42 days left',done:'Closed 19 days after we received it'};
+  v.rq={...cur,summary:isOld?'We corrected your billing address on 11 Jun 2026.':sumMap[scen],pct:(isOld?100:pctMap[scen])+'%',dueNote:isOld?'Closed 8 days after we received it':leftMap[scen]};
+  v.needsInfo=!isOld&&scen==='info'&&!s.infoSent;v.infoSent=!isOld&&scen==='info'&&s.infoSent;v.isExtended=!isOld&&scen==='extended';v.isDone=!isOld&&scen==='done';
+  v.noUpload=!s.upload;v.hasUpload=s.upload;v.pickFile=()=>this.setState({upload:true,uploadErr:false});v.clearFile=()=>this.setState({upload:false});
+  v.uploadErr=s.uploadErr;v.infoNote=s.infoNote;v.onInfoNote=e=>this.setState({infoNote:e.target.value});
+  v.sendInfo=()=>{if(!s.upload)return this.setState({uploadErr:true});this.setState(x=>({infoSent:true,extra:[...x.extra,{dir:'in',at:'13 Oct 2026, 10:44',subject:'You sent a document',body:'proof_of_address.pdf'+(x.infoNote.trim()?' · “'+x.infoNote.trim()+'”':'')}]}));};
+  v.docs=[{icon:'icon-file-archive',label:'Your personal data',file:'lumen_data_DSAR-2026-00418.zip',size:'1.2 MB',dl:()=>this.show('Download started. The link expires 7 days after first opened.')},{icon:'icon-file-text',label:'Our response letter',file:'response_DSAR-2026-00418.pdf',size:'86 KB',dl:()=>this.show('Download started.')}];
+  v.dlNote='Download links expire 7 days after you first open them. The files are deleted on 12 Nov 2026, 30 days after we closed your request. This record of your request stays here.';
+  v.isPurged=isOld;v.purgedNote='We deleted the files for this request on 11 Jul 2026, 30 days after we closed it, as our retention policy requires. The record of what you asked for, what we did and our messages stays here.';
+  // timeline
+  const S=(label,date,desc,state)=>({label,date,desc,state});
+  let steps;
+  if(isOld)steps=[S('Received','3 Jun','We sent a reference number to your email.','done'),S('Identity confirmed','3 Jun','Your email and customer ID matched our records.','done'),S('Making the correction','5 Jun','We updated your billing address in every system that holds it.','done'),S('Final review','10 Jun','A senior member of our privacy team checked the response.','done'),S('Completed','11 Jun','We emailed you confirmation of the change.','done')];
+  else{
+   const idDone=scen!=='info';
+   steps=[S('Received','24 Sep','We sent a reference number to your email.','done'),
+    S(idDone?'Identity confirmed':'Confirming your identity',idDone?'24 Sep':(s.infoSent?'13 Oct':'25 Sep'),idDone?'Your email and customer ID matched our records.':(s.infoSent?'We’re reviewing the document you sent.':'We need one more document from you. See above.'),idDone?'done':'current'),
+    S('Collecting your data',scen==='done'?'10 Oct':'',scen==='done'?'We checked every place your data may be held.':'We’re checking every place your data may be held.',scen==='done'?'done':idDone?'current':'todo'),
+    S('Final review',scen==='done'?'13 Oct':'','A senior member of our privacy team reviews the response before it’s sent.',scen==='done'?'done':'todo'),
+    S('Completed',scen==='done'?'13 Oct':'',scen==='done'?'Your documents are ready to download.':'You’ll get an email when your documents are ready.',scen==='done'?'done':'todo')];
+  }
+  v.steps=steps.map((x,i)=>{const done=x.state==='done',c=x.state==='current';return {...x,n:i+1,done,notDone:!done,bg:done?brand:'#FFFFFF',fg:done?'#FFFFFF':c?brand:'#667085',bd:done||c?brand:'#D0D5DD',lfg:done||c?'#101828':'#667085',w:c?'600':'500',line:i<steps.length-1,lineBg:done?brand:'#E4E7EC',state:done?'(complete)':c?'(current step)':'(not started)'};});
+  // messages
+  const M=(dir,at,subject,body)=>({dir,at,subject,body:body||''});
+  let base;
+  if(isOld)base=[M('out','3 Jun 2026, 14:02','We received your request'),M('out','11 Jun 2026, 09:30','Your request is complete','We corrected your billing address in our records.')];
+  else{base=[M('out','24 Sep 2026, 09:12','We received your request','Your reference is DSAR-2026-00418.'),M('in','24 Sep 2026, 09:31','You confirmed your email address')];
+   if(scen==='info')base.push(M('out','25 Sep 2026, 10:15','We need one more thing to confirm it’s you','Please upload a recent document showing your name and address.'));
+   else base.push(M('out','24 Sep 2026, 11:05','Identity confirmed','We’ve started collecting your data.'));
+   if(scen==='extended')base.push(M('out','13 Oct 2026, 09:40','We need more time to complete your request','New deadline: 24 Nov 2026.'));
+   if(scen==='done')base.push(M('out','13 Oct 2026, 10:50','Your request is complete','Your documents are ready to download in this portal.'));
+   base=base.concat(s.extra);}
+  v.msgs=base.map(m=>{const out=m.dir==='out';return {...m,hasBody:!!m.body,who:out?company:'You',align:out?'flex-start':'flex-end',bg:out?'#F7F8FA':'#FFFFFF',bd:out?'#EEF1F4':'#D0D5DD'};});
+  v.msgDraft=s.msgDraft;v.onMsg=e=>this.setState({msgDraft:e.target.value});v.msgEmpty=!s.msgDraft.trim();
+  v.sendMsg=()=>{const t=s.msgDraft.trim();if(!t)return;this.setState(x=>({msgDraft:'',extra:[...x.extra,{dir:'in',at:'13 Oct 2026, 10:46',subject:'Your message',body:t}]}));this.show('Message sent. We usually reply within 2 business days.');};
+  return v;
+ }
+}
+</script>
+</body>
+</html>

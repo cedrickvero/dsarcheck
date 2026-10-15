@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens land here in Phase 0, taken from docs/02-design-system.md.
+ * Keep the values below as neutral fallbacks only - do not invent colours,
+ * radii or font sizes. The handoff is the source of truth.
+ */
+:root {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+}
