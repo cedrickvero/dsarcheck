@@ -117,3 +117,73 @@ probe reveals:
 The new db:verify invariant caught both within seconds of being written, which is the
 whole point of proving a check can fail: `has_table_privilege('app_runtime','objects','DELETE')`
 stayed `true` until the second migration, and the gate said so.
+
+---
+
+## FINAL STATUS: R2 COMPLETE — both gates approved
+
+| Gate | Verdict | Risk | Rounds |
+|---|---|---|---|
+| Privacy & security guardrail | **APPROVE R2 HARDENING** | **LOW** | 3 (c2c9a8c -> 0146aa1 -> f89b184 -> c21c2d7) |
+| QA & release | **R2 QA: PASS** | — | 3 |
+
+### Commit chain
+
+```
+c21c2d7  fix(r2): denial-code fidelity + close the guardrail NF findings
+f89b184  fix(r2): audit every refusal path (closes the F-2 blocker)
+0146aa1  fix(r2): close all eight guardrail findings
+8d3bad7  docs(qa): record the eight guardrail findings and their fixes
+c2c9a8c  feat(r2): file/URL contract + objects table (the reviewed commit)
+cd49d64  feat(r2): apply the approved R2 patch
+```
+
+### Final evidence (both gates, independently produced)
+
+```
+42/42 db:verify invariants     113 tests / 13 files       typecheck 0
+boundary 48 files, 0 violations                           build OK
+self-test: all 11 R2 object checks fail on a broken table
+db:migrate idempotent x2 (identical output, 42/42 both runs)
+no table in schema public is deletable by app_runtime or app_tenant
+migration counts: 7 rows = 7 disk files (0000-0006) = 7 journal entries
+```
+
+### What the audit trail can now reconstruct
+
+The denial taxonomy was rebuilt across three rounds, driven by two gates catching
+different facets of the same defect. An auditor can now distinguish, **without parsing
+free text**:
+
+| Event | `denialCode` | Discriminator |
+|---|---|---|
+| tenant-boundary probe (cross-tenant key) | `invalid_object_key` | `object_id` **NOT NULL** |
+| malformed request key | `invalid_object_key` | `object_id` NULL |
+| purpose mix-up | `purpose_key_mismatch` | — |
+| TTL policy refusal | `invalid_ttl` / `invalid_ttl_exception` | exception named? |
+| unusable reason | `invalid_reason` | — |
+| unknown purpose | `unknown_purpose` | — |
+| permission-layer denial | `authorization_denied` | — |
+
+That the first two rows are distinguishable at all is the direct product of NF-1 and
+NF-2 both being fixed — QA caught NF-1 as a blocker while the guardrail rated it LOW,
+and the guardrail's NF-2 supplied the discriminator that makes NF-1's fix verifiable.
+
+### Two qualifications carried forward (guardrail's own, judged NOT delta-introduced)
+
+Both are **pre-existing and non-blocking** (`new_findings: []`), and both are audit-trail
+fidelity issues of the kind this prerequisite exists to eliminate, so they are carried
+into **R3 (config & transport guards)**, whose remit already covers error handling:
+
+- **N-1** — the denialCode triage in `signedUrl.ts` falls through to `invalid_purpose`
+  for ANY error that is not `AuthorizationDeniedError`/`UnknownPurposeError`, so an
+  internal outage (e.g. a permission store throwing) is audited as a *purpose-policy
+  refusal*. Byte-identical at f89b184 and HEAD; not delta-introduced.
+- **N-2** — if the actor's workspace/org row does not exist, the denial INSERT fails
+  `audit_events_workspace_fk`, and that write error **masks the original refusal** and
+  lands zero rows. Structural and identical for every denial path; unreachable for a
+  DB-derived actor, but the masking behaviour is wrong regardless.
+
+Also carried into R3 from earlier rounds: **O5** (`toErrorEnvelope` logs a code-frame and
+stack for every >=500 including intentional 501s) and the **insecure in-code S3
+credential defaults** that would boot in production.
