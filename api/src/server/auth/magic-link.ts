@@ -37,7 +37,16 @@ export async function issueLink(
   origin: string,
 ): Promise<IssuedLink & { url: string | null; role: string | null }> {
   const normalised = normaliseEmail(email);
-  const [user] = await tx.select().from(users).where(eq(users.email, normalised)).limit(1);
+  // HIGH-1: an address can legitimately belong to more than one workspace. Matching one
+  // row at random would be a cross-tenant hazard, so an ambiguous address is refused
+  // outright (the caller still returns the generic response). Choosing among them needs
+  // a workspace-selection step that does not exist yet - recorded as a limitation rather
+  // than silently resolved.
+  const matches = await tx.select().from(users).where(eq(users.email, normalised));
+  if (matches.length > 1) {
+    return { token: null, userId: null, orgId: null, workspaceId: null, url: null, role: null };
+  }
+  const user = matches[0];
   if (!user || user.disabledAt) {
     return { token: null, userId: null, orgId: null, workspaceId: null, url: null, role: null };
   }

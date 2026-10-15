@@ -22,6 +22,8 @@ import { createSession } from "@/server/auth/session-store";
 import { redeemLink } from "@/server/auth/magic-link";
 import { sessionCookieName } from "@/server/auth/require-auth";
 import { hashToken } from "@/server/auth/crypto";
+import { enforceRateLimit, bucketKey } from "@/server/auth/rate-limit";
+import { env } from "@/env";
 
 export const GET = route(async (req) => {
   const token = new URL(req.url).searchParams.get("token");
@@ -29,6 +31,15 @@ export const GET = route(async (req) => {
   const tokenHash = hashToken(token);
 
   const result = await withLookup({ magicTokenHash: tokenHash }, async (tx) => {
+    // HIGH-2: the declared redeem limit was never enforced.
+    await enforceRateLimit(tx, {
+      bucketKey: bucketKey([tokenHash]),
+      scope: "magic_link_redeem",
+      limit: env.RATE_LIMIT_REDEEM_PER_HOUR,
+      windowSeconds: 3600,
+      workspaceId: null,
+    });
+
     const link = await redeemLink(tx, token);
     if (!link) return null;
 

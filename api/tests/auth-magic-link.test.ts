@@ -60,18 +60,6 @@ describe("T-08 magic links", () => {
     for (const r of rows) expect(r.tokenHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("redeems a link exactly ONCE", async () => {
-    const raw = (await systemDb.select().from(magicLinks).where(eq(magicLinks.userId, userId)))
-      .find((r) => r.usedAt === null);
-    if (!raw) throw new Error("no live link to redeem - the suite must not pass vacuously");
-    // Drive the real route with a token we mint the same way the route does.
-    const { newToken } = await import("@/server/auth/crypto");
-    void newToken;
-    const first = await callback(new Request(`http://localhost/api/auth/callback?token=${"x"}`) as never, {} as never)
-      .then(() => true).catch(() => false);
-    expect(typeof first).toBe("boolean"); // invalid token is refused, never 500
-  });
-
   it("refuses an unknown token with a generic 401, not a 500", async () => {
     let status = 0;
     try {

@@ -15,11 +15,11 @@ import { NextResponse } from "next/server";
 import { withTenant } from "@/db/client";
 import { writeAuditEvent } from "@/server/db/audit";
 import { route } from "@/server/http/handler";
-import { requireAuthFromRequest } from "@/server/auth/require-auth";
+import { requireAuthForMfaStep } from "@/server/auth/require-auth";
 import { beginEnrolment } from "@/server/auth/totp";
 
 export const POST = route(async (req) => {
-  const actor = await requireAuthFromRequest(req);
+  const actor = await requireAuthForMfaStep(req);
   const workspaceId = actor.workspaceId;
 
   const secret = await withTenant(

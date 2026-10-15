@@ -65,7 +65,9 @@ export function parseSessionCookie(cookieHeader: string | null): string | null {
   if (!cookieHeader) return null;
   for (const part of cookieHeader.split(";")) {
     const [name, ...rest] = part.trim().split("=");
-    if (name === sessionCookieName() || name === SESSION_COOKIE || name === SESSION_COOKIE_PROD) {
+    // LOW-3: only the name this environment actually issues. Accepting both meant a
+    // development-named cookie was honoured in production.
+    if (name === sessionCookieName()) {
       const value = rest.join("=");
       return value ? decodeURIComponent(value) : null;
     }
@@ -78,7 +80,10 @@ export function parseSessionCookie(cookieHeader: string | null): string | null {
  * where RLS exposes exactly the one session row whose hash matches - no tenant is set,
  * so nothing else is visible.
  */
-export async function requireAuthFromToken(token: string | null | undefined): Promise<Actor> {
+export async function requireAuthFromToken(
+  token: string | null | undefined,
+  opts: { allowMfaOutstanding?: boolean } = {},
+): Promise<Actor> {
   if (!token) throw new UnauthenticatedError();
 
   const resolved = await withLookup({ sessionTokenHash: (await import("./crypto")).hashToken(token) }, (tx) =>
@@ -93,7 +98,7 @@ export async function requireAuthFromToken(token: string | null | undefined): Pr
   if (!ROLES.includes(role)) throw new UnauthenticatedError();
 
   const mfaSatisfied = session.mfaSatisfiedAt !== null;
-  if (requiresMfa(role) && !mfaSatisfied) throw new MfaRequiredError();
+  if (requiresMfa(role) && !mfaSatisfied && !opts.allowMfaOutstanding) throw new MfaRequiredError();
 
   return {
     userId: user.id,
@@ -108,6 +113,23 @@ export async function requireAuthFromToken(token: string | null | undefined): Pr
 
 export async function requireAuthFromRequest(req: Request): Promise<Actor> {
   return requireAuthFromToken(parseSessionCookie(req.headers.get("cookie")));
+}
+
+/**
+ * PARTIAL authentication, for the MFA step ONLY.
+ *
+ * CRITICAL-2: requireAuth refuses a session whose MFA is outstanding, but the TOTP
+ * routes must be reachable BY EXACTLY THAT SESSION or MFA is unsatisfiable for every
+ * role that requires it - a deadlock. This resolves the session without the MFA check
+ * and returns an actor marked mfaSatisfied: false.
+ *
+ * It is deliberately narrow and must stay that way: the only legitimate callers are
+ * /api/auth/totp/enrol and /api/auth/totp/verify, both of which touch nothing but the
+ * caller's own mfa_totp row. tests/auth-mfa-step.test.ts asserts that no other module
+ * imports it, so widening this cannot happen quietly.
+ */
+export async function requireAuthForMfaStep(req: Request): Promise<Actor> {
+  return requireAuthFromToken(parseSessionCookie(req.headers.get("cookie")), { allowMfaOutstanding: true });
 }
 
 export async function requireAuth(): Promise<Actor> {

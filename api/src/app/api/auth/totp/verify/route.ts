@@ -10,13 +10,13 @@ import { writeAuditEvent } from "@/server/db/audit";
 import { route } from "@/server/http/handler";
 import { UnauthenticatedError, ValidationError } from "@/server/http/errors";
 import { env } from "@/env";
-import { requireAuthFromRequest } from "@/server/auth/require-auth";
+import { requireAuthForMfaStep } from "@/server/auth/require-auth";
 import { confirmEnrolment, isEnrolled, verifyForUser } from "@/server/auth/totp";
 import { markMfaSatisfied } from "@/server/auth/session-store";
 import { enforceRateLimit, bucketKey } from "@/server/auth/rate-limit";
 
 export const POST = route(async (req) => {
-  const actor = await requireAuthFromRequest(req);
+  const actor = await requireAuthForMfaStep(req);
   const body = (await req.json().catch(() => ({}))) as { code?: unknown };
   if (typeof body.code !== "string" || body.code.trim() === "") {
     throw new ValidationError("a verification code is required");

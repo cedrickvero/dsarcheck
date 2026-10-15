@@ -40,7 +40,7 @@ export const DECIDING_ROLES: readonly Role[] = [
 
 const MATRIX: Readonly<Record<Permission, readonly Role[]>> = {
   view_and_update_cases: ["owner", "workspace_admin", "request_handler", "approver", "system_owner"],
-  record_system_outcomes: ["owner", "workspace_admin", "request_handler", "system_owner"],
+  record_system_outcomes: ["owner", "workspace_admin", "request_handler", "system_owner", "approver"],
   approve_identity: ["owner", "workspace_admin", "request_handler", "approver"],
   approve_closure: ["owner", "workspace_admin", "approver"],
   export_evidence_packs: ["owner", "workspace_admin", "request_handler", "approver"],
