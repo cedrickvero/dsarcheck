@@ -17,10 +17,23 @@ export interface RouteContext {
 
 export type Handler = (req: NextRequest, ctx: RouteContext) => Promise<Response> | Response;
 
+/**
+ * Request ids arrive from the caller and are echoed into a response header and into
+ * every log line for the request, so they are treated as untrusted input: an inbound
+ * value is accepted ONLY if it is a UUID or a short, boring token. Anything else -
+ * too long, control characters, terminal escapes, a JSON blob - is discarded and a
+ * fresh id is generated rather than sanitised in place.
+ */
+const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{8,64}$/;
+const UUID_REQUEST_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function requestId(req: NextRequest): string {
   const incoming = req.headers.get("x-request-id");
-  const id = String(incoming && incoming.length > 0 ? incoming : randomUUID());
-  return id.slice(0, 128);
+  if (incoming && (UUID_REQUEST_ID.test(incoming) || SAFE_REQUEST_ID.test(incoming))) {
+    return incoming;
+  }
+  return randomUUID();
 }
 
 export function route(handler: Handler) {

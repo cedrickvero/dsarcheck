@@ -168,6 +168,48 @@ a property of the object, set at upload, so download events record `sse: null`.)
 (`src/server/auth/authorize.ts`) because the permission source arrives with T-08; until
 then no route may call the storage layer.
 
+## Config & transport guards (R3)
+
+**Security headers** — one definition in `src/server/http/security-headers.ts`, applied
+to every route from `next.config.ts`. The CSP is deliberately **nonce-free** (option 1):
+Tailwind compiles to static CSS so no inline styles are needed, and a nonce-based policy
+needs per-request middleware that only becomes meaningful once routes actually render
+(T-07+). `script-src 'self'` with no `unsafe-inline`/`unsafe-eval` already blocks injected
+inline script. **HSTS is production-only** (sending it over plain-http localhost would pin
+the developer's whole machine to https) and `preload` is withheld until the production
+domain list exists, because preload submission is effectively irreversible.
+
+**Cookies** — `src/server/http/cookies.ts` defines the attribute policy. Nothing calls it
+yet: authentication arrives in T-08. It exists so that when a session cookie IS introduced
+the secure flags are the only available shape. Production uses the `__Host-` prefix, which
+browsers reject unless the cookie is Secure, has no Domain, and is Path=/.
+
+**Request ids** — an inbound `x-request-id` is treated as untrusted input and accepted
+only if it is a UUID or a short boring token (`[A-Za-z0-9._-]{8,64}`). Anything else is
+discarded and a fresh id generated, rather than sanitised in place. These values are
+echoed into a response header and into every log line for the request, so reflecting
+caller bytes would be a log-injection surface.
+
+**Error envelope** — only errors we authored may surface their message; anything
+unrecognised becomes `Internal server error` with code `internal_error`, so a driver
+error, SQL fragment or stack cannot reach the client. Authored messages are stripped of
+control characters and capped. **Logging policy:** 4xx and intentional 501 stubs log
+nothing (logging a stack for every 501 made real incidents unreadable), an authored 5xx
+logs with its stack, and an unexpected failure always logs.
+
+**Production config guard** — `src/env.ts` refuses to start in production when any of these
+still hold a development default: `APP_DATABASE_URL` (a dev host with a placeholder
+password), `APP_DB_PASSWORD`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, or a non-https
+`APP_BASE_URL` (which would break Secure cookies and redirects). It is a **runtime** guard:
+`next build` also runs with `NODE_ENV=production` and a build stage has no secrets, so the
+build phase is exempt — otherwise every production build fails.
+
+**Audit fidelity (carried from R2's guardrail)** — an internal failure to *decide* is now
+recorded as `authorization_unavailable`, not as a purpose-policy refusal (N-1), and a
+failed audit write can no longer **replace the refusal it was recording** (N-2): the
+original error always surfaces, and the missing row is logged, because a refusal that could
+not be recorded is itself an incident.
+
 ## Known follow-ups
 
 - **Authentication is not implemented.** `requireAuth()` and `can()` throw `501`,

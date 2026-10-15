@@ -11,8 +11,11 @@ import { env } from "../env";
 export const mailer = nodemailer.createTransport({
   host: env.SMTP_HOST,
   port: env.SMTP_PORT,
-  secure: false,
-  ignoreTLS: true,
+  secure: env.SMTP_SECURE,
+  // Certificate verification is controlled by configuration and is refused outright
+  // in production by the startup guard. It must never be hardcoded off: doing so
+  // silently accepted any certificate, including an attacker's.
+  ignoreTLS: env.SMTP_IGNORE_TLS,
 });
 
 export interface MailInput {

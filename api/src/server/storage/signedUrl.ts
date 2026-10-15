@@ -162,29 +162,41 @@ async function auditDenial(args: {
   objectId?: string | null;
   error: Error;
 }): Promise<never> {
-  await withTenant(
-    { orgId: args.actor.orgId, workspaceId: args.actor.workspaceId, actorId: args.actor.userId },
-    async (tx) => {
-      await writeAuditEvent(tx, {
-        orgId: args.actor.orgId,
-        workspaceId: args.actor.workspaceId,
-        actorId: args.actor.userId,
-        actorLabel: args.actor.label,
-        action: args.action,
-        category: "file",
-        reason: args.reason,
-        objectType: "object",
-        objectId: args.objectId ?? null,
-        meta: {
-          outcome: "denied",
-          requestId: args.requestId,
-          deniedBy: args.error.name,
-          detail: args.error.message,
-          ...args.requested,
-        },
-      });
-    },
-  );
+  try {
+    await withTenant(
+      { orgId: args.actor.orgId, workspaceId: args.actor.workspaceId, actorId: args.actor.userId },
+      async (tx) => {
+        await writeAuditEvent(tx, {
+          orgId: args.actor.orgId,
+          workspaceId: args.actor.workspaceId,
+          actorId: args.actor.userId,
+          actorLabel: args.actor.label,
+          action: args.action,
+          category: "file",
+          reason: args.reason,
+          objectType: "object",
+          objectId: args.objectId ?? null,
+          meta: {
+            outcome: "denied",
+            requestId: args.requestId,
+            deniedBy: args.error.name,
+            detail: args.error.message,
+            ...args.requested,
+          },
+        });
+      },
+    );
+  } catch (writeError) {
+    // N-2: the refusal matters more than its record. Previously a failing audit write
+    // (e.g. the actor's workspace row is absent, so the FK rejects the row) REPLACED
+    // the refusal the caller needed to see, reporting an FK error instead of the
+    // denial. The original error is always rethrown; the missing row is logged,
+    // because a refusal that could not be recorded is itself an incident.
+    console.error(
+      `[${args.requestId}] AUDIT WRITE FAILED for denial ${args.error.name}; the refusal is reported but NOT recorded`,
+      writeError,
+    );
+  }
   throw args.error;
 }
 
@@ -243,12 +255,15 @@ async function resolvePurposeAndAuthorize(args: {
     const err = error instanceof Error ? error : new Error(String(error));
     // An unknown/user-controlled purpose and an authorization refusal are BOTH
     // denials and must both be on the record.
+    // N-1: the fall-through used to read "invalid_purpose", which filed an internal
+    // outage (e.g. an unreachable permission store) as a purpose-POLICY refusal. A
+    // failure to decide must be distinguishable from a decision to refuse.
     const denialCode =
       err instanceof AuthorizationDeniedError
         ? "authorization_denied"
         : err instanceof UnknownPurposeError
           ? "unknown_purpose"
-          : "invalid_purpose";
+          : "authorization_unavailable";
     await auditDenial({
       actor: args.actor,
       requestId: args.requestId,
