@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
+import { assertProductionConfig } from "@/env";
 import { NotImplementedError, toErrorEnvelope } from "./errors";
 
 /**
@@ -38,6 +39,24 @@ export function requestId(req: NextRequest): string {
   return randomUUID();
 }
 
+/**
+ * The production-config assertion, on the REQUEST path.
+ *
+ * A boot-only guard is not enough: Next.js skips the instrumentation hook entirely
+ * when NEXT_PHASE is "phase-production-build"
+ * (next/dist/server/lib/router-utils/instrumentation-globals: early return), so one
+ * environment variable was enough to suppress both the boot assertion and
+ * assertLeastPrivilege, and the server then served normally with unsafe configuration.
+ * Every request goes through route(), so this cannot be suppressed. Memoised: the check
+ * runs once per process.
+ */
+let productionConfigAsserted = false;
+function assertProductionConfigOnce(): void {
+  if (productionConfigAsserted) return;
+  assertProductionConfig();
+  productionConfigAsserted = true;
+}
+
 export function route(handler: Handler) {
   return async (
     req: NextRequest,
@@ -45,6 +64,7 @@ export function route(handler: Handler) {
   ): Promise<Response> => {
     const id = requestId(req);
     try {
+      assertProductionConfigOnce();
       const res = await handler(req, { params: ctx.params, requestId: id });
       res.headers.set("x-request-id", id);
       return res;

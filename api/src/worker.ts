@@ -1,4 +1,4 @@
-import { env } from "./env";
+import { assertProductionConfig, env } from "./env";
 import { startWorkers } from "./jobs";
 
 /**
@@ -11,6 +11,10 @@ async function main(): Promise<void> {
   await startWorkers();
   console.log("DSAR worker ready");
 }
+
+// The worker is a separate long-lived process and does not run instrumentation, so it
+// asserts the production configuration itself - before any work starts.
+assertProductionConfig();
 
 main().catch((error: unknown) => {
   console.error("Worker failed to start", error);

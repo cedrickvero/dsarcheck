@@ -18,9 +18,9 @@ import { EXCEPTION_TTL_HARD_CAP, validateTtlExceptions } from "@/server/storage/
  * localhost base URL. The startup guard below rejects each of them by name, and the
  * schema references these constants so the two cannot drift apart.
  */
-const DEV_DEFAULT_APP_DATABASE_URL =
-  "postgres://app_runtime:***@hermes_dsar_postgres:5432/hermes_dsar";
-const DEV_DEFAULT_APP_DB_PASSWORD = "app_runtime_dev_password";
+export const DEV_DEFAULT_APP_DATABASE_URL =
+  "postgres://app_runtime:app_runtime_dev_password@hermes_dsar_postgres:5432/hermes_dsar";
+export const DEV_DEFAULT_APP_DB_PASSWORD = "app_runtime_dev_password";
 const DEV_DEFAULT_S3_ACCESS_KEY = "hermes";
 const DEV_DEFAULT_S3_SECRET_KEY = "hermes_dev_password";
 const DEV_DEFAULT_APP_BASE_URL = "http://localhost:3000";
@@ -73,7 +73,7 @@ const envSchema = z.object({
   APP_DATABASE_URL: z
     .string()
     .min(1)
-    .default("postgres://app_runtime:app_runtime_dev_password@hermes_dsar_postgres:5432/hermes_dsar"),
+    .default(DEV_DEFAULT_APP_DATABASE_URL),
   APP_DB_PASSWORD: z.string().default(DEV_DEFAULT_APP_DB_PASSWORD),
 
 
@@ -146,6 +146,18 @@ function computeProductionProblems(opts: { isBuildPhase: boolean }): string[] {
   if (e.APP_DATABASE_URL === DEV_DEFAULT_APP_DATABASE_URL) {
     problems.push(
       "APP_DATABASE_URL is still the development default: production must name its own least-privilege DSN",
+    );
+  }
+  // Defence in depth against the constant and the schema default drifting apart again: a
+  // DSN need not be byte-identical to the default to be unsafe.
+  //
+  // Only the development PASSWORD is treated as the signal. The HOST deliberately is NOT:
+  // naming the compose service host (hermes_dsar_postgres) is exactly what a correctly
+  // configured production deployment on this network does, so rejecting on the host
+  // refused safe configurations - which is how this guard was caught over-blocking.
+  else if (e.APP_DATABASE_URL.includes(DEV_DEFAULT_APP_DB_PASSWORD)) {
+    problems.push(
+      "APP_DATABASE_URL carries the development password: production must name its own least-privilege DSN",
     );
   }
   if (e.APP_DB_PASSWORD === DEV_DEFAULT_APP_DB_PASSWORD) {

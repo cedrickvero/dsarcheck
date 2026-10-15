@@ -1,8 +1,12 @@
 import { spawnSync } from "node:child_process";
+import { DEV_DEFAULT_APP_DATABASE_URL } from "../src/env";
 import { describe, expect, it } from "vitest";
 
 const TSX = "node_modules/.bin/tsx";
-const APP_DB = process.env.APP_DATABASE_URL ?? "postgres://app_runtime:x@127.0.0.1:5432/dsar";
+// Never inherit the ambient APP_DATABASE_URL: with repoenv.sh sourced it IS the
+// development DSN, which made this "safe production configuration" fixture unsafe
+// and dependent on the calling shell.
+const APP_DB = "postgres://app_runtime:prod-db-password@db.prod.internal:5432/dsar";
 
 function load(overrides: Record<string, string | undefined>) {
   const env: NodeJS.ProcessEnv = {
@@ -132,7 +136,7 @@ describe("production config guard (R3)", () => {
 
   it("refuses the development APP_DATABASE_URL default (it would target a dev host)", () => {
     const r = load({
-      APP_DATABASE_URL: "postgres://app_runtime:***@hermes_dsar_postgres:5432/hermes_dsar",
+      APP_DATABASE_URL: DEV_DEFAULT_APP_DATABASE_URL,
     });
     expect(r.status).not.toBe(0);
     expect(`${r.stdout}${r.stderr}`).toMatch(/APP_DATABASE_URL is still the development default/);
@@ -181,5 +185,58 @@ describe("production config guard (R3)", () => {
     const r = loadAndAssert({});
     expect(r.status).toBe(0);
     expect(r.stdout).toContain("NOT_REFUSED");
+  });
+
+  it("refuses the development DSN when APP_DATABASE_URL is left UNSET (this check must not be vacuous)", () => {
+    // The guard used to compare against a placeholder constant that did not match the
+    // schema default, so an unset APP_DATABASE_URL fell back to the dev DSN (dev host
+    // + dev password) and BOOTED in production. Behavioural, so drift cannot hide.
+    const r = load({ APP_DATABASE_URL: undefined });
+    expect(r.status, "production booted on the development database DSN").not.toBe(0);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/APP_DATABASE_URL/);
+  });
+
+  it("refuses a development DSN even when it is not byte-identical to the default", () => {
+    // defence in depth against the constant drifting from the schema default again
+    const r = load({
+      APP_DATABASE_URL: "postgres://someone_else:app_runtime_dev_password@db.prod.internal:5432/dsar",
+    });
+    expect(r.status).not.toBe(0);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/development password/);
+  });
+
+  it("guards the REQUEST path, which Next cannot suppress via NEXT_PHASE", () => {
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      NODE_ENV: "production",
+      NEXT_PHASE: "phase-production-build",
+      S3_ACCESS_KEY: "hermes",
+      S3_SECRET_KEY: "hermes_dev_password",
+      APP_BASE_URL: "http://localhost:3000",
+      S3_ENDPOINT: "http://127.0.0.1:9000",
+    };
+    // Next skips the instrumentation hook when NEXT_PHASE is the build phase, so the
+    // boot guard is suppressible. Every request goes through route(), and that cannot be.
+    const r = spawnSync(
+      TSX,
+      [
+        "-e",
+        'import("./src/server/http/handler.ts").then(async (m) => { const h = m.route(() => new Response("ok", { status: 200 })); const res = await h({ headers: { get: () => null } }, { params: Promise.resolve({}) }); console.log("STATUS", res.status); process.exit(res.status === 500 ? 0 : 1); });',
+      ],
+      { encoding: "utf8", env },
+    );
+    expect(r.status, `request path served instead of refusing:\n${r.stdout}${r.stderr}`).toBe(0);
+    expect(r.stdout).toContain("STATUS 500");
+  });
+
+  it("every long-lived entry point asserts the production config", () => {
+    const fs = require("node:fs") as typeof import("node:fs");
+    // a future refactor must not silently drop an entry point
+    for (const file of ["src/instrumentation.ts", "src/worker.ts", "src/server/http/handler.ts"]) {
+      const source = fs.readFileSync(file, "utf8");
+      expect(source, `${file} no longer asserts the production config`).toContain(
+        "assertProductionConfig",
+      );
+    }
   });
 });
