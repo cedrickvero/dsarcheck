@@ -30,8 +30,10 @@ const UUID_REQUEST_ID =
 
 export function requestId(req: NextRequest): string {
   const incoming = req.headers.get("x-request-id");
-  if (incoming && (UUID_REQUEST_ID.test(incoming) || SAFE_REQUEST_ID.test(incoming))) {
-    return incoming;
+  // Explicit length bound before the allowlist, so a future relaxation of the regex
+  // cannot let an unbounded value reach a header or a log line.
+  if (incoming && incoming.length <= 64) {
+    if (UUID_REQUEST_ID.test(incoming) || SAFE_REQUEST_ID.test(incoming)) return incoming;
   }
   return randomUUID();
 }

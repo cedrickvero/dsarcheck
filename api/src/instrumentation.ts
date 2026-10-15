@@ -23,7 +23,11 @@
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME === "nodejs") {
+    const { assertProductionConfig } = await import("@/env");
     const { assertLeastPrivilege } = await import("@/db/client");
+    // Runtime config re-assertion, without the build-phase exemption: the import-time
+    // guard can be skipped by mutating NEXT_PHASE, this one cannot.
+    assertProductionConfig();
     try {
       const who = await assertLeastPrivilege();
       console.log(

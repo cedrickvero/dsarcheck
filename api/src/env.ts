@@ -130,16 +130,19 @@ const finalEnvSchema = checkedEnvSchema.refine(
  * configuration. In production, silently inheriting one is a security defect, not a
  * convenience - so the process refuses to start rather than run insecurely.
  */
-function productionProblems(): string[] {
+function computeProductionProblems(opts: { isBuildPhase: boolean }): string[] {
   const e = envSchema.parse(process.env);
   if (process.env.NODE_ENV !== "production") return [];
-  // It is a RUNTIME guard. `next build` also runs with NODE_ENV=production, and a
-  // build stage legitimately has no production secrets - so refusing there would
-  // make every production build fail (verified: it broke `npm run build` with
-  // "Failed to collect page data for /health"). The guard fires when the server
-  // actually starts serving, which is the moment the risk exists.
-  if (process.env.NEXT_PHASE === "phase-production-build") return [];
+  // `next build` runs with NODE_ENV=production and legitimately has no production
+  // secrets, so the IMPORT-TIME check stands down during the build. The runtime
+  // assertion below does NOT - that is what stops this exemption becoming a bypass.
+  if (opts.isBuildPhase) return [];
+
   const problems: string[] = [];
+  /** True when the operator never set the variable, so a development default applies. */
+  const unset = (key: string): boolean =>
+    process.env[key] === undefined || process.env[key] === "";
+
   if (e.APP_DATABASE_URL === DEV_DEFAULT_APP_DATABASE_URL) {
     problems.push(
       "APP_DATABASE_URL is still the development default: production must name its own least-privilege DSN",
@@ -155,26 +158,67 @@ function productionProblems(): string[] {
     problems.push("S3_SECRET_KEY is still the development default");
   }
   if (e.S3_ENDPOINT === DEV_DEFAULT_S3_ENDPOINT || /^https?:\/\/(localhost|127\.0\.0\.1)/.test(e.S3_ENDPOINT)) {
-    // A localhost object store in production means evidence uploads silently target
-    // a machine that does not hold the data - and is usually a leftover dev default.
     problems.push("S3_ENDPOINT must not point at localhost in production");
   }
   if (e.APP_BASE_URL === DEV_DEFAULT_APP_BASE_URL || !e.APP_BASE_URL.startsWith("https://")) {
-    // A localhost or http base URL in production breaks Secure cookies, redirects and
-    // password-reset links, and quietly downgrades transport.
     problems.push("APP_BASE_URL must be an https origin in production");
   }
   if (e.SMTP_IGNORE_TLS) {
     problems.push("SMTP_IGNORE_TLS must not be enabled in production");
   }
+
+  // Values that must be chosen deliberately rather than inherited. Each of these has a
+  // development default that would otherwise apply silently in production.
+  if (unset("S3_BUCKET")) {
+    problems.push("S3_BUCKET must be set explicitly: the development bucket name would be used");
+  }
+  if (unset("S3_FORCE_PATH_STYLE")) {
+    problems.push("S3_FORCE_PATH_STYLE must be set explicitly rather than inherited");
+  }
+  if (unset("DB_OWNER_USER")) {
+    problems.push(
+      "DB_OWNER_USER must be set explicitly: it names the owner role the least-privilege assertion checks against",
+    );
+  }
+  if (unset("DB_POOL_MAX")) {
+    problems.push("DB_POOL_MAX must be set explicitly rather than inherited");
+  }
+  if (unset("SMTP_PORT") || unset("SMTP_SECURE")) {
+    problems.push("SMTP_PORT and SMTP_SECURE must both be set explicitly in production");
+  } else if (e.SMTP_PORT === 465 && !e.SMTP_SECURE) {
+    problems.push("SMTP_PORT 465 requires SMTP_SECURE=true (implicit TLS)");
+  } else if (e.SMTP_PORT !== 465 && e.SMTP_SECURE) {
+    problems.push(`SMTP_PORT ${e.SMTP_PORT} requires SMTP_SECURE=false with STARTTLS`);
+  }
   return problems;
 }
 
-const problems = productionProblems();
-if (problems.length > 0) {
+const importTimeProblems = computeProductionProblems({
+  isBuildPhase: process.env.NEXT_PHASE === "phase-production-build",
+});
+if (importTimeProblems.length > 0) {
   throw new Error(
-    `refusing to start in production with unsafe configuration:\n  - ${problems.join("\n  - ")}`,
+    `refusing to start in production with unsafe configuration:\n  - ${importTimeProblems.join("\n  - ")}`,
   );
+}
+
+/**
+ * Runtime re-assertion, deliberately WITHOUT the build-phase exemption.
+ *
+ * The exemption keys off NEXT_PHASE, which is an ordinary MUTABLE environment
+ * variable. Any in-process code that sets it before env.ts is first imported could
+ * otherwise skip the guard completely - verified reachable: with NODE_ENV=production,
+ * development defaults, and NEXT_PHASE=phase-production-build, the import-time check
+ * does not fire. This entry point exists so the server refuses to SERVE regardless of
+ * how its environment was assembled, and is called from the instrumentation hook.
+ */
+export function assertProductionConfig(): void {
+  const problems = computeProductionProblems({ isBuildPhase: false });
+  if (problems.length > 0) {
+    throw new Error(
+      `refusing to serve in production with unsafe configuration:\n  - ${problems.join("\n  - ")}`,
+    );
+  }
 }
 
 export const env: Env = finalEnvSchema.parse(process.env);
