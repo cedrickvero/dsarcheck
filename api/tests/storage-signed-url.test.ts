@@ -4,7 +4,7 @@ import { systemDb, systemPool } from "@/db/client";
 import { auditEvents, objects, orgs, workspaces } from "@/db/schema";
 import type { Actor } from "@/server/auth/require-auth";
 import type { PermissionSource } from "@/server/auth/authorize";
-import { buildObjectKey } from "@/server/storage/objectKey";
+import { buildObjectKey, parseObjectKey } from "@/server/storage/objectKey";
 import { putObjectCommand, serverSideEncryption } from "@/server/storage/s3Client";
 import { env } from "@/env";
 import { issueDownloadUrl, issueUploadUrl, recordFileAccess } from "@/server/storage/signedUrl";
@@ -460,6 +460,61 @@ describe.skipIf(!hasEnv)("signed URL contract", () => {
     const mine = rows.filter((r) => (r.meta as { requestId?: string } | null)?.requestId === id);
     expect(mine, "the access refusal was NOT audited").toHaveLength(1);
     expect((mine[0]!.meta as { outcome?: string }).outcome).toBe("denied");
+  });
+
+
+  it("labels a cross-tenant key as invalid_object_key, NOT as a purpose mismatch (NF-1)", async () => {
+    if (!ready) return;
+    const id = `req-${RUN}-nf1-cross`;
+    const foreignWs = "9a7f5b31-2c4d-4e6f-8a91-0b1c2d3e4f50";
+    const foreignKey = buildObjectKey({ workspaceId: foreignWs, purpose: "evidence" });
+    await expect(
+      issueDownloadUrl({ actor, purpose: "evidence", objectKey: foreignKey, reason: REASON, requestId: id, permissions: allow }),
+    ).rejects.toBeTruthy();
+
+    const rows = await systemDb
+      .select({ objectId: auditEvents.objectId, meta: auditEvents.meta })
+      .from(auditEvents);
+    const mine = rows.filter((r) => (r.meta as { requestId?: string } | null)?.requestId === id);
+    expect(mine).toHaveLength(1);
+    const meta = mine[0]!.meta as { denialCode?: string; outcome?: string };
+    expect(meta.outcome).toBe("denied");
+    // the whole point: a tenant-boundary probe must be distinguishable from a mix-up
+    expect(meta.denialCode).toBe("invalid_object_key");
+    // NF-2: the refusal is correlated to the object, so a per-object query finds it
+    expect(mine[0]!.objectId).toBe(parseObjectKey(foreignKey).id);
+  });
+
+  it("records a refusal for an unusable reason instead of writing nothing (NF-3)", async () => {
+    if (!ready) return;
+    const id = `req-${RUN}-nf3-badreason`;
+    await expect(
+      issueUploadUrl({
+        actor, purpose: "evidence", contentType: "application/pdf",
+        reason: "ab", requestId: id, permissions: allow,
+      }),
+    ).rejects.toThrow(/reason of at least 3 characters/);
+
+    const rows = await systemDb.select({ meta: auditEvents.meta }).from(auditEvents);
+    const mine = rows.filter((r) => (r.meta as { requestId?: string } | null)?.requestId === id);
+    expect(mine, "the invalid-reason refusal was NOT recorded").toHaveLength(1);
+    expect((mine[0]!.meta as { denialCode?: string }).denialCode).toBe("invalid_reason");
+  });
+
+  it("distinguishes an invalid TTL from an unusable exception (NF-4)", async () => {
+    if (!ready) return;
+    const id = `req-${RUN}-nf4-badttl`;
+    await expect(
+      issueUploadUrl({
+        actor, purpose: "evidence", contentType: "application/pdf",
+        reason: REASON, requestId: id, permissions: allow,
+        requestedTtlSeconds: -5, // invalid, and NO exception was named
+      }),
+    ).rejects.toBeTruthy();
+    const rows = await systemDb.select({ meta: auditEvents.meta }).from(auditEvents);
+    const mine = rows.filter((r) => (r.meta as { requestId?: string } | null)?.requestId === id);
+    expect(mine).toHaveLength(1);
+    expect((mine[0]!.meta as { denialCode?: string }).denialCode).toBe("invalid_ttl");
   });
 
 });

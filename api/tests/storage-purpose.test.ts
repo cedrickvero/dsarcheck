@@ -97,7 +97,7 @@ describe("named TTL exceptions", () => {
   it("fails loudly on malformed configuration", () => {
     expect(() => parseTtlExceptions("{not json")).toThrow(/valid JSON/);
     expect(() => parseTtlExceptions('"a string"')).toThrow(/array/);
-    expect(() => parseTtlExceptions('[{"name":"x"}]')).toThrow(/name, purpose and operation/);
+    expect(() => parseTtlExceptions('[{"name":"x"}]')).toThrow(/purpose must be one of|non-blank name/);
     expect(() => parseTtlExceptions('[{"name":"x","purpose":"payroll","operation":"download","ttlSeconds":10}]')).toThrow(
       UnknownPurposeError,
     );

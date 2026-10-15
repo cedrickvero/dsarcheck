@@ -110,10 +110,45 @@ function resolveTtl(args: {
  * the row would throw a ValidationError and MASK the denial it was recording - so the
  * reason is validated before any work begins, not when the row is written.
  */
-function assertAuditReason(reason: unknown): asserts reason is string {
-  if (typeof reason !== "string" || reason.trim().length < 3) {
-    throw new ValidationError("a reason of at least 3 characters is required for this action");
+function hasValidReason(reason: unknown): reason is string {
+  return typeof reason === "string" && reason.trim().length >= 3;
+}
+
+/** The object's uuid when the key parses, else null. Never throws. */
+function tryKeyId(objectKey: string): string | null {
+  try {
+    return parseObjectKey(objectKey).id;
+  } catch {
+    return null;
   }
+}
+
+/**
+ * A refusal because the caller supplied no usable reason is STILL a refusal, and the
+ * product requires every refusal to be on the record. The row is written with a
+ * generated reason (the supplied one is unusable by definition), then the original
+ * ValidationError surfaces - so the denial is recorded and never masked.
+ *
+ * Guardrail NF-3: this path previously wrote zero rows, which made "every refusal is
+ * audited" an overstatement.
+ */
+async function refuseInvalidReason(
+  args: { actor: Actor; requestId: string; action: string; reason: unknown },
+  error: Error,
+): Promise<never> {
+  await auditDenial({
+    actor: args.actor,
+    requestId: args.requestId,
+    reason: "request refused before action: reason missing or shorter than 3 characters",
+    action: args.action,
+    requested: {
+      denialCode: "invalid_reason",
+      providedReasonLength: typeof args.reason === "string" ? args.reason.trim().length : null,
+    },
+    error,
+  });
+  // unreachable: auditDenial rethrows. Explicit so control flow is provable.
+  throw error;
 }
 
 /** Writes the "denied" audit row in the actor's OWN workspace, then rethrows. */
@@ -123,6 +158,8 @@ async function auditDenial(args: {
   reason: string;
   action: string;
   requested: Record<string, unknown>;
+  /** Correlates the refusal to an object when one can be identified (guardrail NF-2). */
+  objectId?: string | null;
   error: Error;
 }): Promise<never> {
   await withTenant(
@@ -137,6 +174,7 @@ async function auditDenial(args: {
         category: "file",
         reason: args.reason,
         objectType: "object",
+        objectId: args.objectId ?? null,
         meta: {
           outcome: "denied",
           requestId: args.requestId,
@@ -163,6 +201,7 @@ async function auditRefusal(
   denialCode: string,
   error: unknown,
   requested: Record<string, unknown>,
+  objectId: string | null = null,
 ): Promise<never> {
   const err = error instanceof Error ? error : new Error(String(error));
   return auditDenial({
@@ -171,6 +210,7 @@ async function auditRefusal(
     reason: args.reason,
     action: args.action,
     requested: { denialCode, ...requested },
+    objectId,
     error: err,
   });
 }
@@ -223,7 +263,12 @@ async function resolvePurposeAndAuthorize(args: {
 }
 
 export async function issueUploadUrl(args: IssueUploadUrlArgs): Promise<IssuedUrl> {
-  assertAuditReason(args.reason);
+  if (!hasValidReason(args.reason)) {
+    return await refuseInvalidReason(
+      { actor: args.actor, requestId: args.requestId, action: "file.upload_url.issued", reason: args.reason },
+      new ValidationError("a reason of at least 3 characters is required for this action"),
+    );
+  }
   const operation: Operation = "upload";
   const action = "file.upload_url.issued";
 
@@ -254,6 +299,7 @@ export async function issueUploadUrl(args: IssueUploadUrlArgs): Promise<IssuedUr
       "invalid_object_key",
       error,
       { requestedObjectId: args.objectId ?? null },
+      null,
     );
   }
   // F-3: object_id must mean the SAME thing on every event. Downloads can only
@@ -272,9 +318,10 @@ export async function issueUploadUrl(args: IssueUploadUrlArgs): Promise<IssuedUr
   } catch (error) {
     return await auditRefusal(
       { actor: args.actor, requestId: args.requestId, reason: args.reason, action: "file.upload_url.issued" },
-      "invalid_ttl_exception",
+      args.exceptionName ? "invalid_ttl_exception" : "invalid_ttl",
       error,
       { purpose, operation, requestedTtlSeconds: args.requestedTtlSeconds ?? null, exceptionName: args.exceptionName ?? null },
+      tryKeyId(objectKey),
     );
   }
   const { ttlSeconds, exceptionName } = ttl;
@@ -349,7 +396,12 @@ export async function issueUploadUrl(args: IssueUploadUrlArgs): Promise<IssuedUr
 }
 
 export async function issueDownloadUrl(args: IssueDownloadUrlArgs): Promise<IssuedUrl> {
-  assertAuditReason(args.reason);
+  if (!hasValidReason(args.reason)) {
+    return await refuseInvalidReason(
+      { actor: args.actor, requestId: args.requestId, action: "file.download_url.issued", reason: args.reason },
+      new ValidationError("a reason of at least 3 characters is required for this action"),
+    );
+  }
   const operation: Operation = "download";
   const action = "file.download_url.issued";
 
@@ -370,19 +422,28 @@ export async function issueDownloadUrl(args: IssueDownloadUrlArgs): Promise<Issu
   let parts: ReturnType<typeof assertKeyInWorkspace>;
   try {
     parts = assertKeyInWorkspace(args.objectKey, args.actor.workspaceId);
-    // The mismatch check lives INSIDE this try on purpose: it is a denial, and a
-    // denial thrown outside an audited wrapper leaves no trace.
-    if (parts.purpose !== purpose) {
-      throw new InvalidObjectKeyError(
-        `key purpose (${parts.purpose}) does not match the authorized purpose (${purpose})`,
-      );
-    }
   } catch (error) {
+    // A cross-tenant or malformed key is NOT a purpose mismatch. Labelling it as one
+    // makes a tenant-boundary probe indistinguishable from a benign mix-up in the
+    // audit trail (guardrail NF-1 / QA blocker).
+    return await auditRefusal(
+      { actor: args.actor, requestId: args.requestId, reason: args.reason, action: "file.download_url.issued" },
+      "invalid_object_key",
+      error,
+      { requestedObjectKey: args.objectKey },
+      tryKeyId(args.objectKey),
+    );
+  }
+  if (parts.purpose !== purpose) {
+    // Audited, not thrown: a denial must leave a trace. This was the F-2 blocker.
     return await auditRefusal(
       { actor: args.actor, requestId: args.requestId, reason: args.reason, action: "file.download_url.issued" },
       "purpose_key_mismatch",
-      error,
+      new InvalidObjectKeyError(
+        `key purpose (${parts.purpose}) does not match the authorized purpose (${purpose})`,
+      ),
       { requestedObjectKey: args.objectKey, authorizedPurpose: purpose },
+      parts.id,
     );
   }
 
@@ -398,9 +459,10 @@ export async function issueDownloadUrl(args: IssueDownloadUrlArgs): Promise<Issu
   } catch (error) {
     return await auditRefusal(
       { actor: args.actor, requestId: args.requestId, reason: args.reason, action: "file.download_url.issued" },
-      "invalid_ttl_exception",
+      args.exceptionName ? "invalid_ttl_exception" : "invalid_ttl",
       error,
       { purpose, operation, requestedTtlSeconds: args.requestedTtlSeconds ?? null, exceptionName: args.exceptionName ?? null },
+      tryKeyId(args.objectKey),
     );
   }
   const { ttlSeconds, exceptionName } = ttl;
@@ -462,7 +524,12 @@ export async function recordFileAccess(args: {
   requestId: string;
   reason: string;
 }): Promise<void> {
-  assertAuditReason(args.reason);
+  if (!hasValidReason(args.reason)) {
+    return await refuseInvalidReason(
+      { actor: args.actor, requestId: args.requestId, action: "file.accessed", reason: args.reason },
+      new ValidationError("a reason of at least 3 characters is required for this action"),
+    );
+  }
   let parts: ReturnType<typeof parseObjectKey>;
   try {
     parts = parseObjectKey(args.objectKey);
@@ -473,6 +540,7 @@ export async function recordFileAccess(args: {
       "invalid_object_key",
       error,
       { requestedObjectKey: args.objectKey },
+      tryKeyId(args.objectKey),
     );
   }
   await withTenant(

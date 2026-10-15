@@ -118,6 +118,45 @@ export class UnknownTtlExceptionError extends Error {
   }
 }
 
+/**
+ * Validates one configured TTL-exception entry. Returns a problem description, or
+ * null when the entry is usable.
+ *
+ * Guardrail NF-5: the startup guard and the runtime parser used to implement these
+ * shape rules separately (and differently), so a change to one would not reach the
+ * other. Both now call this.
+ */
+export function validateTtlExceptionEntry(entry: unknown): string | null {
+  const e = entry as Partial<TtlException> | null;
+  if (!e || typeof e !== "object") return "each TTL exception must be an object";
+  if (typeof e.name !== "string" || e.name.trim() === "") {
+    return "each TTL exception needs a non-blank name";
+  }
+  if (typeof e.purpose !== "string" || !isPurpose(e.purpose)) {
+    return `purpose must be one of: ${Object.keys(PURPOSE_POLICY).join(", ")}`;
+  }
+  if (e.operation !== "upload" && e.operation !== "download") {
+    return "operation must be upload or download";
+  }
+  if (!Number.isInteger(e.ttlSeconds) || (e.ttlSeconds as number) <= 0) {
+    return "ttlSeconds must be a positive integer";
+  }
+  if ((e.ttlSeconds as number) > EXCEPTION_TTL_HARD_CAP) {
+    return `ttlSeconds exceeds the hard cap of ${EXCEPTION_TTL_HARD_CAP}s (0 < ttlSeconds <= ${EXCEPTION_TTL_HARD_CAP})`;
+  }
+  return null;
+}
+
+/** Validates a whole exception list. Returns the first problem, or null. */
+export function validateTtlExceptions(raw: unknown): string | null {
+  if (!Array.isArray(raw)) return "SIGNED_URL_TTL_EXCEPTIONS must be a JSON array";
+  for (const entry of raw) {
+    const problem = validateTtlExceptionEntry(entry);
+    if (problem) return problem;
+  }
+  return null;
+}
+
 /** Parse the configured exception list. Malformed config fails loudly. */
 export function parseTtlExceptions(raw: string | undefined): Map<string, TtlException> {
   const out = new Map<string, TtlException>();
@@ -128,26 +167,21 @@ export function parseTtlExceptions(raw: string | undefined): Map<string, TtlExce
   } catch {
     throw new Error("SIGNED_URL_TTL_EXCEPTIONS is not valid JSON");
   }
-  if (!Array.isArray(parsed)) throw new Error("SIGNED_URL_TTL_EXCEPTIONS must be a JSON array");
-  for (const entry of parsed) {
-    const e = entry as Partial<TtlException>;
-    if (!e?.name || !e.purpose || !e.operation) {
-      throw new Error("each TTL exception needs name, purpose and operation");
-    }
-    assertPurpose(e.purpose);
-    if (e.operation !== "upload" && e.operation !== "download") {
-      throw new Error(`TTL exception ${e.name}: operation must be upload or download`);
-    }
-    if (!Number.isInteger(e.ttlSeconds) || (e.ttlSeconds as number) <= 0) {
-      throw new Error(`TTL exception ${e.name}: ttlSeconds must be a positive integer`);
-    }
-    if ((e.ttlSeconds as number) > EXCEPTION_TTL_HARD_CAP) {
-      throw new Error(
-        `TTL exception ${e.name}: ttlSeconds ${e.ttlSeconds} exceeds the hard cap of ${EXCEPTION_TTL_HARD_CAP}s`,
+  const problem = validateTtlExceptions(parsed);
+  if (problem) {
+    // Preserve the error TYPE for an unknown purpose: callers branch on it, and a
+    // shared validator returns only a string. assertPurpose throws the typed error.
+    if (Array.isArray(parsed)) {
+      // only when a purpose string is PRESENT but invalid - a missing purpose gets
+      // the more specific "purpose must be one of ..." message above
+      const bad = (parsed as Array<{ purpose?: unknown }>).find(
+        (e) => typeof e?.purpose === "string" && !isPurpose(e.purpose),
       );
+      if (bad) assertPurpose(bad.purpose as string);
     }
-    out.set(e.name, e as TtlException);
+    throw new Error(problem);
   }
+  for (const entry of parsed as TtlException[]) out.set(entry.name, entry);
   return out;
 }
 

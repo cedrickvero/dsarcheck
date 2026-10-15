@@ -29,7 +29,7 @@ const adminUser = process.env.DB_OWNER_USER || "hermes";
  * exactly these checks against a probe table that is missing them.
  * Returns the invariant names that FAILED.
  */
-async function checkObjectsTable(conn, table) {
+async function checkObjectsTable(conn, table, { transactional = true } = {}) {
   // Returns its own results rather than writing into the module-level recorder, so
   // it can be called from the self-test before those helpers exist.
   const out = [];
@@ -79,14 +79,26 @@ async function checkObjectsTable(conn, table) {
     );
   }
 
-  // and the table must fail closed when no tenant is set
-  await conn.query("begin");
-  try {
-    await conn.query("set local role app_tenant");
-    const n = (await conn.query(`select count(*)::int as n from "${table}"`)).rows[0].n;
-    say(n === 0, `${table}: RLS fails closed when app.workspace_id is unset`, `saw ${n} row(s)`);
-  } finally {
-    await conn.query("rollback").catch(() => {});
+  // and the table must fail closed when no tenant is set. `transactional: false` is
+  // for the self-test, where the probe already lives inside the caller's transaction
+  // and opening a nested one would roll it back mid-function (guardrail NF-6).
+  if (transactional) {
+    await conn.query("begin");
+    try {
+      await conn.query("set local role app_tenant");
+      const n = (await conn.query(`select count(*)::int as n from "${table}"`)).rows[0].n;
+      say(n === 0, `${table}: RLS fails closed when app.workspace_id is unset`, `saw ${n} row(s)`);
+    } finally {
+      await conn.query("rollback").catch(() => {});
+    }
+  } else {
+    await conn.query("set role app_tenant");
+    try {
+      const n = (await conn.query(`select count(*)::int as n from "${table}"`)).rows[0].n;
+      say(n === 0, `${table}: RLS fails closed when app.workspace_id is unset`, `saw ${n} row(s)`);
+    } finally {
+      await conn.query("reset role").catch(() => {});
+    }
   }
 
   return out;
@@ -112,10 +124,10 @@ async function runSelfTest() {
   const conn = new pg.Client({ connectionString: url });
   await conn.connect();
   try {
-    // The probe is NOT created inside an outer transaction: checkObjectsTable opens
-    // its own transaction for the fail-closed read, and nesting rolled the outer one
-    // back mid-function. Cleanup is guaranteed by the finally instead.
+    // The probe lives inside a transaction so a hard kill cannot leave a
+    // DELETE-granted table behind, and the fail-closed read opts out of nesting.
     await conn.query("drop table if exists objects_probe");
+    await conn.query("begin");
     await conn.query(`create table objects_probe (
       id uuid primary key default gen_random_uuid(),
       workspace_id uuid not null,
@@ -129,10 +141,10 @@ async function runSelfTest() {
        values (gen_random_uuid(), 'ws/probe/evidence/x', 'evidence')`,
     );
     await conn.query("grant delete on objects_probe to app_runtime, app_tenant");
-    const probeFails = (await checkObjectsTable(conn, "objects_probe"))
+    const probeFails = (await checkObjectsTable(conn, "objects_probe", { transactional: false }))
       .filter((r) => !r.pass)
       .map((r) => r.name);
-    await conn.query("drop table if exists objects_probe");
+    await conn.query("rollback");
 
     const expected = [
       "RLS enabled on objects_probe",
