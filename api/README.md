@@ -151,10 +151,18 @@ always clamped. To exceed a ceiling you must configure a named exception
 (`SIGNED_URL_TTL_EXCEPTIONS`) that matches one purpose and one operation exactly; the
 exception's name is written into the audit event. There is no wildcard.
 
-**Encryption** — uploads carry server-side encryption, `AES256` by default so local
-MinIO needs no KMS; set `S3_SSE_ALGORITHM=aws:kms` and `S3_KMS_KEY_ID` for stronger key
-custody. Because the parameters are signed, an uploader using the presigned PUT must
-send the matching `x-amz-server-side-encryption` header or the signature will not match.
+**Encryption** — uploads carry server-side encryption. `AES256` (SSE-S3) is the default
+so local MinIO needs no KMS; `S3_SSE_ALGORITHM=aws:kms` selects KMS for production and
+requires `S3_KMS_KEY_ID` — if the algorithm is `aws:kms` and no key is set, the process
+**fails at startup**, not on the first upload.
+
+Callers cannot influence encryption: the command builder accepts only an object key and
+a content type, and the algorithm comes from configuration alone. Because the SSE headers
+are part of the signature, an uploader using the presigned PUT must send the matching
+`x-amz-server-side-encryption` header — substituting its own value breaks the signature.
+The selected algorithm and a reference to the key are recorded in the audit event; key
+material never is. (A presigned GET carries no encryption parameters — an object's SSE is
+a property of the object, set at upload, so download events record `sse: null`.)
 
 **Not yet wired:** the 11 route stubs remain 501. Authorization is an injectable seam
 (`src/server/auth/authorize.ts`) because the permission source arrives with T-08; until

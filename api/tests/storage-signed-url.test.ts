@@ -5,7 +5,8 @@ import { auditEvents, objects, orgs, workspaces } from "@/db/schema";
 import type { Actor } from "@/server/auth/require-auth";
 import type { PermissionSource } from "@/server/auth/authorize";
 import { buildObjectKey } from "@/server/storage/objectKey";
-import { serverSideEncryption } from "@/server/storage/s3Client";
+import { putObjectCommand, serverSideEncryption } from "@/server/storage/s3Client";
+import { env } from "@/env";
 import { issueDownloadUrl, issueUploadUrl, recordFileAccess } from "@/server/storage/signedUrl";
 
 /**
@@ -134,6 +135,14 @@ describe.skipIf(!hasEnv)("signed URL contract", () => {
     }
     expect(meta.actorId ?? matching[0]!.actorId).toBe(actor.userId);
     expect(matching[0]!.workspaceId).toBe(actor.workspaceId);
+
+    // the applied encryption is on the record, and no key material is
+    const sse = meta.sse as { algorithm?: string; keyIdRef?: unknown } | null;
+    expect(sse?.algorithm).toBe("AES256");
+    expect(sse?.keyIdRef).toBeNull();
+    const serialised = JSON.stringify(matching[0]!.meta);
+    expect(serialised).not.toContain(env.S3_SECRET_KEY);
+    expect(serialised).not.toContain(env.S3_ACCESS_KEY);
   });
 
   it("clamps an absurd requested TTL to the ceiling", async () => {
@@ -163,6 +172,32 @@ describe.skipIf(!hasEnv)("signed URL contract", () => {
       permissions: allow,
     });
     expect(decodeURIComponent(issued.url)).toContain("x-amz-server-side-encryption");
+  });
+
+  it("takes no caller-supplied encryption settings, and cannot be overridden by them", async () => {
+    if (!ready) return;
+    // Arity is the point: the builder accepts a key and a content type, so there is
+    // no parameter through which a caller could choose or weaken the encryption.
+    expect(putObjectCommand.length).toBe(2);
+
+    const key = buildObjectKey({ workspaceId: actor.workspaceId, purpose: "evidence" });
+    const cmd = putObjectCommand(key, "application/pdf");
+    expect(cmd.input.ServerSideEncryption).toBe("AES256");
+    // in kms mode the key would come from config, never from the caller
+    expect(cmd.input.SSEKMSKeyId).toBeUndefined();
+
+    // and because the SSE header is signed, substituting a value breaks the signature
+    const issued = await issueUploadUrl({
+      actor,
+      purpose: "evidence",
+      contentType: "application/pdf",
+      reason: REASON,
+      requestId: RID.sse,
+      permissions: allow,
+    });
+    expect(decodeURIComponent(issued.url)).toMatch(
+      /X-Amz-SignedHeaders=[^&]*x-amz-server-side-encryption/,
+    );
   });
 
   it("refuses an authorization denial: no URL, no row, and the denial is audited", async () => {

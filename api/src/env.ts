@@ -60,4 +60,19 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-export const env: Env = envSchema.parse(process.env);
+/**
+ * Cross-field guard, evaluated at import time - that is, at startup.
+ *
+ * Selecting KMS encryption without naming a key is a misconfiguration that must stop
+ * the process loudly rather than surface on the first upload attempt. parse() throws,
+ * so the server and the worker both fail to boot with the reason attached.
+ */
+const checkedEnvSchema = envSchema.refine(
+  (e) => e.S3_SSE_ALGORITHM !== "aws:kms" || Boolean(e.S3_KMS_KEY_ID?.trim()),
+  {
+    message: "S3_SSE_ALGORITHM=aws:kms requires S3_KMS_KEY_ID to be set",
+    path: ["S3_KMS_KEY_ID"],
+  },
+);
+
+export const env: Env = checkedEnvSchema.parse(process.env);

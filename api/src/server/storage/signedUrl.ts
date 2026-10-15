@@ -34,7 +34,7 @@ import {
   type Operation,
   type Purpose,
 } from "./purpose";
-import { getObjectCommand, putObjectCommand, s3 } from "./s3Client";
+import { getObjectCommand, putObjectCommand, s3, serverSideEncryption } from "./s3Client";
 
 export interface IssuedUrl {
   url: string;
@@ -208,7 +208,10 @@ export async function issueUploadUrl(args: IssueUploadUrlArgs): Promise<IssuedUr
     exceptionName: args.exceptionName,
   });
 
-  // 5. SSE + mint
+  // 5. SSE + mint. The algorithm comes from configuration only - the caller passes
+  //    no encryption parameter, and because the SSE headers are part of the
+  //    signature an uploader cannot substitute its own.
+  const sse = serverSideEncryption();
   const url = await getSignedUrl(s3, putObjectCommand(objectKey, args.contentType), {
     expiresIn: ttlSeconds,
   });
@@ -248,6 +251,11 @@ export async function issueUploadUrl(args: IssueUploadUrlArgs): Promise<IssuedUr
           method: methodOf(operation),
           expiresAt: expiresAt.toISOString(),
           ttlSeconds,
+          // The algorithm actually applied, and a reference to the key - never key material.
+          sse: {
+            algorithm: sse.ServerSideEncryption,
+            keyIdRef: sse.ServerSideEncryption === "aws:kms" ? sse.SSEKMSKeyId : null,
+          },
           ...(exceptionName ? { exceptionName } : {}),
         },
       });
@@ -325,6 +333,9 @@ export async function issueDownloadUrl(args: IssueDownloadUrlArgs): Promise<Issu
           method: methodOf(operation),
           expiresAt: expiresAt.toISOString(),
           ttlSeconds,
+          // A presigned GET carries no encryption parameters: an object's SSE is a
+          // property of the object, set when it was uploaded, not of this URL.
+          sse: null,
           ...(exceptionName ? { exceptionName } : {}),
         },
       });
