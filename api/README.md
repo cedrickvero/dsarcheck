@@ -121,6 +121,45 @@ Mutation shape (supports rules 1, 3 and 5): every write goes
 commits or rolls back with the change — proven both ways in
 `tests/tenant-isolation.test.ts`.
 
+## Object storage (R2)
+
+Files are never publicly reachable. Access is always a short-lived signed URL, and
+every issue and every access attempt is recorded in `audit_events`.
+
+**Key scheme** — `ws/<workspaceId>/<purpose>/<uuid>`
+
+- `workspaceId` is the actor's database-derived workspace, never a caller claim
+- `purpose` comes from the server-side allowlist in `src/server/storage/purpose.ts`
+- the `uuid` is generated server-side
+- a DB CHECK requires `object_key` to begin with `ws/<workspace_id>/`, so a row whose
+  key belongs to another tenant cannot be stored at all
+
+**One entry point.** `src/server/storage/signedUrl.ts` is the only place a URL is
+minted, in a fixed order:
+
+```
+authorize -> validate purpose -> validate/build key -> clamp TTL
+  -> apply SSE -> mint URL -> persist metadata + audit event in ONE transaction
+```
+
+If authorization fails there is no URL, no row, and the denial is itself audited.
+The legacy `signedGetUrl`/`signedPutUrl` helpers in `src/lib/s3.ts` (unbounded
+caller-supplied TTL, no tenant scoping) are deleted, so no unscoped minting path remains.
+
+**TTL ceilings** — uploads 900s, downloads 600s. A requested TTL is a hint and is
+always clamped. To exceed a ceiling you must configure a named exception
+(`SIGNED_URL_TTL_EXCEPTIONS`) that matches one purpose and one operation exactly; the
+exception's name is written into the audit event. There is no wildcard.
+
+**Encryption** — uploads carry server-side encryption, `AES256` by default so local
+MinIO needs no KMS; set `S3_SSE_ALGORITHM=aws:kms` and `S3_KMS_KEY_ID` for stronger key
+custody. Because the parameters are signed, an uploader using the presigned PUT must
+send the matching `x-amz-server-side-encryption` header or the signature will not match.
+
+**Not yet wired:** the 11 route stubs remain 501. Authorization is an injectable seam
+(`src/server/auth/authorize.ts`) because the permission source arrives with T-08; until
+then no route may call the storage layer.
+
 ## Known follow-ups
 
 - **Authentication is not implemented.** `requireAuth()` and `can()` throw `501`,

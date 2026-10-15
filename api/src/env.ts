@@ -24,6 +24,16 @@ const envSchema = z.object({
   S3_BUCKET: z.string().default("dsar-evidence"),
   S3_ACCESS_KEY: z.string().default("hermes"),
   S3_SECRET_KEY: z.string().default("hermes_dev_password"),
+  /** "AES256" (default) or "aws:kms". KMS additionally needs S3_KMS_KEY_ID. */
+  S3_SSE_ALGORITHM: z.enum(["AES256", "aws:kms"]).default("AES256"),
+  S3_KMS_KEY_ID: z.string().optional(),
+  /**
+   * Named TTL exceptions, as a JSON array:
+   *   [{"name":"legal-hold-export","purpose":"generated_pack","operation":"download","ttlSeconds":3600}]
+   * An exception extends the TTL for exactly one purpose+operation and its name is
+   * written into the audit event. Empty by default: the ceilings are the rule.
+   */
+  SIGNED_URL_TTL_EXCEPTIONS: z.string().optional(),
   S3_FORCE_PATH_STYLE: z
     .enum(["true", "false"])
     .default("true")

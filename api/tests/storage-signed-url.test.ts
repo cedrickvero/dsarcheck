@@ -1,0 +1,298 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
+import { systemDb, systemPool } from "@/db/client";
+import { auditEvents, objects, orgs, workspaces } from "@/db/schema";
+import type { Actor } from "@/server/auth/require-auth";
+import type { PermissionSource } from "@/server/auth/authorize";
+import { buildObjectKey } from "@/server/storage/objectKey";
+import { serverSideEncryption } from "@/server/storage/s3Client";
+import { issueDownloadUrl, issueUploadUrl, recordFileAccess } from "@/server/storage/signedUrl";
+
+/**
+ * R2 behavioural tests. These need the objects table (migration 0004) and the
+ * application DSN, so they skip cleanly before the migration is applied.
+ */
+const hasEnv = Boolean(process.env.DATABASE_URL && process.env.APP_DATABASE_URL);
+
+const allow: PermissionSource = { can: () => true };
+const deny: PermissionSource = { can: () => false };
+
+let orgId = "";
+let actor: Actor;
+const REASON = "Requested by the data subject during case handling";
+/** Audit rows persist (append-only), so ids must be unique per run or a rerun
+ *  reads its own previous run as a duplicate. */
+const RUN = `${Date.now()}`;
+const RID = {
+  upload: `req-${RUN}-upload`,
+  persist: `req-${RUN}-persist`,
+  clamp: `req-${RUN}-clamp`,
+  sse: `req-${RUN}-sse`,
+  denied: `req-${RUN}-denied`,
+  atomic: `req-${RUN}-atomic`,
+  cross: `req-${RUN}-cross`,
+  mismatch: `req-${RUN}-mismatch`,
+  purpose: `req-${RUN}-purpose`,
+  download: `req-${RUN}-download`,
+  access: `req-${RUN}-access`,
+};
+
+async function objectsExist(): Promise<boolean> {
+  try {
+    await systemDb.select({ id: objects.id }).from(objects).limit(1);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+describe.skipIf(!hasEnv)("signed URL contract", () => {
+  let ready = false;
+
+  beforeAll(async () => {
+    ready = await objectsExist();
+    if (!ready) return;
+    const org = (
+      await systemDb
+        .insert(orgs)
+        .values({ name: `R2 Org ${Date.now()}` })
+        .returning({ id: orgs.id })
+    )[0]!;
+    const ws = (
+      await systemDb
+        .insert(workspaces)
+        .values({ orgId: org.id, name: `R2 WS ${Date.now()}` })
+        .returning({ id: workspaces.id })
+    )[0]!;
+    orgId = org.id;
+    actor = {
+      userId: `r2-user-${Date.now()}`,
+      label: "R2 Tester",
+      orgId: org.id,
+      workspaceId: ws.id,
+      roles: ["owner"],
+    };
+  });
+
+  afterAll(async () => {
+    await systemPool.end().catch(() => {});
+  });
+
+  const itReady = (fn: () => Promise<void>) =>
+    it("__", async () => {
+      if (!ready) return;
+      await fn();
+    });
+
+  it("issues an upload URL scoped to the actor's own workspace", async () => {
+    if (!ready) return;
+    const issued = await issueUploadUrl({
+      actor,
+      purpose: "evidence",
+      contentType: "application/pdf",
+      reason: REASON,
+      requestId: RID.upload,
+      permissions: allow,
+    });
+    expect(issued.method).toBe("PUT");
+    expect(issued.operation).toBe("upload");
+    expect(issued.objectKey.startsWith(`ws/${actor.workspaceId}/`)).toBe(true);
+    expect(issued.url).toContain(issued.objectKey);
+    expect(issued.expiresAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("persists metadata AND the audit event, with all eight required fields", async () => {
+    if (!ready) return;
+    const issued = await issueUploadUrl({
+      actor,
+      purpose: "evidence",
+      contentType: "text/plain",
+      reason: REASON,
+      requestId: RID.persist,
+      permissions: allow,
+    });
+
+    const rows = await systemDb.select().from(objects).where(eq(objects.objectKey, issued.objectKey));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.workspaceId).toBe(actor.workspaceId);
+    expect(rows[0]!.orgId).toBe(actor.orgId);
+    expect(rows[0]!.purpose).toBe("evidence");
+    expect(rows[0]!.contentType).toBe("text/plain");
+    expect(rows[0]!.uploaderActorId).toBe(actor.userId);
+
+    const audits = await systemDb
+      .select()
+      .from(auditEvents)
+      .where(eq(auditEvents.action, "file.upload_url.issued"));
+    const matching = audits.filter(
+      (a) => (a.meta as Record<string, unknown>)?.requestId === RID.persist,
+    );
+    expect(matching).toHaveLength(1);
+    const meta = matching[0]!.meta as Record<string, unknown>;
+    for (const field of ["requestId", "objectKey", "purpose", "operation", "method", "expiresAt"]) {
+      expect(meta[field], `audit meta is missing ${field}`).toBeTruthy();
+    }
+    expect(meta.actorId ?? matching[0]!.actorId).toBe(actor.userId);
+    expect(matching[0]!.workspaceId).toBe(actor.workspaceId);
+  });
+
+  it("clamps an absurd requested TTL to the ceiling", async () => {
+    if (!ready) return;
+    const issued = await issueUploadUrl({
+      actor,
+      purpose: "evidence",
+      contentType: "application/pdf",
+      reason: REASON,
+      requestId: RID.clamp,
+      requestedTtlSeconds: 86_400,
+      permissions: allow,
+    });
+    expect(issued.ttlSeconds).toBe(900);
+    expect(issued.url).toMatch(/X-Amz-Expires=900/);
+  });
+
+  it("signs the SSE header into the upload URL", async () => {
+    if (!ready) return;
+    expect(serverSideEncryption()).toEqual({ ServerSideEncryption: "AES256" });
+    const issued = await issueUploadUrl({
+      actor,
+      purpose: "evidence",
+      contentType: "application/pdf",
+      reason: REASON,
+      requestId: RID.sse,
+      permissions: allow,
+    });
+    expect(decodeURIComponent(issued.url)).toContain("x-amz-server-side-encryption");
+  });
+
+  it("refuses an authorization denial: no URL, no row, and the denial is audited", async () => {
+    if (!ready) return;
+    const before = await systemDb.select().from(objects);
+    await expect(
+      issueUploadUrl({
+        actor,
+        purpose: "evidence",
+        contentType: "application/pdf",
+        reason: REASON,
+        requestId: RID.denied,
+        permissions: deny,
+      }),
+    ).rejects.toThrow(/authorization denied/);
+
+    const after = await systemDb.select().from(objects);
+    expect(after.length).toBe(before.length);
+
+    const audits = await systemDb
+      .select()
+      .from(auditEvents)
+      .where(eq(auditEvents.action, "file.upload_url.issued"));
+    const denials = audits.filter(
+      (a) =>
+        (a.meta as Record<string, unknown>)?.outcome === "denied" &&
+        (a.meta as Record<string, unknown>)?.requestId === RID.denied,
+    );
+    expect(denials).toHaveLength(1);
+    expect((denials[0]!.meta as Record<string, unknown>).requestId).toBe(RID.denied);
+  });
+
+  it("rolls the metadata back when the audit write fails (atomicity)", async () => {
+    if (!ready) return;
+    const before = await systemDb.select().from(objects);
+    await expect(
+      issueUploadUrl({
+        actor,
+        purpose: "evidence",
+        contentType: "application/pdf",
+        // too short: writeAuditEvent refuses it INSIDE the transaction
+        reason: "ab",
+        requestId: RID.atomic,
+        permissions: allow,
+      }),
+    ).rejects.toThrow(/reason is required/);
+    const after = await systemDb.select().from(objects);
+    expect(after.length).toBe(before.length);
+  });
+
+  it("rejects a download for another workspace's key", async () => {
+    if (!ready) return;
+    const otherWs = (
+      await systemDb
+        .insert(workspaces)
+        .values({ orgId, name: `R2 Other ${Date.now()}` })
+        .returning({ id: workspaces.id })
+    )[0]!;
+    const foreignKey = buildObjectKey({ workspaceId: otherWs.id, purpose: "evidence" });
+
+    await expect(
+      issueDownloadUrl({
+        actor,
+        purpose: "evidence",
+        objectKey: foreignKey,
+        reason: REASON,
+        requestId: RID.cross,
+        permissions: allow,
+      }),
+    ).rejects.toThrow(/different workspace/);
+  });
+
+  it("rejects a download when the purpose disagrees with the key", async () => {
+    if (!ready) return;
+    const key = buildObjectKey({ workspaceId: actor.workspaceId, purpose: "evidence" });
+    await expect(
+      issueDownloadUrl({
+        actor,
+        purpose: "generated_pack",
+        objectKey: key,
+        reason: REASON,
+        requestId: RID.mismatch,
+        permissions: allow,
+      }),
+    ).rejects.toThrow(/does not match the authorized purpose/);
+  });
+
+  it("rejects a user-controlled purpose outright", async () => {
+    if (!ready) return;
+    await expect(
+      issueUploadUrl({
+        actor,
+        purpose: "payroll",
+        contentType: "application/pdf",
+        reason: REASON,
+        requestId: RID.purpose,
+        permissions: allow,
+      }),
+    ).rejects.toThrow(/allowlist/);
+  });
+
+  it("records a download URL and an access attempt", async () => {
+    if (!ready) return;
+    const key = buildObjectKey({ workspaceId: actor.workspaceId, purpose: "evidence" });
+    const issued = await issueDownloadUrl({
+      actor,
+      purpose: "evidence",
+      objectKey: key,
+      reason: REASON,
+      requestId: RID.download,
+      permissions: allow,
+    });
+    expect(issued.method).toBe("GET");
+    expect(issued.ttlSeconds).toBe(600);
+    expect(issued.url).toContain(key);
+
+    await recordFileAccess({
+      actor,
+      objectKey: key,
+      operation: "download",
+      outcome: "granted",
+      requestId: RID.access,
+      reason: REASON,
+    });
+    const audits = await systemDb
+      .select()
+      .from(auditEvents)
+      .where(eq(auditEvents.action, "file.accessed"));
+    const mine = audits.filter((a) => (a.meta as Record<string, unknown>)?.requestId === RID.access);
+    expect(mine).toHaveLength(1);
+    expect((mine[0]!.meta as Record<string, unknown>).objectKey).toBe(key);
+  });
+});

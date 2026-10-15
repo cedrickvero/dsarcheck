@@ -1,4 +1,4 @@
-import { index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 /**
  * Scaffold subset of docs/04-data-model.md.
@@ -65,4 +65,38 @@ export const auditEvents = pgTable(
     meta: jsonb("meta").$type<Record<string, unknown>>(),
   },
   (table) => [index("audit_events_workspace_at_idx").on(table.workspaceId, table.at)],
+);
+
+
+/**
+ * Object metadata (R2 file/URL contract).
+ *
+ * Every row is tenant-scoped: org_id and workspace_id are NOT NULL, RLS is enabled
+ * and FORCED, and a CHECK constraint requires object_key to begin with
+ * ws/<workspace_id>/. That last one makes a row whose key belongs to another tenant
+ * structurally impossible, rather than merely unlikely.
+ *
+ * purpose is constrained to the server-side allowlist. The list is duplicated in
+ * purpose.ts by necessity (Postgres cannot read TypeScript), so
+ * tests/objects-schema.test.ts reads this CHECK back out of pg_constraint and fails
+ * if the two ever drift.
+ *
+ * size_bytes is filled in when the upload completes; it is NULL until then.
+ * uploader_actor_id is text with no FK: the actors table does not exist yet (T-08),
+ * so a foreign key is not yet applicable. Same shape as audit_events.actor_id.
+ */
+export const objects = pgTable(
+  "objects",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id").notNull(),
+    workspaceId: uuid("workspace_id").notNull(),
+    objectKey: text("object_key").notNull().unique(),
+    purpose: text("purpose").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: bigint("size_bytes", { mode: "number" }),
+    uploaderActorId: text("uploader_actor_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("objects_workspace_created_idx").on(table.workspaceId, table.createdAt)],
 );

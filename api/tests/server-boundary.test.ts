@@ -64,7 +64,8 @@ describe("server boundary check", () => {
 
     it("FAILS when a client component reaches storage", () => {
       const root = fixture({
-        "app/upload/page.tsx": '"use client";\nimport { signUpload } from "@/lib/s3";\n',
+        "app/upload/page.tsx":
+          '"use client";\nimport { uploadServerSideEncryption } from "@/server/storage/s3Client";\n',
       });
       expect(runChecker(root).code).toBe(1);
     });

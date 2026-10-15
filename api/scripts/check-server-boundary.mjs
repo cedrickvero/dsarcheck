@@ -37,8 +37,8 @@ export const SERVER_MODULES = [
   "src/env",
   "src/auth",
   "src/jobs",
-  "src/lib/s3",
   "src/lib/mailer",
+  // src/lib/s3 was deleted in R2: the only storage client is src/server/storage/s3Client.ts
 ];
 
 /** Privileged handles that must never leave db/client.ts. */

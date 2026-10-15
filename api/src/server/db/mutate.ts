@@ -1,7 +1,7 @@
 import type { ZodTypeAny } from "zod";
 import { can } from "@/auth/authz";
 import { withTenant, type Transaction } from "@/db/client";
-import { auditEvents } from "@/db/schema";
+import { writeAuditEvent } from "@/server/db/audit";
 import { requireAuth, type Actor } from "@/server/auth/require-auth";
 import { AppError, ValidationError } from "@/server/http/errors";
 import { parseWith } from "@/server/http/validate";
@@ -59,7 +59,7 @@ export async function mutate<R>(
     { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
     async (tx) => {
       const result = await fn(tx, input);
-      await tx.insert(auditEvents).values({
+      await writeAuditEvent(tx, {
         orgId: actor.orgId,
         workspaceId: actor.workspaceId,
         actorId: actor.userId,

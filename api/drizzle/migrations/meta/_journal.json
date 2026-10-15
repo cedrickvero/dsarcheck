@@ -29,6 +29,13 @@
       "when": 1792052793529,
       "tag": "0003_r1_substrate_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792062593912,
+      "tag": "0004_r2_objects",
+      "breakpoints": true
     }
   ]
 }

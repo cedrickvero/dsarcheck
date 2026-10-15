@@ -23,9 +23,115 @@ if (!adminDsn) {
 const appDsn = process.env.APP_DATABASE_URL;
 const adminUser = process.env.DB_OWNER_USER || "hermes";
 
+
+/**
+ * R2 object-table invariants, parameterised by table name so the self-test can run
+ * exactly these checks against a probe table that is missing them.
+ * Returns the invariant names that FAILED.
+ */
+async function checkObjectsTable(conn, table) {
+  // Returns its own results rather than writing into the module-level recorder, so
+  // it can be called from the self-test before those helpers exist.
+  const out = [];
+  const say = (pass, name, detail = "") => out.push({ pass, name, detail });
+
+  const rls = (await conn.query(
+    `select relrowsecurity, relforcerowsecurity from pg_class where relname = $1 and relkind = 'r'`,
+    [table],
+  )).rows[0];
+  say(!!rls && rls.relrowsecurity === true, `RLS enabled on ${table}`);
+  say(!!rls && rls.relforcerowsecurity === true, `RLS FORCED on ${table} (owner not exempt)`);
+
+  const pol = (await conn.query(
+    `select count(*)::int as n from pg_policies where schemaname = 'public' and tablename = $1`,
+    [table],
+  )).rows[0];
+  say(!!pol && pol.n > 0, `tenant policy present on ${table}`, pol ? `${pol.n} policy/policies` : "none");
+
+  const cons = (await conn.query(
+    `select conname from pg_constraint where conrelid = $1::regclass`,
+    [`public.${table}`],
+  )).rows.map((r) => r.conname);
+  say(cons.includes("objects_key_workspace_prefix"), `${table}: key/workspace CHECK present`);
+  say(cons.includes("objects_purpose_allowlist"), `${table}: purpose allowlist CHECK present`);
+  say(cons.includes("objects_workspace_fk"), `${table}: workspace FK present`);
+  say(cons.includes("objects_org_fk"), `${table}: org FK present`);
+
+  const uniqueKey = (await conn.query(
+    `select 1 from pg_constraint where conrelid = $1::regclass and contype = 'u'`,
+    [`public.${table}`],
+  )).rows.length;
+  say(uniqueKey > 0, `${table}: object_key is unique`);
+
+  return out;
+}
+
+
+/**
+ * Falsification self-test — proves these checks CAN fail.
+ *
+ * Creates a probe table inside a transaction that deliberately omits every R2
+ * invariant, runs the SAME check functions against it, and asserts each one is
+ * reported as a failure. If a check passes on a table that plainly violates it, the
+ * check is vacuous and this exits non-zero. Rolls back, leaving nothing behind.
+ *
+ * Run: node scripts/db-verify-invariants.mjs --self-test
+ */
+async function runSelfTest() {
+  const url = process.env.DATABASE_URL;
+  if (!url) {
+    console.error("--self-test needs DATABASE_URL (admin DSN)");
+    process.exit(2);
+  }
+  const conn = new pg.Client({ connectionString: url });
+  await conn.connect();
+  try {
+    await conn.query("begin");
+    await conn.query(`create table objects_probe (
+      id uuid primary key default gen_random_uuid(),
+      workspace_id uuid not null,
+      object_key text not null,
+      purpose text not null
+    )`);
+    const probeFails = (await checkObjectsTable(conn, "objects_probe"))
+      .filter((r) => !r.pass)
+      .map((r) => r.name);
+    await conn.query("rollback");
+
+    const expected = [
+      "RLS enabled on objects_probe",
+      "RLS FORCED on objects_probe (owner not exempt)",
+      "tenant policy present on objects_probe",
+      "objects_probe: key/workspace CHECK present",
+      "objects_probe: purpose allowlist CHECK present",
+      "objects_probe: workspace FK present",
+      "objects_probe: org FK present",
+      "objects_probe: object_key is unique",
+    ];
+    const missed = expected.filter((name) => !probeFails.includes(name));
+    if (missed.length > 0) {
+      console.error(`self-test FAILED - a broken table was not detected by: ${missed.join(", ")}`);
+      process.exit(1);
+    }
+    console.log(
+      `self-test OK - all ${expected.length} R2 object checks correctly failed against a deliberately broken table`,
+    );
+  } catch (error) {
+    await conn.query("rollback").catch(() => {});
+    throw error;
+  } finally {
+    await conn.end().catch(() => {});
+  }
+}
+
 const results = [];
 const check = (cond, name, detail = "") =>
   results.push({ pass: Boolean(cond), name, detail });
+
+if (process.argv.includes("--self-test")) {
+  await runSelfTest();
+  process.exit(0);
+}
 
 const admin = new pg.Client({ connectionString: adminDsn });
 await admin.connect();
@@ -58,6 +164,8 @@ try {
 
   // 2 · RLS must be enabled AND forced on every multi-tenant table
   const tables = ["audit_events", "orgs", "workspaces"];
+// `objects` is verified by checkObjectsTable below, which also asserts the R2
+// constraints - keeping it out of this list avoids printing each check twice.
   const rls = await q(
     `select relname, relrowsecurity, relforcerowsecurity from pg_class
       where relname = any($1) and relkind = 'r'`,
@@ -136,6 +244,11 @@ try {
     await admin.query("rollback").catch(() => {});
   }
   check(!truncated, "TRUNCATE on audit_events is rejected");
+
+  // R2 · the object table must carry the same tenant guarantees as R1
+  for (const r of await checkObjectsTable(admin, "objects")) {
+    check(r.pass, r.name, r.detail);
+  }
 
   // 9 · historical FK violations are reported, not fatal (the FKs are NOT VALID)
   const orphans = (
