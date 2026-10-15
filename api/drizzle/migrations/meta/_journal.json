@@ -50,6 +50,13 @@
       "when": 1792066844928,
       "tag": "0006_app_role_no_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792086852986,
+      "tag": "0007_dapper_corsair",
+      "breakpoints": true
     }
   ]
 }

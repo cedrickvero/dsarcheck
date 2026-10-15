@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import {
-  DEV_DEFAULT_APP_DATABASE_URL,
+  DEV_DEFAULT_APP_DATABASE_URL, DEV_DEFAULT_TOTP_KEY,
   DEV_DEFAULT_DATABASE_URL,
   DEV_DEFAULT_REDIS_URL,
   DEV_DEFAULT_SMTP_FROM,
@@ -31,6 +31,7 @@ function load(overrides: Record<string, string | undefined>) {
     SMTP_PORT: "587",
     SMTP_SECURE: "false",
     SMTP_IGNORE_TLS: "false",
+    TOTP_ENCRYPTION_KEY: "cHJvZHVjdGlvbi10b3RwLWtleS0zMi1ieXRlcy1vayE=",
     DATABASE_URL: "postgres://dsar_owner:strong-production-owner-password@db.internal:5432/dsar",
     REDIS_URL: "redis://:strong-production-redis-password@redis.internal:6379",
     SMTP_HOST: "smtp.internal",
@@ -70,6 +71,7 @@ function loadAndAssert(overrides: Record<string, string | undefined>) {
     SMTP_PORT: "587",
     SMTP_SECURE: "false",
     SMTP_IGNORE_TLS: "false",
+    TOTP_ENCRYPTION_KEY: "cHJvZHVjdGlvbi10b3RwLWtleS0zMi1ieXRlcy1vayE=",
     DATABASE_URL: "postgres://dsar_owner:strong-production-owner-password@db.internal:5432/dsar",
     REDIS_URL: "redis://:strong-production-redis-password@redis.internal:6379",
     SMTP_HOST: "smtp.internal",
@@ -300,6 +302,12 @@ describe("production config guard (R3)", () => {
       expect(r.status, `accepted SESSION_SECRET=${bad ?? "(unset)"}`).not.toBe(0);
       expect(`${r.stdout}${r.stderr}`).toMatch(/SESSION_SECRET must be set to at least 32 characters/);
     }
+  });
+
+  it("refuses the published development TOTP key in production - T-08", () => {
+    const r = load({ TOTP_ENCRYPTION_KEY: DEV_DEFAULT_TOTP_KEY });
+    expect(r.status).not.toBe(0);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/TOTP_ENCRYPTION_KEY must be set to a real 32-byte base64 secret/);
   });
 
   it("refuses the development S3 bucket, owner role and mail-sink port by VALUE - L1", () => {

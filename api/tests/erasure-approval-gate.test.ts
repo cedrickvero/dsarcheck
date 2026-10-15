@@ -15,7 +15,7 @@ const handler: Actor = {
   label: "H. Handler",
   orgId: "org-1",
   workspaceId: "ws-1",
-  roles: ["handler"],
+  roles: ["request_handler"],
 };
 const approver: Actor = { ...handler, userId: "user-approver", label: "A. Approver", roles: ["approver"] };
 

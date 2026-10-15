@@ -26,6 +26,7 @@ export const DEV_DEFAULT_SMTP_FROM = "no-reply@privacyspace.local";
 /** The admin password embedded in the development DSN, derived so it is never re-typed. */
 const DEV_DEFAULT_DATABASE_PASSWORD =
   /^[^:]+:\/\/[^:]+:([^@]*)@/.exec(DEV_DEFAULT_DATABASE_URL)?.[1] ?? "";
+export const DEV_DEFAULT_TOTP_KEY = "ZGV2LW9ubHktbm90LWEtcmVhbC1rZXktMDAwMDA=";
 export const DEV_DEFAULT_APP_DATABASE_URL =
   "postgres://app_runtime:app_runtime_dev_password@hermes_dsar_postgres:5432/hermes_dsar";
 export const DEV_DEFAULT_APP_DB_PASSWORD = "app_runtime_dev_password";
@@ -77,6 +78,18 @@ const envSchema = z.object({
 
   DB_POOL_MAX: z.coerce.number().int().positive().default(10),
   DB_OWNER_USER: z.string().default("hermes"),
+  // ── T-08 auth ────────────────────────────────────────────────────────────────
+  /** AES-256-GCM key for TOTP secrets. base64 of 32 bytes. Dev default is a fixed,
+   *  obviously-unsafe value so production cannot accidentally use it (guarded below). */
+  TOTP_ENCRYPTION_KEY: z
+    .string()
+    .default("ZGV2LW9ubHktbm90LWEtcmVhbC1rZXktMDAwMDA="),
+  SESSION_ABSOLUTE_DAYS: z.coerce.number().int().positive().default(7),
+  SESSION_IDLE_MINUTES: z.coerce.number().int().positive().default(720),
+  MAGIC_LINK_TTL_MINUTES: z.coerce.number().int().positive().default(15),
+  RATE_LIMIT_MAGIC_LINK_PER_HOUR: z.coerce.number().int().positive().default(5),
+  RATE_LIMIT_REDEEM_PER_HOUR: z.coerce.number().int().positive().default(20),
+  RATE_LIMIT_TOTP_PER_HOUR: z.coerce.number().int().positive().default(10),
 
   // The APPLICATION connects with this DSN: a least-privilege LOGIN role.
   // DATABASE_URL above is the admin/owner DSN (migrations + test setup only).
@@ -260,6 +273,14 @@ function computeProductionProblems(opts: { isBuildPhase: boolean }): string[] {
     problems.push("SMTP_PORT 1025 is the development mail sink and must not be used in production");
   }
 
+  // TOTP_ENCRYPTION_KEY must be a real secret in production: its development default is
+  // a published constant, so leaving it would make every stored TOTP secret decryptable
+  // by anyone with the source.
+  if (unset("TOTP_ENCRYPTION_KEY") || e.TOTP_ENCRYPTION_KEY === DEV_DEFAULT_TOTP_KEY) {
+    problems.push(
+      "TOTP_ENCRYPTION_KEY must be set to a real 32-byte base64 secret: the development default is public",
+    );
+  }
   if (unset("S3_FORCE_PATH_STYLE")) {
     problems.push("S3_FORCE_PATH_STYLE must be set explicitly rather than inherited");
   }

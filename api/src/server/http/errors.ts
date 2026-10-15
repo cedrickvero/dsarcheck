@@ -29,6 +29,37 @@ export class NotImplementedError extends AppError {
   }
 }
 
+/**
+ * Authentication failures share ONE generic code and message on purpose: sign-in must
+ * not reveal whether an address exists, whether an account has MFA enabled, or whether
+ * a code was wrong versus replayed.
+ */
+export class UnauthenticatedError extends AppError {
+  constructor() {
+    super(401, "unauthenticated", "Sign-in failed. Check your link or code and try again.");
+  }
+}
+
+/** Authenticated, but not permitted. Distinct from 401 so the audit trail can tell them apart. */
+export class ForbiddenError extends AppError {
+  constructor(detail: string) {
+    super(403, "forbidden", detail);
+  }
+}
+
+export class RateLimitError extends AppError {
+  constructor() {
+    super(429, "rate_limited", "Too many attempts. Try again later.");
+  }
+}
+
+/** MFA is required for this role and has not been satisfied on this session. */
+export class MfaRequiredError extends AppError {
+  constructor() {
+    super(401, "mfa_required", "Multi-factor verification is required to continue.");
+  }
+}
+
 export class ValidationError extends AppError {
   constructor(detail: string) {
     super(422, "validation_failed", detail);

@@ -1,0 +1,73 @@
+/**
+ * GET /api/auth/callback?token=... - redeem a sign-in link.
+ *
+ * Atomic single use: redemption is UPDATE ... WHERE used_at IS NULL, so a replayed
+ * link finds nothing. Runs in withLookup({ magicTokenHash }), where the only visible
+ * row is the one whose hash matches the presented token.
+ *
+ * A session is created here. If the user's role requires MFA it is NOT yet usable -
+ * requireAuth refuses it until /api/auth/totp/verify succeeds. The cookie is set with
+ * the R3 policy: HttpOnly, Secure in production, SameSite=Lax, __Host- in production.
+ */
+import { NextResponse } from "next/server";
+import { withLookup } from "@/db/client";
+import { writeAuditEvent } from "@/server/db/audit";
+import { route } from "@/server/http/handler";
+import { UnauthenticatedError } from "@/server/http/errors";
+import { requiresMfa } from "@/server/authz";
+import type { Role } from "@/server/auth/require-auth";
+import { sql } from "drizzle-orm";
+import { users } from "@/db/schema";
+import { createSession } from "@/server/auth/session-store";
+import { redeemLink } from "@/server/auth/magic-link";
+import { sessionCookieName } from "@/server/auth/require-auth";
+import { hashToken } from "@/server/auth/crypto";
+
+export const GET = route(async (req) => {
+  const token = new URL(req.url).searchParams.get("token");
+  if (!token) throw new UnauthenticatedError();
+  const tokenHash = hashToken(token);
+
+  const result = await withLookup({ magicTokenHash: tokenHash }, async (tx) => {
+    const link = await redeemLink(tx, token);
+    if (!link) return null;
+
+    // Learn the tenant from the redeemed link, then read the role - so mfaRequired is
+    // accurate rather than assumed.
+    await tx.execute(sql`select set_config('app.workspace_id', ${link.workspaceId}, true)`);
+    const [user] = await tx.select().from(users).where(sql`${users.id} = ${link.userId}`).limit(1);
+
+    const created = await createSession(tx, {
+      userId: link.userId,
+      orgId: link.orgId,
+      workspaceId: link.workspaceId,
+    });
+
+    await writeAuditEvent(tx, {
+      orgId: link.orgId,
+      workspaceId: link.workspaceId,
+      actorId: link.userId,
+      actorLabel: "session",
+      action: "auth.sign_in",
+      category: "authentication",
+      reason: "Magic link redeemed",
+      objectType: "session",
+      objectId: created.sessionId,
+      meta: { mfaOutstanding: requiresMfa((user?.role ?? "request_handler") as Role) },
+    });
+    return { created, mfaRequired: requiresMfa((user?.role ?? "request_handler") as Role) };
+  });
+
+  if (!result) throw new UnauthenticatedError();
+
+  const production = process.env.NODE_ENV === "production";
+  const res = NextResponse.json({ ok: true, mfaRequired: result.mfaRequired });
+  res.cookies.set(sessionCookieName(), result.created.token, {
+    httpOnly: true,
+    secure: production,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 7 * 24 * 3600,
+  });
+  return res;
+});

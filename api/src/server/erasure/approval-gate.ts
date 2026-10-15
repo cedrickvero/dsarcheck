@@ -112,4 +112,4 @@ export function assertNoActionRequiredOutstanding(systems: readonly SystemOutcom
 }
 
 /** Roles permitted to decide an erasure outcome at all (the permission source has the final say). */
-export const DECIDING_ROLES: readonly Role[] = ["owner", "admin", "handler", "approver"];
+export const DECIDING_ROLES: readonly Role[] = ["owner", "workspace_admin", "request_handler", "approver"];

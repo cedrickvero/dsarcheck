@@ -48,7 +48,7 @@ beforeAll(async () => {
     const tag = `e4-${RUN}`;
     const org = (await systemDb.insert(orgs).values({ name: `${tag}-org` }).returning({ id: orgs.id }))[0]!;
     const ws = (await systemDb.insert(workspaces).values({ orgId: org.id, name: `${tag}-ws` }).returning({ id: workspaces.id }))[0]!;
-    handler = { userId: `user-${tag}`, label: "E4 Handler", orgId: org.id, workspaceId: ws.id, roles: ["handler"] };
+    handler = { userId: `user-${tag}`, label: "E4 Handler", orgId: org.id, workspaceId: ws.id, roles: ["request_handler"] };
     approver = { ...handler, userId: `approver-${tag}`, label: "E4 Approver", roles: ["approver"] };
     await systemDb.select({ id: auditEvents.id }).from(auditEvents).limit(1);
     ready = true;

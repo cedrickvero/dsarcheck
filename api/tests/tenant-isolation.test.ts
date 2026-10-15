@@ -148,7 +148,7 @@ suite("R1 tenant isolation + append-only audit", () => {
         { action: "case.close", reason: "closing after verification", objectType: "case", schema: z.object({}), input: {} },
         async () => "unreachable",
       ),
-    ).rejects.toThrow(/not implemented/i);
+    ).rejects.toThrow(/sign-in required|unauthenticated/i);
   });
 
   it("mutate() rejects a missing reason before touching the database", async () => {

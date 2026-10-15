@@ -64,6 +64,45 @@ export async function withTenant<T>(
   });
 }
 
+/**
+ * Run `fn` with NO tenant, but with the hash of one presented credential exposed to
+ * the pre-auth lookup policies.
+ *
+ * This is what makes sign-in possible under FORCED row-level security. app.workspace_id
+ * is deliberately NOT set, so every tenant policy evaluates NULL and denies: the only
+ * rows visible are those whose hash equals the credential the caller already holds.
+ * A lookup therefore cannot enumerate users, cannot read another workspace's rows, and
+ * cannot see any table that has only a tenant policy. tests/auth-tenant.test.ts proves
+ * each of those three.
+ */
+export interface LookupContext {
+  /** sha256 of a presented magic-link token. */
+  magicTokenHash?: string;
+  /** sha256 of a presented session token. */
+  sessionTokenHash?: string;
+  /** sha256 of a normalised email address, for the "whose address is this?" lookup. */
+  emailHash?: string;
+}
+
+export async function withLookup<T>(
+  ctx: LookupContext,
+  fn: (tx: Transaction) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    if (ctx.magicTokenHash) {
+      await tx.execute(sql`select set_config('app.magic_token_hash', ${ctx.magicTokenHash}, true)`);
+    }
+    if (ctx.sessionTokenHash) {
+      await tx.execute(sql`select set_config('app.session_token_hash', ${ctx.sessionTokenHash}, true)`);
+    }
+    if (ctx.emailHash) {
+      await tx.execute(sql`select set_config('app.lookup_email_hash', ${ctx.emailHash}, true)`);
+    }
+    await tx.execute(sql`set local role app_tenant`);
+    return fn(tx);
+  });
+}
+
 /** Liveness/readiness probe that needs no tenant context. */
 export async function pingDatabase(): Promise<void> {
   await pool.query("select 1");
