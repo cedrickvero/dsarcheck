@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest";
 /**
  * The boundary checker is only worth having if it can actually fail. The
  * previous version could not: it scanned for "use client" files, found none,
- * and therefore always passed. These cases are the positive control.
+ * and therefore always passed. These cases are the positive control, covering
+ * both rules.
  */
 const HERE = dirname(fileURLToPath(import.meta.url));
 const API_ROOT = resolve(HERE, "..");
@@ -39,42 +40,77 @@ function runChecker(root: string): { code: number; output: string } {
 }
 
 describe("server boundary check", () => {
-  it("FAILS on a client component importing @/env (positive control)", () => {
-    const root = fixture({
-      "app/page.tsx":
-        '"use client";\nimport { env } from "@/env";\nexport default () => env.PORT;\n',
+  describe("rule 1 - client modules must not import server code", () => {
+    it("FAILS on a client component importing @/env", () => {
+      const root = fixture({
+        "app/page.tsx":
+          '"use client";\nimport { env } from "@/env";\nexport default () => env.PORT;\n',
+      });
+      const { code, output } = runChecker(root);
+      expect(code).toBe(1);
+      expect(output).toContain("@/env");
     });
-    const { code, output } = runChecker(root);
-    expect(code).toBe(1);
-    expect(output).toContain("@/env");
+
+    it("FAILS on a relative server import and on a dynamic import", () => {
+      const root = fixture({
+        "app/deep/x.tsx":
+          '"use client";\nconst a = () => import("@/db/client");\nconst b = require("../../db/client");\n',
+      });
+      const { code, output } = runChecker(root);
+      expect(code).toBe(1);
+      expect(output).toContain("@/db/client");
+      expect(output).toContain("../../db/client");
+    });
+
+    it("FAILS when a client component reaches storage", () => {
+      const root = fixture({
+        "app/upload/page.tsx": '"use client";\nimport { signUpload } from "@/lib/s3";\n',
+      });
+      expect(runChecker(root).code).toBe(1);
+    });
+
+    it("PASSES when the same import sits in a server module", () => {
+      const root = fixture({
+        "server/db/thing.ts": 'import { db } from "@/db/client";\nexport const t = db;\n',
+      });
+      expect(runChecker(root).code).toBe(0);
+    });
   });
 
-  it("FAILS on a relative server import and on a dynamic import", () => {
-    const root = fixture({
-      "app/deep/x.tsx":
-        '"use client";\nconst a = () => import("@/db/client");\nconst b = require("../../db/client");\n',
+  describe("rule 2 - privileged handles must not leave db/client.ts", () => {
+    it("FAILS when a route imports systemDb", () => {
+      const root = fixture({
+        "app/api/cases/route.ts":
+          'import { systemDb } from "@/db/client";\nexport const GET = () => systemDb;\n',
+      });
+      const { code, output } = runChecker(root);
+      expect(code).toBe(1);
+      expect(output).toContain("systemDb");
     });
-    const { code, output } = runChecker(root);
-    expect(code).toBe(1);
-    expect(output).toContain("@/db/client");
-    expect(output).toContain("../../db/client");
+
+    it("FAILS on systemPool even in a server module", () => {
+      const root = fixture({
+        "server/db/helper.ts": 'import { systemPool } from "@/db/client";\nexport const p = systemPool;\n',
+      });
+      expect(runChecker(root).code).toBe(1);
+    });
+
+    it("PASSES when db/client.ts imports its own privileged handles", () => {
+      const root = fixture({
+        "db/client.ts": "const systemPool = 1;\nconst systemDb = 2;\nexport { systemPool, systemDb };\n",
+      });
+      expect(runChecker(root).code).toBe(0);
+    });
+
+    it("PASSES the unprivileged handle in a server module", () => {
+      const root = fixture({
+        "server/db/thing.ts": 'import { db } from "@/db/client";\nexport const t = db;\n',
+      });
+      expect(runChecker(root).code).toBe(0);
+    });
   });
 
-  it("FAILS when a client component reaches storage", () => {
-    const root = fixture({
-      "app/upload/page.tsx": '"use client";\nimport { signUpload } from "@/lib/s3";\n',
-    });
-    expect(runChecker(root).code).toBe(1);
-  });
-
-  it("PASSES when the same import sits in a server module", () => {
-    const root = fixture({
-      "server/db/thing.ts": 'import { db } from "@/db/client";\nexport const t = db;\n',
-    });
-    expect(runChecker(root).code).toBe(0);
-  });
-
-  it("PASSES the real tree (no client component imports server code)", () => {
+  it("PASSES the real tree", () => {
     const { code, output } = runChecker(API_ROOT);
     expect(code).toBe(0);
     expect(output).toContain("server boundary OK");

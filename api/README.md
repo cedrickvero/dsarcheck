@@ -139,6 +139,11 @@ commits or rolls back with the change — proven both ways in
   earlier test cleanup, before the tenant-integrity FKs existed. `db:verify` reports them
   and they are deliberately **not** deleted (append-only forbids it). Because the FKs are
   `NOT VALID`, that history is unenforced; a retention decision is still owed.
+- **Migration 0003's header comment is stale.** It still describes `app_runtime` as
+  `NOLOGIN` and says connections assume it with SET ROLE. The authoritative
+  definition is now `scripts/db-ensure-runtime-role.mjs`, which alters the role to
+  `LOGIN`. The migration file is left byte-identical because it has already been
+  applied, and editing applied migrations is forbidden (see Database workflow).
 - **Domain functions are unported.** `src/domain/*` are typed stubs that throw.
   Port them from `design/reference/seed/workspace-seed.js` (T-07).
 - Design tokens are not wired yet: `globals.css` holds neutral fallbacks only.
