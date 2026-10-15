@@ -35,7 +35,9 @@ export async function register(): Promise<void> {
           `(superuser=${who.superuser}, bypassrls=${who.bypassRls}, owns=${who.ownsTables})`,
       );
     } catch (error) {
-      console.error("db: least-privilege assertion FAILED:", error);
+      // Dynamic import, like the others above: keeps this file safe for the edge build.
+      const { logError } = await import("@/server/log");
+      logError("instrumentation", error, { phase: "boot", assertion: "least-privilege" });
       if (process.env.NODE_ENV === "production") throw error;
     }
   }

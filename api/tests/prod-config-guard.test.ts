@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { DEV_DEFAULT_APP_DATABASE_URL } from "../src/env";
+import { DEV_DEFAULT_APP_DATABASE_URL, DEV_DEFAULT_DATABASE_URL } from "../src/env";
 import { describe, expect, it } from "vitest";
 
 const TSX = "node_modules/.bin/tsx";
@@ -25,6 +25,11 @@ function load(overrides: Record<string, string | undefined>) {
     SMTP_PORT: "587",
     SMTP_SECURE: "false",
     SMTP_IGNORE_TLS: "false",
+    DATABASE_URL: "postgres://dsar_owner:strong-production-owner-password@db.internal:5432/dsar",
+    REDIS_URL: "redis://:strong-production-redis-password@redis.internal:6379",
+    SMTP_HOST: "smtp.internal",
+    SMTP_FROM: "no-reply@privacyspace.example",
+    SESSION_SECRET: "a-production-session-secret-of-sufficient-length",
     ...overrides,
   };
   for (const [key, value] of Object.entries(overrides)) {
@@ -59,6 +64,11 @@ function loadAndAssert(overrides: Record<string, string | undefined>) {
     SMTP_PORT: "587",
     SMTP_SECURE: "false",
     SMTP_IGNORE_TLS: "false",
+    DATABASE_URL: "postgres://dsar_owner:strong-production-owner-password@db.internal:5432/dsar",
+    REDIS_URL: "redis://:strong-production-redis-password@redis.internal:6379",
+    SMTP_HOST: "smtp.internal",
+    SMTP_FROM: "no-reply@privacyspace.example",
+    SESSION_SECRET: "a-production-session-secret-of-sufficient-length",
     ...overrides,
   } as NodeJS.ProcessEnv;
   for (const [k, v] of Object.entries(overrides)) if (v === undefined) delete env[k];
@@ -237,6 +247,36 @@ describe("production config guard (R3)", () => {
       expect(source, `${file} no longer asserts the production config`).toContain(
         "assertProductionConfig",
       );
+    }
+  });
+
+  it("refuses the DEVELOPMENT DATABASE_URL (the admin/superuser DSN) - FINDING B", () => {
+    for (const bad of [undefined, DEV_DEFAULT_DATABASE_URL]) {
+      const r = load({ DATABASE_URL: bad });
+      expect(r.status, `accepted DATABASE_URL=${bad ?? "(unset)"}`).not.toBe(0);
+      expect(`${r.stdout}${r.stderr}`).toMatch(/DATABASE_URL must be set explicitly/);
+    }
+  });
+
+  it("refuses an unset REDIS_URL - the dev default is unauthenticated - FINDING B", () => {
+    const r = load({ REDIS_URL: undefined });
+    expect(r.status).not.toBe(0);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/REDIS_URL must be set explicitly/);
+  });
+
+  it("refuses unset SMTP_HOST / SMTP_FROM - FINDING B", () => {
+    for (const [key, re_] of [["SMTP_HOST", /SMTP_HOST must be set explicitly/], ["SMTP_FROM", /SMTP_FROM must be set explicitly/]] as const) {
+      const r = load({ [key]: undefined });
+      expect(r.status, `accepted unset ${key}`).not.toBe(0);
+      expect(`${r.stdout}${r.stderr}`).toMatch(re_);
+    }
+  });
+
+  it("refuses a missing or too-short SESSION_SECRET - requirement 8's cookie secret", () => {
+    for (const bad of [undefined, "too-short"]) {
+      const r = load({ SESSION_SECRET: bad });
+      expect(r.status, `accepted SESSION_SECRET=${bad ?? "(unset)"}`).not.toBe(0);
+      expect(`${r.stdout}${r.stderr}`).toMatch(/SESSION_SECRET must be set to at least 32 characters/);
     }
   });
 });

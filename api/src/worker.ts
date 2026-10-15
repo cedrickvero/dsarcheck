@@ -1,4 +1,5 @@
 import { assertProductionConfig, env } from "./env";
+import { logError } from "@/server/log";
 import { startWorkers } from "./jobs";
 
 /**
@@ -17,6 +18,6 @@ async function main(): Promise<void> {
 assertProductionConfig();
 
 main().catch((error: unknown) => {
-  console.error("Worker failed to start", error);
+  logError("worker", error, { phase: "startup" });
   process.exit(1);
 });

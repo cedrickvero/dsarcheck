@@ -1,3 +1,5 @@
+import { logError } from "@/server/log";
+
 /**
  * Typed application errors plus the single JSON error envelope every route
  * handler returns: { error: { code, message, requestId } }.
@@ -63,11 +65,12 @@ export function toErrorEnvelope(
   const message = isApp ? sanitizeMessage(err.message) : "Internal server error";
 
   if (isApp && status >= 500 && !(err instanceof NotImplementedError)) {
-    // A real server-side failure we authored: keep the stack for diagnosis.
-    console.error(`[${requestId}] ${code} (${status})`, err);
+    // A real server-side failure we authored. Logged through logError: a sanitised
+    // summary, never the raw object (which can carry SQL, bound parameters and a stack).
+    logError("request", err, { requestId, code, status });
   } else if (!isApp) {
     // Unexpected: this is the one case that must never be silent.
-    console.error(`[${requestId}] unhandled`, err);
+    logError("request-unhandled", err, { requestId });
   }
   // 4xx and intentional 501 stubs are expected traffic and deliberately log nothing.
   // Logging a stack for every 501 made real incidents unreadable.

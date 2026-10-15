@@ -25,7 +25,7 @@ export type Handler = (req: NextRequest, ctx: RouteContext) => Promise<Response>
  * too long, control characters, terminal escapes, a JSON blob - is discarded and a
  * fresh id is generated rather than sanitised in place.
  */
-const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{8,64}$/;
+const SAFE_REQUEST_ID = /^[A-Za-z0-9-]{8,64}$/;
 const UUID_REQUEST_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

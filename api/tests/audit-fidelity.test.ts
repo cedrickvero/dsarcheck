@@ -45,7 +45,12 @@ afterAll(async () => {
 
 describe("audit fidelity (guardrail N-1 / N-2)", () => {
   it("labels an internal authorization failure as authorization_unavailable, not a policy refusal (N-1)", async () => {
-    if (!ready) return;
+    if (!ready) {
+      throw new Error(
+        "audit-fidelity: the database is unavailable, so this test asserted nothing. " +
+          "Failing loudly: a check that cannot fail is not a check.",
+      );
+    }
     const id = `req-${RUN}-n1`;
     const broken: PermissionSource = {
       can: () => {
@@ -74,7 +79,12 @@ describe("audit fidelity (guardrail N-1 / N-2)", () => {
   });
 
   it("never lets a failed audit write replace the refusal it was recording (N-2)", async () => {
-    if (!ready) return;
+    if (!ready) {
+      throw new Error(
+        "audit-fidelity: the database is unavailable, so this test asserted nothing. " +
+          "Failing loudly: a check that cannot fail is not a check.",
+      );
+    }
     // an actor whose workspace row does not exist: the denial INSERT fails its FK
     const ghost: Actor = {
       ...actor,

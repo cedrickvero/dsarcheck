@@ -21,6 +21,7 @@ import { objects } from "@/db/schema";
 import { authorize, AuthorizationDeniedError, type PermissionSource } from "@/server/auth/authorize";
 import type { Actor } from "@/server/auth/require-auth";
 import { writeAuditEvent } from "@/server/db/audit";
+import { logError } from "@/server/log";
 import { env } from "@/env";
 import { ValidationError } from "@/server/http/errors";
 import { assertKeyInWorkspace, buildObjectKey, InvalidObjectKeyError, parseObjectKey } from "./objectKey";
@@ -192,10 +193,12 @@ async function auditDenial(args: {
     // the refusal the caller needed to see, reporting an FK error instead of the
     // denial. The original error is always rethrown; the missing row is logged,
     // because a refusal that could not be recorded is itself an incident.
-    console.error(
-      `[${args.requestId}] AUDIT WRITE FAILED for denial ${args.error.name}; the refusal is reported but NOT recorded`,
-      writeError,
-    );
+    // Sanitised summary only: the raw write error is a Drizzle/pg object carrying the
+    // SQL, its bound parameters (reason, objectKey) and a stack.
+    logError("audit-write-failed", writeError, {
+      requestId: args.requestId,
+      refusal: args.error.name,
+    });
   }
   throw args.error;
 }

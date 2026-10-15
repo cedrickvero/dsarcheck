@@ -18,6 +18,8 @@ import { EXCEPTION_TTL_HARD_CAP, validateTtlExceptions } from "@/server/storage/
  * localhost base URL. The startup guard below rejects each of them by name, and the
  * schema references these constants so the two cannot drift apart.
  */
+export const DEV_DEFAULT_DATABASE_URL =
+  "postgres://hermes:hermes_dev_password@127.0.0.1:5432/hermes_dsar";
 export const DEV_DEFAULT_APP_DATABASE_URL =
   "postgres://app_runtime:app_runtime_dev_password@hermes_dsar_postgres:5432/hermes_dsar";
 export const DEV_DEFAULT_APP_DB_PASSWORD = "app_runtime_dev_password";
@@ -33,7 +35,7 @@ const envSchema = z.object({
   DATABASE_URL: z
     .string()
     .min(1)
-    .default("postgres://hermes:hermes_dev_password@127.0.0.1:5432/hermes_dsar"),
+    .default(DEV_DEFAULT_DATABASE_URL),
 
   REDIS_URL: z.string().min(1).default("redis://127.0.0.1:6379"),
 
@@ -60,6 +62,8 @@ const envSchema = z.object({
   SMTP_HOST: z.string().default("127.0.0.1"),
   SMTP_PORT: z.coerce.number().int().positive().default(1025),
   SMTP_FROM: z.string().default("no-reply@privacyspace.local"),
+  /** Signs the session cookie. Required in production; unused until T-08 sets one. */
+  SESSION_SECRET: z.string().default(""),
   // Explicit string enums rather than z.coerce.boolean(), which maps the string
   // "false" to true - a silent security flip.
   SMTP_SECURE: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
@@ -177,6 +181,30 @@ function computeProductionProblems(opts: { isBuildPhase: boolean }): string[] {
   }
   if (e.SMTP_IGNORE_TLS) {
     problems.push("SMTP_IGNORE_TLS must not be enabled in production");
+  }
+
+  // FINDING B. DATABASE_URL's development default is the ADMIN/SUPERUSER DSN: silently
+  // inheriting a superuser connection string in production is what this guard exists to
+  // stop, even though it is not used on the request path today.
+  if (unset("DATABASE_URL") || e.DATABASE_URL === DEV_DEFAULT_DATABASE_URL) {
+    problems.push(
+      "DATABASE_URL must be set explicitly in production: its default is the development ADMIN (superuser) DSN",
+    );
+  }
+  if (unset("REDIS_URL")) {
+    problems.push(
+      "REDIS_URL must be set explicitly in production: the development default is an unauthenticated localhost",
+    );
+  }
+  if (unset("SMTP_HOST")) {
+    problems.push("SMTP_HOST must be set explicitly in production");
+  }
+  if (unset("SMTP_FROM")) {
+    problems.push("SMTP_FROM must be set explicitly in production");
+  }
+  // Requirement 8's "missing cookie secret".
+  if (unset("SESSION_SECRET") || e.SESSION_SECRET.length < 32) {
+    problems.push("SESSION_SECRET must be set to at least 32 characters in production");
   }
 
   // Values that must be chosen deliberately rather than inherited. Each of these has a
