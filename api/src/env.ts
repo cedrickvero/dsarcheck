@@ -26,7 +26,7 @@ export const DEV_DEFAULT_SMTP_FROM = "no-reply@privacyspace.local";
 /** The admin password embedded in the development DSN, derived so it is never re-typed. */
 const DEV_DEFAULT_DATABASE_PASSWORD =
   /^[^:]+:\/\/[^:]+:([^@]*)@/.exec(DEV_DEFAULT_DATABASE_URL)?.[1] ?? "";
-export const DEV_DEFAULT_TOTP_KEY = "ZGV2LW9ubHktbm90LWEtcmVhbC1rZXktMDAwMDA=";
+export const DEV_DEFAULT_TOTP_KEY = "ZGV2LW9ubHktbm90LWEtcmVhbC1rZXktLS0tLS0tLS0=";
 export const DEV_DEFAULT_APP_DATABASE_URL =
   "postgres://app_runtime:app_runtime_dev_password@hermes_dsar_postgres:5432/hermes_dsar";
 export const DEV_DEFAULT_APP_DB_PASSWORD = "app_runtime_dev_password";
@@ -83,7 +83,7 @@ const envSchema = z.object({
    *  obviously-unsafe value so production cannot accidentally use it (guarded below). */
   TOTP_ENCRYPTION_KEY: z
     .string()
-    .default("ZGV2LW9ubHktbm90LWEtcmVhbC1rZXktMDAwMDA="),
+    .default(DEV_DEFAULT_TOTP_KEY),
   SESSION_ABSOLUTE_DAYS: z.coerce.number().int().positive().default(7),
   SESSION_IDLE_MINUTES: z.coerce.number().int().positive().default(720),
   MAGIC_LINK_TTL_MINUTES: z.coerce.number().int().positive().default(15),
