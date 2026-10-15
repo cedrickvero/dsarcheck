@@ -75,4 +75,32 @@ const checkedEnvSchema = envSchema.refine(
   },
 );
 
-export const env: Env = checkedEnvSchema.parse(process.env);
+/**
+ * Cross-field guard for TTL exceptions, evaluated at import time. An exception
+ * widens a signed-URL ceiling, so a malformed or over-cap entry is a security
+ * misconfiguration, not a runtime detail: it must stop the process at startup.
+ */
+const finalEnvSchema = checkedEnvSchema.refine(
+  (e) => {
+    const raw = e.SIGNED_URL_TTL_EXCEPTIONS;
+    if (!raw || raw.trim() === "") return true;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return false;
+      return parsed.every((x) => {
+        const t = (x as { ttlSeconds?: unknown }).ttlSeconds;
+        return Number.isInteger(t) && (t as number) > 0 && (t as number) <= 3600;
+      });
+    } catch {
+      return false;
+    }
+  },
+  {
+    message:
+      "SIGNED_URL_TTL_EXCEPTIONS must be a JSON array of {name, purpose, operation, ttlSeconds} with 0 < ttlSeconds <= 3600",
+    path: ["SIGNED_URL_TTL_EXCEPTIONS"],
+  },
+);
+
+
+export const env: Env = finalEnvSchema.parse(process.env);

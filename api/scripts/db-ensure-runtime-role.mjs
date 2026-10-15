@@ -60,12 +60,16 @@ try {
   );
   await client.query(`grant ${tenant} to ${role}`);
   await client.query(`grant usage on schema public to ${role}`);
-  await client.query(`grant select, insert, update, delete on all tables in schema public to ${role}`);
+  // DELETE is deliberately NOT granted: deletion is an approved, audited action (R4),
+  // never a blanket privilege. Guardrail F-1.
+  await client.query(`grant select, insert, update on all tables in schema public to ${role}`);
+  await client.query(`revoke delete on all tables in schema public from ${role}`);
   await client.query(`revoke truncate, references, trigger on all tables in schema public from ${role}`);
   await client.query(`revoke create on schema public from ${role}`);
   await client.query(`revoke truncate, references, trigger on all tables in schema public from ${tenant}`);
+  await client.query(`revoke delete on all tables in schema public from ${tenant}`);
   await client.query(
-    `alter default privileges in schema public grant select, insert, update, delete on tables to ${role}`,
+    `alter default privileges in schema public grant select, insert, update on tables to ${role}`,
   );
 
   // Prove it before declaring success: the password must actually authenticate

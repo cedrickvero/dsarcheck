@@ -192,4 +192,26 @@ describe.skipIf(!hasEnv)("objects table", () => {
     const inSql = [...def.matchAll(/'([^']+)'/g)].map((m) => m[1]);
     expect(new Set(inSql)).toEqual(new Set(Object.keys(PURPOSE_POLICY)));
   });
+
+  it("refuses to let the application principal delete an object (guardrail F-1)", async () => {
+    if (!ready) return;
+    const key = `ws/${wsA}/evidence/2df1b6bf-2222-4333-8444-555555555555`;
+    const ins = await asTenant(
+      wsA,
+      `insert into objects (org_id, workspace_id, object_key, purpose, content_type, uploader_actor_id)
+       values ($1,$2,$3,'evidence','application/pdf','f1-test') returning id`,
+      [orgId, wsA, key],
+      { commit: true },
+    );
+    expect(ins.ok).toBe(true);
+
+    const del = await asTenant(wsA, "delete from objects where object_key=$1", [key], { commit: true });
+    expect(del.ok, "app_tenant was able to DELETE an object").toBe(false);
+    expect(del.ok ? "" : del.error).toMatch(/permission denied/i);
+
+    const still = await asTenant(wsA, "select count(*)::int n from objects where object_key=$1", [key]);
+    const remaining = still.ok ? (still.rows[0] as { n: number } | undefined)?.n : undefined;
+    expect(remaining, "the object was deleted despite the refusal").toBe(1);
+  });
+
 });

@@ -22,10 +22,12 @@ import { authorize, AuthorizationDeniedError, type PermissionSource } from "@/se
 import type { Actor } from "@/server/auth/require-auth";
 import { writeAuditEvent } from "@/server/db/audit";
 import { env } from "@/env";
+import { ValidationError } from "@/server/http/errors";
 import { assertKeyInWorkspace, buildObjectKey, InvalidObjectKeyError, parseObjectKey } from "./objectKey";
 import {
   assertPurpose,
   clampTtl,
+  UnknownPurposeError,
   methodOf,
   parseTtlExceptions,
   requiredPermission,
@@ -103,6 +105,17 @@ function resolveTtl(args: {
   return { ttlSeconds: clampTtl(args.purpose, args.operation, requested) };
 }
 
+/**
+ * A denial audit row needs the caller's reason. If the reason were invalid, writing
+ * the row would throw a ValidationError and MASK the denial it was recording - so the
+ * reason is validated before any work begins, not when the row is written.
+ */
+function assertAuditReason(reason: unknown): asserts reason is string {
+  if (typeof reason !== "string" || reason.trim().length < 3) {
+    throw new ValidationError("a reason of at least 3 characters is required for this action");
+  }
+}
+
 /** Writes the "denied" audit row in the actor's OWN workspace, then rethrows. */
 async function auditDenial(args: {
   actor: Actor;
@@ -137,6 +150,23 @@ async function auditDenial(args: {
   throw args.error;
 }
 
+/** Audits a refusal raised by the key-validation step, then rethrows it. */
+async function auditKeyDenial(
+  args: { actor: Actor; requestId: string; reason: string; action: string },
+  error: unknown,
+  requested: Record<string, unknown>,
+): Promise<never> {
+  const err = error instanceof Error ? error : new Error(String(error));
+  return auditDenial({
+    actor: args.actor,
+    requestId: args.requestId,
+    reason: args.reason,
+    action: args.action,
+    requested: { denialCode: "invalid_object_key", ...requested },
+    error: err,
+  });
+}
+
 /**
  * Steps 1+2 of the fixed order for both operations: resolve the requested purpose
  * against the server-side allowlist, then authorize that exact
@@ -162,21 +192,30 @@ async function resolvePurposeAndAuthorize(args: {
     });
     return purpose;
   } catch (error) {
-    if (error instanceof AuthorizationDeniedError) {
-      await auditDenial({
-        actor: args.actor,
-        requestId: args.requestId,
-        reason: args.reason,
-        action: args.action,
-        requested: { purpose: args.requestedPurpose, ...args.extra },
-        error,
-      });
-    }
-    throw error;
+    const err = error instanceof Error ? error : new Error(String(error));
+    // An unknown/user-controlled purpose and an authorization refusal are BOTH
+    // denials and must both be on the record.
+    const denialCode =
+      err instanceof AuthorizationDeniedError
+        ? "authorization_denied"
+        : err instanceof UnknownPurposeError
+          ? "unknown_purpose"
+          : "invalid_purpose";
+    await auditDenial({
+      actor: args.actor,
+      requestId: args.requestId,
+      reason: args.reason,
+      action: args.action,
+      requested: { purpose: args.requestedPurpose, denialCode, ...args.extra },
+      error: err,
+    });
+    // unreachable: auditDenial rethrows. Explicit so control flow is provable.
+    throw err;
   }
 }
 
 export async function issueUploadUrl(args: IssueUploadUrlArgs): Promise<IssuedUrl> {
+  assertAuditReason(args.reason);
   const operation: Operation = "upload";
   const action = "file.upload_url.issued";
 
@@ -193,12 +232,24 @@ export async function issueUploadUrl(args: IssueUploadUrlArgs): Promise<IssuedUr
   });
 
   // 3. build the key server-side, in the actor's workspace
-  const objectKey = buildObjectKey({
-    workspaceId: args.actor.workspaceId,
-    purpose,
-    id: args.objectId,
-  });
-  assertKeyInWorkspace(objectKey, args.actor.workspaceId);
+  let objectKey: string;
+  try {
+    objectKey = buildObjectKey({
+      workspaceId: args.actor.workspaceId,
+      purpose,
+      id: args.objectId,
+    });
+    assertKeyInWorkspace(objectKey, args.actor.workspaceId);
+  } catch (error) {
+    return await auditKeyDenial(
+      { actor: args.actor, requestId: args.requestId, reason: args.reason, action: "file.upload_url.issued" },
+      error,
+      { requestedObjectId: args.objectId ?? null },
+    );
+  }
+  // F-3: object_id must mean the SAME thing on every event. Downloads can only
+  // know the key's uuid, so uploads record that too, with the row id kept beside it.
+  const keyId = parseObjectKey(objectKey).id;
 
   // 4. clamp the TTL
   const { ttlSeconds, exceptionName } = resolveTtl({
@@ -242,9 +293,10 @@ export async function issueUploadUrl(args: IssueUploadUrlArgs): Promise<IssuedUr
         category: "file",
         reason: args.reason,
         objectType: "object",
-        objectId: row?.id ?? null,
+        objectId: keyId,
         meta: {
           requestId: args.requestId,
+          objectRowId: row?.id ?? null,
           objectKey,
           purpose,
           operation,
@@ -277,6 +329,7 @@ export async function issueUploadUrl(args: IssueUploadUrlArgs): Promise<IssuedUr
 }
 
 export async function issueDownloadUrl(args: IssueDownloadUrlArgs): Promise<IssuedUrl> {
+  assertAuditReason(args.reason);
   const operation: Operation = "download";
   const action = "file.download_url.issued";
 
@@ -294,7 +347,16 @@ export async function issueDownloadUrl(args: IssueDownloadUrlArgs): Promise<Issu
   });
 
   // 3. validate the key: tenant prefix, shape, and agreement with the authorized purpose
-  const parts = assertKeyInWorkspace(args.objectKey, args.actor.workspaceId);
+  let parts: ReturnType<typeof assertKeyInWorkspace>;
+  try {
+    parts = assertKeyInWorkspace(args.objectKey, args.actor.workspaceId);
+  } catch (error) {
+    return await auditKeyDenial(
+      { actor: args.actor, requestId: args.requestId, reason: args.reason, action: "file.download_url.issued" },
+      error,
+      { requestedObjectKey: args.objectKey },
+    );
+  }
   if (parts.purpose !== purpose) {
     throw new InvalidObjectKeyError(
       `key purpose (${parts.purpose}) does not match the authorized purpose (${purpose})`,
@@ -366,6 +428,7 @@ export async function recordFileAccess(args: {
   requestId: string;
   reason: string;
 }): Promise<void> {
+  assertAuditReason(args.reason);
   const parts = parseObjectKey(args.objectKey);
   assertKeyInWorkspace(args.objectKey, args.actor.workspaceId);
   await withTenant(

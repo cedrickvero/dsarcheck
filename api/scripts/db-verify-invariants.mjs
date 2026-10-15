@@ -63,6 +63,28 @@ async function checkObjectsTable(conn, table) {
   )).rows.length;
   say(uniqueKey > 0, `${table}: object_key is unique`);
 
+  // F-1: the app principal must not hold DELETE. Deleting a DSAR object is a
+  // destructive action requiring human approval (R4); until that approved path
+  // exists the privilege must be ABSENT, not merely discouraged.
+  const canDelete = (
+    await conn.query(`select has_table_privilege('app_runtime', $1, 'DELETE') as can`, [table])
+  ).rows[0].can;
+  say(
+    !canDelete,
+    `${table}: DELETE withheld from app_runtime`,
+    canDelete ? "app_runtime CAN delete rows" : "",
+  );
+
+  // and the table must fail closed when no tenant is set
+  await conn.query("begin");
+  try {
+    await conn.query("set local role app_tenant");
+    const n = (await conn.query(`select count(*)::int as n from "${table}"`)).rows[0].n;
+    say(n === 0, `${table}: RLS fails closed when app.workspace_id is unset`, `saw ${n} row(s)`);
+  } finally {
+    await conn.query("rollback").catch(() => {});
+  }
+
   return out;
 }
 
@@ -93,6 +115,13 @@ async function runSelfTest() {
       object_key text not null,
       purpose text not null
     )`);
+    // deliberately: a row a GUC-less read CAN see, and DELETE granted to the app
+    // principal - so both new checks have something real to fail against
+    await conn.query(
+      `insert into objects_probe (workspace_id, object_key, purpose)
+       values (gen_random_uuid(), 'ws/probe/evidence/x', 'evidence')`,
+    );
+    await conn.query("grant delete on objects_probe to app_runtime");
     const probeFails = (await checkObjectsTable(conn, "objects_probe"))
       .filter((r) => !r.pass)
       .map((r) => r.name);
@@ -107,6 +136,8 @@ async function runSelfTest() {
       "objects_probe: workspace FK present",
       "objects_probe: org FK present",
       "objects_probe: object_key is unique",
+      "objects_probe: DELETE withheld from app_runtime",
+      "objects_probe: RLS fails closed when app.workspace_id is unset",
     ];
     const missed = expected.filter((name) => !probeFails.includes(name));
     if (missed.length > 0) {
@@ -246,6 +277,18 @@ try {
   check(!truncated, "TRUNCATE on audit_events is rejected");
 
   // R2 · the object table must carry the same tenant guarantees as R1
+  // The class, not just the instance: guardrail F-1 was a blanket grant, so assert
+  // that NO relation in the schema is deletable by the application principal.
+  const deletable = (
+    await admin.query(`
+      select count(*)::int as n
+      from information_schema.tables t
+      where t.table_schema = 'public' and t.table_type = 'BASE TABLE'
+        and has_table_privilege('app_runtime', format('%I.%I', t.table_schema, t.table_name), 'DELETE')
+    `)
+  ).rows[0].n;
+  check(deletable === 0, "app_runtime holds DELETE on no table in schema public", `deletable: ${deletable}`);
+
   for (const r of await checkObjectsTable(admin, "objects")) {
     check(r.pass, r.name, r.detail);
   }

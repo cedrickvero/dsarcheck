@@ -97,6 +97,13 @@ export function clampTtl(purpose: Purpose, operation: Operation, requestedSecond
  * named (carried into the audit event), and may only extend the TTL for the exact
  * purpose and operation it was granted for. There is no wildcard.
  */
+/**
+ * Hard cap on any configured TTL exception. An exception is a deliberate, named,
+ * audited widening of a ceiling - not a way to mint a week-long public URL. Values
+ * above this are rejected when the config is parsed (i.e. at startup).
+ */
+export const EXCEPTION_TTL_HARD_CAP = 3600;
+
 export interface TtlException {
   name: string;
   purpose: Purpose;
@@ -134,6 +141,11 @@ export function parseTtlExceptions(raw: string | undefined): Map<string, TtlExce
     if (!Number.isInteger(e.ttlSeconds) || (e.ttlSeconds as number) <= 0) {
       throw new Error(`TTL exception ${e.name}: ttlSeconds must be a positive integer`);
     }
+    if ((e.ttlSeconds as number) > EXCEPTION_TTL_HARD_CAP) {
+      throw new Error(
+        `TTL exception ${e.name}: ttlSeconds ${e.ttlSeconds} exceeds the hard cap of ${EXCEPTION_TTL_HARD_CAP}s`,
+      );
+    }
     out.set(e.name, e as TtlException);
   }
   return out;
@@ -151,6 +163,12 @@ export function resolveTtlWithException(args: {
   operation: Operation;
   requestedSeconds: number;
 }): { ttlSeconds: number; exceptionName: string } {
+  // The exception branch must apply the same positive-TTL rule as clampTtl, or a
+  // request of 0 yields a URL that expired before it was issued - and would be
+  // persisted and audited as a success.
+  if (!Number.isFinite(args.requestedSeconds) || args.requestedSeconds <= 0) {
+    throw new Error(`requested TTL must be a positive number: ${args.requestedSeconds}`);
+  }
   const found = args.exceptions.get(args.exceptionName);
   if (!found) {
     throw new UnknownTtlExceptionError(args.exceptionName, "not configured");

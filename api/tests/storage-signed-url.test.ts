@@ -230,22 +230,28 @@ describe.skipIf(!hasEnv)("signed URL contract", () => {
     expect((denials[0]!.meta as Record<string, unknown>).requestId).toBe(RID.denied);
   });
 
-  it("rolls the metadata back when the audit write fails (atomicity)", async () => {
+  it("rolls the metadata back when the audit write fails INSIDE the transaction (atomicity)", async () => {
     if (!ready) return;
-    const before = await systemDb.select().from(objects);
+    const before = (await systemDb.select().from(objects)).length;
+
+    // The objects row is written FIRST and the audit event second. A blank actor
+    // label violates audit_events' attribution CHECK, so the audit insert fails
+    // inside the transaction - if the two writes were not atomic, the objects row
+    // would survive a failure that happened after it.
+    const unlabelled: Actor = { ...actor, label: "" };
     await expect(
       issueUploadUrl({
-        actor,
+        actor: unlabelled,
         purpose: "evidence",
         contentType: "application/pdf",
-        // too short: writeAuditEvent refuses it INSIDE the transaction
-        reason: "ab",
+        reason: REASON,
         requestId: RID.atomic,
         permissions: allow,
       }),
-    ).rejects.toThrow(/reason is required/);
-    const after = await systemDb.select().from(objects);
-    expect(after.length).toBe(before.length);
+    ).rejects.toBeTruthy();
+
+    const after = (await systemDb.select().from(objects)).length;
+    expect(after, "the objects row survived a failed audit write").toBe(before);
   });
 
   it("rejects a download for another workspace's key", async () => {
@@ -330,4 +336,59 @@ describe.skipIf(!hasEnv)("signed URL contract", () => {
     expect(mine).toHaveLength(1);
     expect((mine[0]!.meta as Record<string, unknown>).objectKey).toBe(key);
   });
+
+  it("audits EVERY denial path, not only the authorization refusal (F-2)", async () => {
+    if (!ready) return;
+    const ids = {
+      cross: `req-${RUN}-dcross`,
+      purpose: `req-${RUN}-dpurpose`,
+      denied: `req-${RUN}-ddenied`,
+    };
+    const denyAll: PermissionSource = { can: () => false };
+    const foreign = buildObjectKey({
+      workspaceId: "9a7f5b31-2c4d-4e6f-8a91-0b1c2d3e4f50",
+      purpose: "evidence",
+    });
+
+    await expect(
+      issueDownloadUrl({ actor, purpose: "evidence", objectKey: foreign, reason: REASON, requestId: ids.cross, permissions: allow }),
+    ).rejects.toBeTruthy();
+    await expect(
+      issueUploadUrl({ actor, purpose: "not_a_purpose", contentType: "application/pdf", reason: REASON, requestId: ids.purpose, permissions: allow }),
+    ).rejects.toBeTruthy();
+    await expect(
+      issueUploadUrl({ actor, purpose: "evidence", contentType: "application/pdf", reason: REASON, requestId: ids.denied, permissions: denyAll }),
+    ).rejects.toBeTruthy();
+
+    const rows = await systemDb.select({ meta: auditEvents.meta }).from(auditEvents);
+    for (const id of [ids.cross, ids.purpose, ids.denied]) {
+      const mine = rows.filter((r) => (r.meta as { requestId?: string } | null)?.requestId === id);
+      expect(mine, `denial not audited: ${id}`).toHaveLength(1);
+      expect((mine[0]!.meta as { outcome?: string }).outcome).toBe("denied");
+    }
+  });
+
+  it("records the SAME object_id on upload and download events (F-3)", async () => {
+    if (!ready) return;
+    const objectId = "3f0e1c22-9a11-4b33-8c44-556677889900";
+    const upId = `req-${RUN}-corr-up`;
+    const downId = `req-${RUN}-corr-down`;
+    const up = await issueUploadUrl({
+      actor, purpose: "evidence", contentType: "application/pdf",
+      reason: REASON, requestId: upId, permissions: allow, objectId,
+    });
+    await issueDownloadUrl({
+      actor, purpose: "evidence", objectKey: up.objectKey,
+      reason: REASON, requestId: downId, permissions: allow,
+    });
+    const rows = await systemDb
+      .select({ objectId: auditEvents.objectId, meta: auditEvents.meta })
+      .from(auditEvents);
+    const a = rows.find((r) => (r.meta as { requestId?: string } | null)?.requestId === upId);
+    const b = rows.find((r) => (r.meta as { requestId?: string } | null)?.requestId === downId);
+    expect(a?.objectId).toBe(objectId);
+    expect(b?.objectId).toBe(objectId);
+    expect(a?.objectId).toBe(b?.objectId);
+  });
+
 });

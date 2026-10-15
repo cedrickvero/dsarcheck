@@ -36,6 +36,20 @@
       "when": 1792062593912,
       "tag": "0004_r2_objects",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792066617025,
+      "tag": "0005_r2_objects_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792066844928,
+      "tag": "0006_app_role_no_delete",
+      "breakpoints": true
     }
   ]
 }
