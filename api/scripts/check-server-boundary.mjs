@@ -44,6 +44,27 @@ export const SERVER_MODULES = [
 /** Privileged handles that must never leave db/client.ts. */
 export const PRIVILEGED_EXPORTS = ["systemDb", "systemPool"];
 
+/**
+ * The ONLY files permitted to import the privileged handles, as src-relative paths.
+ *
+ * Deliberately a list of EXACT paths, compared after resolution - never a prefix, a
+ * glob or a directory. A directory exemption would silently widen to every file added
+ * under it later; an exact-path list cannot. `tests/server-boundary.test.ts` asserts
+ * both that the one entry is allowed and that a near-miss name (src/db/seed-extra.ts)
+ * is NOT, so widening this by accident fails a test rather than passing silently.
+ *
+ * Why the seed qualifies at all: creating the first org and workspace cannot be done
+ * under RLS - a tenant policy needs a tenant, so bootstrapping must run privileged. The
+ * seed is development-only and refuses to run in production; that refusal, plus this
+ * single exact-path exemption, is the whole containment.
+ */
+export const PRIVILEGED_IMPORT_ALLOWLIST = ["src/db/seed.ts"];
+
+function isAllowlistedPrivilegedImporter(filePath, srcDir) {
+  const rel = relative(dirname(srcDir), resolve(filePath)).split("\\").join("/");
+  return PRIVILEGED_IMPORT_ALLOWLIST.some((allowed) => rel === allowed);
+}
+
 const IMPORT_RE = /(?:from\s*|import\s*\(\s*|require\s*\(\s*)["']([^"']+)["']/g;
 const NAMED_IMPORT_RE = /import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/g;
 
@@ -82,6 +103,7 @@ export function scanPrivilegedImports(text, filePath, srcDir) {
   const violations = [];
   const self = `${srcDir}/db/client.ts`;
   if (resolve(filePath) === resolve(self)) return violations;
+  if (isAllowlistedPrivilegedImporter(filePath, srcDir)) return violations;
   for (const match of text.matchAll(NAMED_IMPORT_RE)) {
     const names = match[1]
       .split(",")

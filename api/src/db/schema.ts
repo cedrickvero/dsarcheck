@@ -1,4 +1,4 @@
-import { bigint, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { bigint, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 /**
  * Scaffold subset of docs/04-data-model.md.
@@ -291,4 +291,89 @@ export const rateLimitHits = pgTable(
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   },
   (table) => [index("rate_limit_hits_bucket_scope_at_idx").on(table.bucketKey, table.scope, table.at)],
+);
+
+
+/**
+ * T-07 case entity (design/docs/04).
+ *
+ * Vocabulary is the spec's own, verbatim - CASE_STATUSES, REQUEST_TYPES and PRIORITIES
+ * below are copied from docs/04's TypeScript unions, not invented. Priority has exactly
+ * two values there ("Normal" | "High"), which is why there is no "Urgent".
+ *
+ * case_number is DSAR-{YYYY}-{5 digits} and is unique PER WORKSPACE, not globally - the
+ * prototype's IDs are global, but the spec explicitly allows per-workspace.
+ */
+export const CASE_STATUSES = [
+  "New",
+  "Verifying",
+  "In progress",
+  "Awaiting approval",
+  "Completed",
+  "Extended",
+  "Rejected",
+] as const;
+
+export const REQUEST_TYPES = [
+  "Access",
+  "Rectification",
+  "Erasure",
+  "Portability",
+  "Objection",
+  "Restriction",
+] as const;
+
+export const PRIORITIES = ["Normal", "High"] as const;
+
+/**
+ * Per-workspace, per-year counter for case numbering.
+ *
+ * Allocation is a single INSERT ... ON CONFLICT DO UPDATE SET next_value = next_value + 1
+ * RETURNING next_value (see src/server/cases/create.ts). One statement means Postgres
+ * takes the row lock itself, so two concurrent creations cannot be handed the same
+ * number and no application-level lock or retry loop is needed.
+ */
+export const caseNumberSeq = pgTable(
+  "case_number_seq",
+  {
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    year: integer("year").notNull(),
+    nextValue: integer("next_value").notNull().default(1),
+  },
+  (table) => [primaryKey({ columns: [table.workspaceId, table.year] })],
+);
+
+/**
+ * A DSAR case. Tenant-scoped: org_id and workspace_id are NOT NULL, RLS is enabled and
+ * FORCED, and the tenant policy fails closed when app.workspace_id is unset.
+ *
+ * statutory_due_at is stored rather than derived: the deadline depends on the request
+ * type and jurisdiction, so it is computed once at intake and kept, not recalculated on
+ * read (which would silently change historical cases when the rules change).
+ */
+export const cases = pgTable(
+  "cases",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    caseNumber: text("case_number").notNull(),
+    requestType: text("request_type", { enum: REQUEST_TYPES }).notNull(),
+    priority: text("priority", { enum: PRIORITIES }).notNull().default("Normal"),
+    status: text("status", { enum: CASE_STATUSES }).notNull().default("New"),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+    statutoryDueAt: timestamp("statutory_due_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("cases_workspace_number_idx").on(table.workspaceId, table.caseNumber),
+    index("cases_workspace_status_idx").on(table.workspaceId, table.status),
+    index("cases_workspace_received_idx").on(table.workspaceId, table.receivedAt),
+  ],
 );

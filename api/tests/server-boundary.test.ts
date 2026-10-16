@@ -1,3 +1,4 @@
+import { PRIVILEGED_IMPORT_ALLOWLIST, scanPrivilegedImports } from "../scripts/check-server-boundary.mjs";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -115,5 +116,53 @@ describe("server boundary check", () => {
     const { code, output } = runChecker(API_ROOT);
     expect(code).toBe(0);
     expect(output).toContain("server boundary OK");
+  });
+});
+
+
+/**
+ * The privileged-handle allowlist, and the proof that it cannot widen by accident.
+ *
+ * src/db/seed.ts must import systemDb/systemPool: creating the first org and workspace
+ * is impossible under RLS, because a tenant policy needs a tenant that does not exist
+ * yet. Everything else must fail. The near-miss cases below are the point - a prefix or
+ * directory exemption would let a future file inherit the exemption silently.
+ */
+describe("privileged-handle allowlist (T-07)", () => {
+  const srcDir = join(process.cwd(), "src");
+  const importText = 'import { systemDb, systemPool } from "@/db/client";\n';
+
+  it("names exactly one file, so widening it is a visible edit", () => {
+    expect(PRIVILEGED_IMPORT_ALLOWLIST).toEqual(["src/db/seed.ts"]);
+  });
+
+  it("ALLOWS the seed to import the privileged handles", () => {
+    expect(scanPrivilegedImports(importText, join(srcDir, "db/seed.ts"), srcDir)).toEqual([]);
+  });
+
+  it("REFUSES any other file - server module, route, or component", () => {
+    for (const rel of [
+      "server/cases/query.ts",
+      "server/cases/create.ts",
+      "server/http/handler.ts",
+      "app/app/cases/page.tsx",
+      "db/schema.ts",
+    ]) {
+      const v = scanPrivilegedImports(importText, join(srcDir, rel), srcDir);
+      // TWO handles in the fixture, so two violations - one per handle.
+      expect(v.length, `${rel} was allowed to import a privileged handle`).toBe(2);
+    }
+  });
+
+  it("cannot be widened by a near-miss name", () => {
+    for (const rel of ["db/seed-extra.ts", "db/seed.ts.bak", "db/seed/extra.ts", "db/seedx.ts"]) {
+      const v = scanPrivilegedImports(importText, join(srcDir, rel), srcDir);
+      expect(v.length, `${rel} inherited the exemption`).toBe(2);
+    }
+  });
+
+  it("still refuses the seed if it stops being the seed path", () => {
+    const v = scanPrivilegedImports(importText, join(srcDir, "server/db/seed.ts"), srcDir);
+    expect(v.length).toBe(2);
   });
 });

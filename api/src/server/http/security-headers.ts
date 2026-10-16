@@ -5,7 +5,7 @@
  *   - Tailwind compiles to static CSS, so no inline styles are required;
  *   - a nonce-based policy needs per-request middleware and only becomes meaningful
  *     once routes actually render, which they do not until T-07+.
- * `script-src 'self'` with no 'unsafe-inline' or 'unsafe-eval' already blocks
+ * `script-src 'self'${opts.nonce ? ` 'nonce-${opts.nonce}'` : ""}` with no 'unsafe-inline' or 'unsafe-eval' already blocks
  * injected inline script, which is the threat that matters here.
  *
  * Server-only module, but build-time safe: it must stay pure (no env, no node
@@ -17,10 +17,14 @@ export interface HeaderPair {
 }
 
 /** The policy in one readable place, so a reviewer can diff it as a whole. */
-export function contentSecurityPolicy(): string {
+export function contentSecurityPolicy(opts: { nonce?: string } = {}): string {
+  // The nonce is the ONLY way Next's inline bootstrap scripts are permitted to run; there
+  // is no fallback to 'unsafe-inline' or 'unsafe-eval'. When no nonce is supplied - the
+  // static path, which serves no HTML - the policy stays strict and simply omits it.
+  const scriptSrc = opts.nonce ? `script-src 'self' 'nonce-${opts.nonce}'` : "script-src 'self'";
   return [
     "default-src 'self'",
-    "script-src 'self'",
+    scriptSrc,
     "style-src 'self'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
@@ -32,16 +36,13 @@ export function contentSecurityPolicy(): string {
   ].join("; ");
 }
 
-/**
- * The full header set. HSTS is production-only: sending it over plain http on
- * localhost would pin a browser to https for the developer's whole machine.
- *
- * `preload` is deliberately withheld until the production domain list exists -
- * submitting to the preload list is effectively irreversible.
- */
-export function securityHeaders(opts: { production: boolean }): HeaderPair[] {
+export function securityHeaders(opts: { production: boolean; includeCsp?: boolean; nonce?: string }): HeaderPair[] {
+  // includeCsp defaults to true so the R3 contract is unchanged. next.config and the
+  // middleware both pass false: the CSP is set per-request by src/middleware.ts, and a
+  // second, nonce-free CSP would INTERSECT with the nonce policy in the browser and
+  // block the inline scripts the nonce exists to permit.
   const headers: HeaderPair[] = [
-    { key: "Content-Security-Policy", value: contentSecurityPolicy() },
+    ...(opts.includeCsp === false ? [] : [{ key: "Content-Security-Policy", value: contentSecurityPolicy(opts) }]),
     { key: "X-Content-Type-Options", value: "nosniff" },
     { key: "X-Frame-Options", value: "DENY" },
     { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

@@ -13,7 +13,8 @@ const nextConfig: NextConfig = {
 
   // R3: security headers on every response, from one definition.
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders({ production }) }];
+    return [{ source: "/:path*", // includeCsp:false - the CSP needs a per-request nonce, so src/middleware.ts owns it.
+      headers: securityHeaders({ production, includeCsp: false }) }];
   },
 };
 
