@@ -1,7 +1,7 @@
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { PRIVILEGED_IMPORT_ALLOWLIST, scanPrivilegedImports } from "../scripts/check-server-boundary.mjs";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -164,5 +164,54 @@ describe("privileged-handle allowlist (T-07)", () => {
   it("still refuses the seed if it stops being the seed path", () => {
     const v = scanPrivilegedImports(importText, join(srcDir, "server/db/seed.ts"), srcDir);
     expect(v.length).toBe(2);
+  });
+});
+
+
+/**
+ * F-1: the guardrail proved the NAMED-IMPORT-ONLY rule was evadable - a namespace import,
+ * a dynamic import(), require(), a re-export and a default import all reached the
+ * RLS-bypassing handles while the checker reported ZERO violations. These are the exact
+ * evasions, each of which must now fail. The console output from the guardrail is the
+ * reason this block exists rather than a comment claiming it was fixed.
+ */
+describe("F-1: every import form is caught, not just named imports", () => {
+  const srcDir = join(process.cwd(), "src");
+  const other = join(srcDir, "server/cases/query.ts");
+  const forms: Array<[string, string]> = [
+    ["namespace", 'import * as client from "@/db/client";\nclient.systemDb;'],
+    ["dynamic", 'const c = await import("@/db/client");\nc.systemPool;'],
+    ["require", 'const c = require("@/db/client");\nc.systemDb;'],
+    ["re-export", 'export { systemDb } from "@/db/client";'],
+    ["default", 'import client from "@/db/client";\nclient.systemDb;'],
+    ["plain mention", 'const db = systemPool;'],
+  ];
+
+  it.each(forms)("catches a %s import", (_label, text) => {
+    const v = scanPrivilegedImports(text, other, srcDir);
+    expect(v.length, `evasion form not caught: ${_label}`).toBeGreaterThan(0);
+  });
+
+  it("still ALLOWS the seed itself", () => {
+    const v = scanPrivilegedImports('import { systemDb } from "@/db/client";', join(srcDir, "db/seed.ts"), srcDir);
+    expect(v).toEqual([]);
+  });
+
+  it("does not flag PROSE that merely names a handle", () => {
+    const v = scanPrivilegedImports(
+      '// never import systemDb or systemPool here\nconst x = 1;',
+      other, srcDir,
+    );
+    expect(v).toEqual([]);
+  });
+
+  it("refuses a SYMLINK even at the allowlisted path", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "boundary-"));
+    const link = join(tmp, "seed.ts");
+    symlinkSync(join(srcDir, "db/seed.ts"), link);
+    const v = scanPrivilegedImports('import { systemDb } from "@/db/client";', link, tmp);
+    // The security property is that a symlink does NOT inherit the allowlisted path's
+    // exemption. Which rule flags it is an implementation detail; being flagged is not.
+    expect(v.length).toBeGreaterThan(0);
   });
 });

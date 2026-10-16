@@ -5,6 +5,7 @@
  * these render the real components to static markup and assert the status is present as
  * TEXT. If someone later replaces the label with a coloured dot, this fails.
  */
+import React from "react";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { StatePanel } from "@/app/app/_components/state-panel";

@@ -99,17 +99,49 @@ export function scanText(text, filePath, srcDir) {
 }
 
 /** RULE 2 — pure: privileged handles imported outside their own module. */
+/** Comments are stripped before identifier matching, so prose that NAMES a handle in
+ *  order to warn against it is not a violation. */
+export function stripComments(raw) {
+  return raw.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+}
+
 export function scanPrivilegedImports(text, filePath, srcDir) {
   const violations = [];
   const self = `${srcDir}/db/client.ts`;
   if (resolve(filePath) === resolve(self)) return violations;
+
+  // A symlink to the allowlisted path is NOT the allowlisted file: it can point anywhere.
+  try {
+    if (lstatSync(filePath).isSymbolicLink()) {
+      return [{ file: filePath, spec: "symlink under src (refused outright)" }];
+    }
+  } catch {
+    /* not on disk (fixtures) - nothing to check */
+  }
+
   if (isAllowlistedPrivilegedImporter(filePath, srcDir)) return violations;
+
   for (const match of text.matchAll(NAMED_IMPORT_RE)) {
     const names = match[1]
       .split(",")
       .map((n) => n.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0].trim());
     for (const name of PRIVILEGED_EXPORTS) {
       if (names.includes(name)) violations.push({ file: filePath, spec: name });
+    }
+  }
+
+  // F-1: THE NAMED-IMPORT SCAN ALONE WAS EVADABLE. A namespace import
+  // (`import * as c`), a dynamic `import()`, `require()`, a re-export
+  // (`export { systemDb } from ...`) and a default import all reached the handles while
+  // this function reported ZERO violations - proven by the guardrail with raw output.
+  // Detection is therefore identifier-level: outside the two permitted files, mentioning
+  // a privileged handle AT ALL is a violation, whatever syntax carried it. Comments are
+  // stripped first so a warning against the handle is not itself flagged.
+  const code = stripComments(text);
+  for (const name of PRIVILEGED_EXPORTS) {
+    if (violations.some((v) => v.spec === name)) continue;
+    if (new RegExp(`\\b${name}\\b`).test(code)) {
+      violations.push({ file: filePath, spec: `${name} (non-named import form - namespace, dynamic, require, re-export or default)` });
     }
   }
   return violations;
