@@ -49,27 +49,22 @@ check that has been proven able to fail.
 Measured at `HEAD` after the host-routing slice:
 
 ```
-698 tests / 45 files    588 passed · 18 failed · 43 skipped · 5 files skipped
+701 tests / 45 files    701 passed · 0 failed · 0 skipped
 typecheck               0 errors
 boundary                87 files, 0 client -> server imports, 0 privileged handles
+db:verify               42/42 invariants
 11 domain routes        still stubbed (notImplemented -> 501)
 ```
 
-The 18 failures are **environmental, not regressions**: the auth, cases, audit-fidelity
-and erasure-decision suites need `DATABASE_URL`, and the shell they ran in had none. They
-fail loudly on purpose ("database unavailable, asserted nothing") rather than skipping
-green - which is the right design, and means the number is honest rather than flattering.
+**The whole suite is green against the real database.** Earlier measurements in this file
+reported 18 failures or 43 skips; those were the DB suites refusing to pass without
+credentials, not regressions. The missing piece was the `app_runtime` password - the
+least-privilege role every tenant-scoped query uses - which is not the value in
+`api/.env.example`. Once the container's own environment was supplied, 40 of the 59
+partial-run failures disappeared with it, and the rest with the admin DSN.
 
-A partial environment was measured once: with the admin DSN from `api/.env.example` the
-total rose to 581 passed / 59 failed, and **40 of those failures were one cause** -
-`password authentication failed for user "app_runtime"`, the least-privilege role every
-tenant-scoped query uses. Its password in the running container is not the sample value,
-so the app-role suites cannot run until the real `APP_DATABASE_URL` is supplied. Run them
-where the environment already exists:
-
-```
-docker exec hermes_dsar_api npm test
-```
+Two things this changes about the earlier record: nothing was broken, and the "environmental
+failure" caveat can now be deleted rather than carried.
 
 Two practices matter more than the numbers:
 
@@ -163,8 +158,12 @@ Carry-forwards, all still open:
 
 1. A future role-change route must call `rotateOnPrivilegeChange` **and** write the
    privilege-change audit event in ONE transaction. No route drives it today.
-2. `tests/auth-magic-link.test.ts` passes unchanged under mutation - its single-use claim
-   has no teeth. Harden it or fold it into the mfa-step suite.
+2. ~~`tests/auth-magic-link.test.ts` passes unchanged under mutation~~ - **RESOLVED**. It now
+   redeems a real link through the route, asserts the replay is refused, checks that exactly
+   one row is marked used, that an expired link is refused *without* being consumed, and that
+   a refusal creates no session. The old "unknown token" test accepted status 0 as a pass,
+   so an unrelated crash counted as a refusal; it now requires exactly 401. Three mutations
+   (used_at guard removed, expiry guard removed, refusal turned into a 500) each fail it.
 3. `users.mfa_required` is a dead column; role policy in `authz.ts` is the live source.
 4. The ambiguous-email guard compares the raw `email` rather than the normalised hash
    (fails closed; case-sensitivity edge).

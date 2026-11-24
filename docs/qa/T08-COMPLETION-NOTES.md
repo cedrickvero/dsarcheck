@@ -78,8 +78,12 @@ relevant, not a nicety.
    `rotateOnPrivilegeChange` **and** write the privilege-change audit event in ONE
    transaction. `rotateOnPrivilegeChange` does not self-audit, and no route drives it
    today. This note is the record the guardrail asked for.
-2. **Harden `tests/auth-magic-link.test.ts`** so its single-use claim has teeth, or fold it
-   into the mfa-step suite. It is currently weak under mutation.
+2. ~~**Harden `tests/auth-magic-link.test.ts`**~~ - **DONE.** It now redeems a real link
+   through the callback, proves the replay is refused, asserts exactly one row is marked
+   used, that an expired link is refused without being consumed, and that a refusal creates
+   no session. The old unknown-token assertion accepted status 0 - an unrelated crash passed
+   as a refusal - and now requires exactly 401. Mutation-checked: removing the `used_at`
+   guard, removing the expiry guard, and turning the refusal into a 500 each turn it red.
 3. **LOW-1:** `users.mfa_required` is a dead column - role policy in `authz.ts` is the live
    source of truth. Remove it or make it authoritative.
 4. **New LOW:** the ambiguous-email guard compares the raw `email` rather than the

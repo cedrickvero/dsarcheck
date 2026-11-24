@@ -5,20 +5,22 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { systemDb, systemPool } from "@/db/client";
-import { magicLinks, orgs, users, workspaces } from "@/db/schema";
-import { hashEmail } from "@/server/auth/crypto";
+import { magicLinks, orgs, sessions, users, workspaces } from "@/db/schema";
+import { hashEmail, hashToken, newToken } from "@/server/auth/crypto";
 import { POST as requestLink } from "@/app/api/auth/magic-link/route";
 import { GET as callback } from "@/app/api/auth/callback/route";
 
 const RUN = `${Date.now()}`;
 const tag = `t08l-${RUN}`;
 let knownEmail = ""; let unknownEmail = "";
-let userId = "";
+let userId = ""; let orgId = ""; let wsId = "";
 
 beforeAll(async () => {
   try {
     const org = (await systemDb.insert(orgs).values({ name: `${tag}-org` }).returning({ id: orgs.id }))[0]!;
+    orgId = org.id;
     const ws = (await systemDb.insert(workspaces).values({ orgId: org.id, name: `${tag}-ws` }).returning({ id: workspaces.id }))[0]!;
+    wsId = ws.id;
     knownEmail = `${tag}-known@example.test`;
     unknownEmail = `${tag}-nobody@example.test`;
     const u = (await systemDb.insert(users).values({
@@ -30,6 +32,43 @@ beforeAll(async () => {
   }
 });
 afterAll(async () => { await systemPool.end().catch(() => {}); });
+
+/**
+ * Drive the callback and normalise the two ways it can refuse: a Response, or an AppError
+ * thrown by the route handler. A thrown error with no status is a 500, so a crash can never
+ * be mistaken for a refusal.
+ */
+async function hit(token: string): Promise<{ status: number; cookie: string | null }> {
+  try {
+    const res = await callback(
+      new Request(`http://localhost/api/auth/callback?token=${encodeURIComponent(token)}`) as never,
+      {} as never,
+    );
+    return { status: res.status, cookie: res.headers.get("set-cookie") };
+  } catch (e) {
+    return { status: (e as { status?: number }).status ?? 500, cookie: null };
+  }
+}
+
+/** A link row for the seeded user, so a redemption test does not depend on SMTP. */
+async function mintLink(): Promise<string> {
+  const token = newToken();
+  await systemDb.insert(magicLinks).values({
+    orgId, workspaceId: wsId, userId,
+    emailHash: hashEmail(knownEmail),
+    tokenHash: hashToken(token),
+    expiresAt: new Date(Date.now() + 15 * 60_000),
+  });
+  return token;
+}
+
+async function sessionCount(): Promise<number> {
+  const [row] = await systemDb
+    .select({ n: sql<number>`count(*)::int` })
+    .from(sessions)
+    .where(eq(sessions.userId, userId));
+  return row!.n;
+}
 
 const post = (email: string) =>
   requestLink(new Request("http://localhost/api/auth/magic-link", {
@@ -60,14 +99,54 @@ describe("T-08 magic links", () => {
     for (const r of rows) expect(r.tokenHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("refuses an unknown token with a generic 401, not a 500", async () => {
-    let status = 0;
-    try {
-      await callback(new Request("http://localhost/api/auth/callback?token=not-a-real-token") as never, {} as never);
-    } catch (e) {
-      status = (e as { status?: number }).status ?? 0;
-    }
-    expect([0, 401]).toContain(status);
-    if (status !== 0) expect(status).toBe(401);
+  it("refuses an unknown token with a 401 - not a 500, and not by throwing something else", async () => {
+    // The previous version of this test accepted status 0 as a pass, so an unrelated crash
+    // counted as a refusal. Anything other than exactly 401 now fails.
+    const { status } = await hit("not-a-real-token");
+    expect(status).toBe(401);
+  });
+
+  it("redeems a link exactly ONCE, and records the redemption", async () => {
+    const token = await mintLink();
+    const first = await hit(token);
+    expect(first.status).toBe(200);
+    expect(first.cookie).toContain("dsar_session");
+
+    const replay = await hit(token);
+    expect(replay.status).toBe(401);
+    expect(replay.cookie).toBeNull();
+
+    // Exactly one row, marked used: the property, not the response code alone.
+    const rows = await systemDb
+      .select({ usedAt: magicLinks.usedAt })
+      .from(magicLinks)
+      .where(eq(magicLinks.tokenHash, hashToken(token)));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.usedAt).not.toBeNull();
+  });
+
+  it("refuses an expired link and leaves it unconsumed", async () => {
+    const token = newToken();
+    await systemDb.insert(magicLinks).values({
+      orgId, workspaceId: wsId, userId,
+      emailHash: hashEmail(knownEmail),
+      tokenHash: hashToken(token),
+      expiresAt: new Date(Date.now() - 60_000),
+    });
+
+    expect((await hit(token)).status).toBe(401);
+
+    const [row] = await systemDb
+      .select({ usedAt: magicLinks.usedAt })
+      .from(magicLinks)
+      .where(eq(magicLinks.tokenHash, hashToken(token)));
+    // Refusing must not burn the token: an expired link is refused, not spent.
+    expect(row!.usedAt).toBeNull();
+  });
+
+  it("does not create a session when redemption is refused", async () => {
+    const before = await sessionCount();
+    await hit("not-a-real-token");
+    expect(await sessionCount()).toBe(before);
   });
 });
