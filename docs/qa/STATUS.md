@@ -49,7 +49,7 @@ check that has been proven able to fail.
 Measured at `HEAD` after the host-routing slice:
 
 ```
-679 tests / 44 files    569 passed · 18 failed · 43 skipped · 5 files skipped
+698 tests / 45 files    588 passed · 18 failed · 43 skipped · 5 files skipped
 typecheck               0 errors
 boundary                87 files, 0 client -> server imports, 0 privileged handles
 11 domain routes        still stubbed (notImplemented -> 501)
@@ -130,7 +130,12 @@ I/O, so the edge middleware and the tests use the same code. Middleware now:
 - refuses a cookie presented on the wrong surface (staff on a portal, workspace on the console,
   and any cookie when the host cannot be classified - fail closed);
 - 301s `dsarcheck.com/<slug>/...` to the subdomain, with the query string preserved;
-- refuses the CNAME target, nested subdomains and every reserved name as a tenant.
+- 301s `www.dsarcheck.com/<path>?<query>` to the apex before any cookie check, so a stale
+  cookie cannot turn a permanent redirect into a 401;
+- refuses the CNAME target, nested subdomains and every reserved name as a tenant;
+- classifies a customer-owned domain as a tenant ONLY once its TXT claim is verified, and
+  `domainsEligibleForCertificate()` exposes the provisioning order (TXT first, certificate
+  second) so the caller cannot request a certificate for an unverified name.
 
 The slug is per WORKSPACE, not per org: an agency owns several client workspaces, so the
 customer's name cannot be the identifier for all of them. Tenant resolution still happens
@@ -138,6 +143,8 @@ server-side from the session + RLS; nothing in middleware is an authorization co
 
 Two consequences worth naming:
 
+- **Deployment, not application:** the apex and the wildcard need separate certificates, and
+  custom domains need on-demand issuance after TXT. The app encodes the gate, not the TLS.
 - The brand is copy, not configuration. `{slug}.privacyspace.com` in the handoff became
   `{slug}.dsarcheck.com`, and the parity suite normalises the domain before comparing - that
   substitution is the only permitted divergence from the reference.

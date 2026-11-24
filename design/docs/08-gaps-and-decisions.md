@@ -80,15 +80,20 @@ The product ships on **dsarcheck.com**. Four surfaces, four origins, deliberatel
 | Host | Serves | Session |
 |---|---|---|
 | `dsarcheck.com` | Landing, legal, pricing. No tenant, no authenticated content. | none |
+| `www.dsarcheck.com` | 301 to the apex, preserving path and query. Serves nothing. | none |
 | `admin.dsarcheck.com` | Staff console (organizations, billing, subdomain reviews, domains, staff). | staff only |
 | `<slug>.dsarcheck.com` | One customer portal. Tenant is resolved from the `Host` header alone. | workspace only |
 | `portals.dsarcheck.com` | CNAME target for verified customer domains. Serves no page itself. | — |
 
 Decisions that follow, all recorded in code under `api/src/domain/platform.ts` and `api/src/domain/host.ts`:
 
+- **`www` is a permanent redirect, not a second landing origin.** One canonical marketing URL, one certificate to keep valid, and an origin whose cookie jar stays empty. The redirect happens before any cookie check, so a stale cookie cannot turn it into a 401.
+- **Custom domains are gated on TXT ownership verification.** A claim record carries `txtVerifiedAt`; until it is set, the host resolves to `unknown` and is indistinguishable from a stranger's domain. `domainsEligibleForCertificate()` only returns verified, un-certificated, un-removed claims — so the provisioning loop has no path that requests a certificate for an unverified name. Verification is expressed as a claim row rather than a `Set<string>` of "verified" hosts, because a set can be populated from an unverified row by mistake and the mistake is invisible.
+
 - **`slug` is per workspace, not per organisation.** An agency owns several client workspaces, so the customer's name cannot be the identifier for all of them.
 - **`dsarcheck.com/<slug>` is a 301 to the subdomain**, never a served form. Path-based tenants share one origin, so they would share cookies, cache and CSP.
 - **No `Domain=.dsarcheck.com` cookie, ever.** Both session cookies are `__Host-` in production, host-only by definition. A domain-scoped cookie would be readable by every tenant subdomain, so one tenant's XSS would become every tenant's session.
 - **Two cookie names, not one**: `__Host-dsar_session` (workspace) and `__Host-dsar_staff_session` (staff). A cookie presented on the wrong surface is refused, not interpreted.
 - **Reserved names include the infrastructure**: `www admin api app portals status support mail cdn staging …` plus the product's own words, so no tenant can shadow a surface or imply an endorsement.
+- **What the application cannot do, and must not pretend to:** the apex and `*.dsarcheck.com` need SEPARATE certificates (a wildcard never covers its apex), and customer-owned domains need on-demand certificate issuance after the TXT check passes. Certificate provisioning and DNS remain deployment-platform responsibilities; the app's job is to refuse to classify an unverified custom domain as a tenant, and to expose which domains are eligible.
 - **Brand substitution is deliberate**: the handoff's copy says `{slug}.privacyspace.com`; the product says `{slug}.dsarcheck.com`. This is the ONLY permitted divergence in copy, and `api/tests/domain-parity.test.ts` normalises the domain before comparing against the reference.

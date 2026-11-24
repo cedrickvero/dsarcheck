@@ -32,10 +32,55 @@ export interface HostContext {
    */
   knownSlugs?: ReadonlySet<string>;
   /**
-   * Customer-owned domains whose DNS has been verified. Omit when the caller cannot
-   * know; the resolution then reports `verified: undefined` rather than guessing.
+   * Customer-owned domain claims, with their verification state. Omit when the caller
+   * cannot know; the resolution then reports `verified: undefined` rather than guessing.
+   *
+   * A claim is used rather than a `Set<string>` on purpose: a set of "verified" names can
+   * be built from an unverified row by mistake, and the mistake is invisible. Here an
+   * unverified claim cannot be expressed as a verified one.
    */
-  verifiedCustomDomains?: ReadonlySet<string>;
+  customDomainClaims?: readonly CustomDomainClaim[];
+}
+
+/**
+ * A customer's request to serve a portal on their own domain.
+ *
+ * `txtVerifiedAt` is the ONLY thing that makes the host a tenant (docs/08 §7): the customer
+ * publishes a TXT record, we observe it, and only then may the host be classified as
+ * verified; certificate issuance comes after that. `removedAt` keeps the row for the audit
+ * trail instead of deleting it, and a removed claim is treated as absent.
+ */
+export interface CustomDomainClaim {
+  /** Normalised, lower-case, no port, no trailing dot. */
+  hostname: string;
+  /** TXT record name and expected value, e.g. `_dsarcheck-challenge.privacy.acme.com`. */
+  txtRecordName: string;
+  txtRecordValue: string;
+  /** When the TXT record was observed. Null until then. */
+  txtVerifiedAt: Date | null;
+  /** Set by the deployment platform once an on-demand certificate exists. */
+  certificateIssuedAt?: Date | null;
+  removedAt?: Date | null;
+}
+
+/**
+ * Which custom domains the deployment may now request a certificate for.
+ *
+ * Encoding the ORDER here - TXT first, certificate second - is the point: a caller that
+ * iterates claims to provision TLS has no path that issues for an unverified name, because
+ * the filter is what produces the list.
+ */
+export function domainsEligibleForCertificate(
+  claims: readonly CustomDomainClaim[],
+): string[] {
+  return claims
+    .filter(
+      (claim) =>
+        claim.txtVerifiedAt !== null &&
+        !claim.certificateIssuedAt &&
+        !claim.removedAt,
+    )
+    .map((claim) => claim.hostname);
 }
 
 export type UnknownReason =
@@ -44,10 +89,18 @@ export type UnknownReason =
   | "reserved-slug"
   | "unknown-slug"
   | "nested-subdomain"
-  | "unverified-custom-domain";
+  | "unverified-custom-domain"
+  /* A claim exists but its TXT ownership record has not been verified, or the claim was
+     removed. Until TXT passes, the host must not be treated as a tenant - and no
+     certificate should have been requested for it. */
+  | "custom-domain-unverified";
 
 export type HostSurface =
   | { kind: "apex"; host: string }
+  /* `www.` is NOT the apex: it serves nothing and permanently redirects to it, so that
+     the marketing origin is a single origin (one canonical URL, one certificate, one
+     cookie jar that stays empty). */
+  | { kind: "www"; host: string }
   | { kind: "admin"; host: string }
   | { kind: "portal"; slug: string; host: string }
   | { kind: "custom-domain"; host: string; verified: boolean | undefined }
@@ -90,8 +143,12 @@ export function classifyHost(raw: string | null | undefined, ctx: HostContext = 
     };
   }
 
-  if (host === apexHost(platform) || host === `www.${platform}`) {
+  if (host === apexHost(platform)) {
     return { kind: "apex", host };
+  }
+
+  if (host === `www.${platform}`) {
+    return { kind: "www", host };
   }
 
   if (host === adminHost(platform)) {
@@ -121,14 +178,22 @@ export function classifyHost(raw: string | null | undefined, ctx: HostContext = 
     return { kind: "portal", slug: label, host };
   }
 
-  // A host we do not own: only a verified customer domain may serve a portal.
-  if (ctx.verifiedCustomDomains === undefined) {
+  // A host we do not own: only a claim whose TXT ownership record has passed may serve a
+  // portal. Certificate issuance is downstream of that check, never a substitute for it.
+  if (ctx.customDomainClaims === undefined) {
     return { kind: "custom-domain", host, verified: undefined };
   }
-  if (ctx.verifiedCustomDomains.has(host)) {
-    return { kind: "custom-domain", host, verified: true };
+
+  const claim = ctx.customDomainClaims.find(
+    (candidate) => candidate.hostname === host && !candidate.removedAt,
+  );
+  if (!claim) {
+    return { kind: "unknown", host, reason: "unverified-custom-domain" };
   }
-  return { kind: "unknown", host, reason: "unverified-custom-domain" };
+  if (!claim.txtVerifiedAt) {
+    return { kind: "unknown", host, reason: "custom-domain-unverified" };
+  }
+  return { kind: "custom-domain", host, verified: true };
 }
 
 /** Paths the apex serves itself; they can never be a workspace slug. */
@@ -164,7 +229,11 @@ export interface RedirectInput {
 }
 
 /**
- * `https://dsarcheck.com/acme/app` -> `https://acme.dsarcheck.com/app`
+ * `https://www.dsarcheck.com/pricing?x=1` -> `https://dsarcheck.com/pricing?x=1`
+ * `https://dsarcheck.com/acme/app`        -> `https://acme.dsarcheck.com/app`
+ *
+ * `www` is a permanent redirect, not a served surface: one canonical marketing origin means
+ * one certificate to keep valid and one origin whose cookie jar stays empty.
  *
  * A printed link or an old email must not break, but the apex must not serve tenant
  * content either: path-based tenants share one origin, so they share cookies, cache and
@@ -178,6 +247,12 @@ export function canonicalRedirect(input: RedirectInput): { status: 301; location
   const ctx = input.ctx ?? {};
   const platform = ctx.platformDomain ?? DEFAULT_PLATFORM_DOMAIN;
   const surface = classifyHost(input.host, ctx);
+
+  if (surface.kind === "www") {
+    const path = input.pathname.startsWith("/") ? input.pathname : `/${input.pathname}`;
+    return { status: 301, location: `https://${platform}${path}${input.search ?? ""}` };
+  }
+
   if (surface.kind !== "apex") return null;
 
   const segments = input.pathname.split("/").filter(Boolean);

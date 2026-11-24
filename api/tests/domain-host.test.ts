@@ -7,6 +7,7 @@ import {
   presentedCookieScopes,
   type HostSurface,
 } from "@/domain/host";
+import { domainsEligibleForCertificate, type CustomDomainClaim } from "@/domain/host";
 import {
   RESERVED_SLUGS,
   STAFF_COOKIE,
@@ -41,9 +42,10 @@ describe("normalizeHost()", () => {
 describe("classifyHost()", () => {
   const at = (host: string | null, ctx = {}): HostSurface => classifyHost(host, { platformDomain: P, ...ctx });
 
-  it("classifies the apex and www as the landing surface", () => {
+  it("classifies the apex as the landing surface, and www as its own redirecting host", () => {
     expect(at(P)).toEqual({ kind: "apex", host: P });
-    expect(at(`www.${P}`)).toEqual({ kind: "apex", host: `www.${P}` });
+    // www is NOT the apex: it serves nothing and 301s, so the marketing origin stays single.
+    expect(at(`www.${P}`)).toEqual({ kind: "www", host: `www.${P}` });
   });
 
   it("classifies admin as the staff console", () => {
@@ -84,16 +86,44 @@ describe("classifyHost()", () => {
     expect(at(portalHost("status", P), ctx)).toMatchObject({ kind: "unknown", reason: "reserved-slug" });
   });
 
-  it("treats a foreign host as a custom domain, and refuses it unless verified", () => {
-    expect(at("privacy.acme.com")).toEqual({ kind: "custom-domain", host: "privacy.acme.com", verified: undefined });
-    expect(at("privacy.acme.com", { verifiedCustomDomains: new Set(["privacy.acme.com"]) })).toMatchObject({
+  it("treats a foreign host as a custom-domain candidate when the caller cannot know", () => {
+    expect(at("privacy.acme.com")).toEqual({
+      kind: "custom-domain",
+      host: "privacy.acme.com",
+      verified: undefined,
+    });
+  });
+
+  it("classifies a custom domain as a tenant only after TXT verification", () => {
+    const verified: CustomDomainClaim = {
+      hostname: "privacy.acme.com",
+      txtRecordName: "_dsarcheck-challenge.privacy.acme.com",
+      txtRecordValue: "dsar-verify=ws_123",
+      txtVerifiedAt: new Date("2026-10-12T09:00:00Z"),
+    };
+    const unverified: CustomDomainClaim = { ...verified, txtVerifiedAt: null };
+
+    expect(at("privacy.acme.com", { customDomainClaims: [verified] })).toMatchObject({
       kind: "custom-domain",
       verified: true,
     });
-    expect(at("privacy.evil.com", { verifiedCustomDomains: new Set(["privacy.acme.com"]) })).toMatchObject({
+
+    // Unverified is a distinct reason: it is a known claim awaiting DNS, not a stray host.
+    expect(at("privacy.acme.com", { customDomainClaims: [unverified] })).toMatchObject({
+      kind: "unknown",
+      reason: "custom-domain-unverified",
+    });
+
+    // No claim at all, and a removed claim, both look like a stranger's domain.
+    expect(at("privacy.evil.com", { customDomainClaims: [verified] })).toMatchObject({
       kind: "unknown",
       reason: "unverified-custom-domain",
     });
+    expect(
+      at("privacy.acme.com", {
+        customDomainClaims: [{ ...verified, removedAt: new Date("2026-10-13T00:00:00Z") }],
+      }),
+    ).toMatchObject({ kind: "unknown", reason: "unverified-custom-domain" });
   });
 
   it("does not accept a lookalike domain that merely ends with the platform name", () => {
@@ -151,6 +181,24 @@ describe("canonicalRedirect()", () => {
     expect(go("/acme", P, { knownSlugs: new Set(["acme"]) })).not.toBeNull();
   });
 
+  it("301s www to the apex, preserving path and query", () => {
+    expect(go("/pricing", `www.${P}`)).toEqual({ status: 301, location: `https://${P}/pricing` });
+    expect(
+      canonicalRedirect({
+        host: `www.${P}`,
+        pathname: "/pricing",
+        search: "?plan=agency&ref=ad",
+        ctx: { platformDomain: P },
+      }),
+    ).toEqual({ status: 301, location: `https://${P}/pricing?plan=agency&ref=ad` });
+    expect(go("/", `www.${P}`)).toEqual({ status: 301, location: `https://${P}/` });
+  });
+
+  it("never redirects www to www, and never redirects a www path into a tenant", () => {
+    // www/acme must land on the apex path, which then 301s to the subdomain on the next hop.
+    expect(go("/acme/app", `www.${P}`)).toEqual({ status: 301, location: `https://${P}/acme/app` });
+  });
+
   it("never redirects from a portal, admin or custom domain", () => {
     expect(go("/acme/app", portalHost("acme", P))).toBeNull();
     expect(go("/acme", adminHost(P))).toBeNull();
@@ -170,6 +218,12 @@ describe("cookie surfaces", () => {
     expect(cookieAllowedOnSurface("workspace", "admin")).toBe(false);
     expect(cookieAllowedOnSurface("workspace", "apex")).toBe(false);
     expect(cookieAllowedOnSurface("workspace", "unknown")).toBe(false);
+  });
+
+  it("allows no cookie on www or the apex", () => {
+    expect(cookieAllowedOnSurface("workspace", "www")).toBe(false);
+    expect(cookieAllowedOnSurface("staff", "www")).toBe(false);
+    expect(cookieAllowedOnSurface("workspace", "apex")).toBe(false);
   });
 
   it("allows the staff cookie only on the admin console", () => {
@@ -201,6 +255,38 @@ describe("cookie surfaces", () => {
     expect(
       presentedCookieScopes("theme=dark; __Host-dsar_session=abc; dsar_staff_session=def").sort(),
     ).toEqual(["staff", "workspace"]);
+  });
+});
+
+describe("custom-domain certificate ordering", () => {
+  const base: CustomDomainClaim = {
+    hostname: "privacy.acme.com",
+    txtRecordName: "_dsarcheck-challenge.privacy.acme.com",
+    txtRecordValue: "dsar-verify=ws_123",
+    txtVerifiedAt: new Date("2026-10-12T09:00:00Z"),
+  };
+
+  it("offers a domain for a certificate only after TXT verification", () => {
+    expect(domainsEligibleForCertificate([base])).toEqual(["privacy.acme.com"]);
+    expect(domainsEligibleForCertificate([{ ...base, txtVerifiedAt: null }])).toEqual([]);
+  });
+
+  it("does not re-request a certificate that already exists, or for a removed claim", () => {
+    expect(
+      domainsEligibleForCertificate([{ ...base, certificateIssuedAt: new Date("2026-10-12T10:00:00Z") }]),
+    ).toEqual([]);
+    expect(
+      domainsEligibleForCertificate([{ ...base, removedAt: new Date("2026-10-13T00:00:00Z") }]),
+    ).toEqual([]);
+  });
+
+  it("orders the list so provisioning never precedes verification", () => {
+    const eligible = domainsEligibleForCertificate([
+      base,
+      { ...base, hostname: "privacy.pending.com", txtVerifiedAt: null },
+      { ...base, hostname: "privacy.second.com" },
+    ]);
+    expect(eligible).toEqual(["privacy.acme.com", "privacy.second.com"]);
   });
 });
 

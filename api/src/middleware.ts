@@ -60,6 +60,21 @@ export function middleware(req: NextRequest) {
     platformDomain: process.env.PLATFORM_DOMAIN,
   });
 
+  // ── www -> apex, unconditionally ──────────────────────────────────────────
+  // Before the cookie check: a stray cookie on www must not turn a permanent redirect into
+  // a 401. www serves nothing, so there is no state to protect here.
+  if (surface.kind === "www") {
+    const redirect = canonicalRedirect({
+      host: req.headers.get("host"),
+      pathname: req.nextUrl.pathname,
+      search: req.nextUrl.search,
+      ctx: { platformDomain: process.env.PLATFORM_DOMAIN },
+    });
+    if (redirect) {
+      return applyHeaders(NextResponse.redirect(redirect.location, redirect.status));
+    }
+  }
+
   // ── Wrong-surface cookies ─────────────────────────────────────────────────
   // Presence only; validation is requireAuth()'s job. A staff cookie on a tenant host
   // (or the reverse) is refused rather than interpreted.
