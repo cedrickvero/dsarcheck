@@ -46,10 +46,10 @@ check that has been proven able to fail.
 
 ## Verification state
 
-Measured at `2eba546`:
+Measured at `ce1a728`:
 
 ```
-374 tests / 42 files    264 passed · 18 failed · 43 skipped · 5 files skipped
+649 tests / 43 files    539 passed · 18 failed · 43 skipped · 5 files skipped
 typecheck               0 errors
 boundary                85 files, 0 client -> server imports, 0 privileged handles
 11 domain routes        still stubbed (notImplemented -> 501)
@@ -59,7 +59,13 @@ The 18 failures are **environmental, not regressions**: the auth, cases, audit-f
 and erasure-decision suites need `DATABASE_URL`, and the shell they ran in had none. They
 fail loudly on purpose ("database unavailable, asserted nothing") rather than skipping
 green - which is the right design, and means the number is honest rather than flattering.
-Run them where the environment exists:
+
+A partial environment was measured once: with the admin DSN from `api/.env.example` the
+total rose to 581 passed / 59 failed, and **40 of those failures were one cause** -
+`password authentication failed for user "app_runtime"`, the least-privilege role every
+tenant-scoped query uses. Its password in the running container is not the sample value,
+so the app-role suites cannot run until the real `APP_DATABASE_URL` is supplied. Run them
+where the environment already exists:
 
 ```
 docker exec hermes_dsar_api npm test
@@ -97,6 +103,19 @@ the tests now pin down:
   system: the erasure work check reports it, so the two checks cannot double-count.
 - Stepper done-states are independent of position, as in the prototype: a case can have
   its checklist complete while identity is still pending.
+
+**Parity is now proven, not claimed.** `tests/domain-parity.test.ts` loads the original
+`design/reference/seed/workspace-seed.js` in-process and runs its `sla()`, `progress()`,
+`checks()` and `respText()` over every case it seeds plus eleven synthetic cases, requiring
+our output to match field for field (275 assertions). A mutation that narrowed a copy
+string from 7 to 14 days killed 64 of them. Two findings came out of writing it:
+
+- The seeded demo data does not reach every branch - every seeded Completed system has
+  evidence and no seeded case lacks a template. The synthetic cases close that gap; a
+  mutation on the "N systems missing evidence" detail survived until they existed.
+- The reference omits `deadlineS` on closed cases; ours always returns a string so the UI
+  cannot render `undefined`. That divergence is asserted deliberately rather than papered
+  over.
 
 ## T-08 - complete (see `T08-COMPLETION-NOTES.md`)
 
