@@ -327,6 +327,9 @@ export const REQUEST_TYPES = [
 
 export const PRIORITIES = ["Normal", "High"] as const;
 
+/** Risk levels (docs/04). Decided at intake; drives identity verification and escalation. */
+export const RISK_LEVELS = ["Low", "Medium", "High"] as const;
+
 /**
  * Per-workspace, per-year counter for case numbering.
  *
@@ -381,6 +384,11 @@ export const cases = pgTable(
     requesterEmail: text("requester_email").notNull().default(""),
     /** 0, 1 or 2 - the statutory extension the workspace has applied. */
     extensionMonths: smallint("extension_months").notNull().default(0),
+    /** Low / Medium / High - decided at intake, drives the identity queue and dashboard. */
+    risk: text("risk", { enum: RISK_LEVELS }).notNull().default("Low"),
+    /** Set when the case is closed; null otherwise. The dashboard's "completed this
+     *  month" and "average time to closure" both read it. */
+    closedAt: timestamp("closed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

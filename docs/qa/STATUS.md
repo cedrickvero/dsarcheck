@@ -51,11 +51,11 @@ check that has been proven able to fail.
 Measured at `HEAD` after the host-routing slice:
 
 ```
-749 tests / 47 files    749 passed · 0 failed · 0 skipped
+763 tests / 49 files    763 passed · 0 failed · 0 skipped
 typecheck               0 errors
-boundary                92 files, 0 client -> server imports, 0 privileged handles
+boundary                94 files, 0 client -> server imports, 0 privileged handles
 db:verify               42/42 invariants
-migrations              12 applied, each exactly once
+migrations              13 applied, each exactly once
 11 domain routes        still stubbed (notImplemented -> 501)
 ```
 
@@ -207,10 +207,19 @@ Two decisions worth keeping: "My cases" matches on `ownerId` rather than a displ
 action is all-or-nothing - one foreign case number aborts the batch before anything is
 written, rather than applying to the subset that resolved.
 
-Still open in T-07, against Phase 3:
+**Dashboard (docs/03 § B, direct): built.** Eight KPI tiles and the "Needs attention" table
+with the product's exact ranking (deadline passed → awaiting approval → high-risk identity →
+Action required → due within 7 days → identity pending, ties by days left), the empty state
+and the "Ordered by what blocks closure first" caption. The tiles read `risk` and `closedAt`,
+which migration `0013` added to `cases` (risk CHECK Low/Medium/High; closedAt nullable). The
+"Average time to closure" tile is computed from closed cases rather than a seed constant.
 
-- Dashboard KPIs and "Needs attention" / "Client workspaces" (docs/03 § B).
-- The notification bell + popover (the derivation exists in `domain/notifications.ts`).
+Still open in T-07:
+
+- The agency "Client workspaces" table (docs/03 § B) - deferred until the multi-workspace
+  membership model exists; the current app is single-workspace.
+- The notification bell + popover (the derivation exists in `domain/notifications.ts`, and
+  the per-user read marks need a `notification_reads` table).
 - Cockpit tabs beyond the header (identity, checklist, redaction, erasure, approval,
   evidence) - the cockpit is still header-only.
 - Sticky header and sortable columns beyond SLA, which the spec marks as approved

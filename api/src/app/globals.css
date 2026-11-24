@@ -168,3 +168,16 @@ input:focus-visible, select:focus-visible, summary:focus-visible, tr:focus-withi
 .reason-dialog .hint { font-size: 13px; margin-top: 4px; }
 .reason-dialog .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px; }
 .reason-dialog .button { min-height: 44px; }
+
+/* ── Dashboard ────────────────────────────────────────────────────────────── */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 20px 0; }
+.kpi {
+  display: flex; flex-direction: column; gap: 6px; min-height: 96px; justify-content: center;
+  padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: #fff;
+}
+.kpi-label { font-size: 14px; color: var(--muted); }
+.kpi-value { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.attention-card { border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; }
+.attention-card h2 { margin: 0; }
+.attention-card .caption { color: var(--muted); margin: 4px 0 12px; }
+.attention-card .state-panel { border: 0; }
