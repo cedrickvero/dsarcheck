@@ -11,9 +11,10 @@ raw gate evidence is under `/opt/data/qa-tmp/`.
 ## Position
 
 **M0 Foundation (R1-R4) complete and gate-approved. T-08 (authentication, sessions, RBAC,
-authorization seam) complete and gate-approved. The domain layer (build plan Phase 1) is
-ported and tested, with its gates NOT yet dispatched. T-07 (workspace shell, case list,
-dashboard) is partial.**
+authorization seam) complete and gate-approved. The domain layer (Phase 1), host routing
+and the case list are implemented AND gate-approved (guardrail APPROVE + QA PASS, evidence
+under /opt/data/qa-tmp/GUARDRAIL-DOMAIN-HOSTS-CASES.md and QA-DOMAIN-HOSTS-CASES.md).
+T-07's dashboard, notification bell and cockpit tabs remain open.**
 
 | Prerequisite | Verdict | Commit |
 |---|---|---|
@@ -22,8 +23,9 @@ dashboard) is partial.**
 | R3 config & transport guards | guardrail APPROVE R3 (LOW, 3 rounds) + QA PASS | `e45214f` |
 | R4 human-gated erasure contract | guardrail APPROVE R4 + QA PASS | `984a071` |
 | T-08 auth substrate | guardrail **APPROVE T-08** + QA **PASS** (18/18 gate items) | `2dfd1a3` |
-| Domain port (Phase 1) | implemented, 85 tests, mutation-checked; **gates not dispatched** | `2eba546` |
-| T-07 workspace shell + case list | **partial** - shell and cases foundation only | `df0e8ab` |
+| Domain port (Phase 1) | **guardrail APPROVE + QA PASS** (0 CRITICAL, 0 HIGH, 2 LOW - both closed) | `2eba546` |
+| Host routing (4 surfaces, www, TXT-gated custom domains) | **guardrail APPROVE + QA PASS** | `1477812` |
+| T-07 case list (views, filters, bulk, CSV, empty/skeleton) | **guardrail APPROVE + QA PASS** (11/11 gate items) | `5029e60` |
 
 Every prerequisite was accepted only on guardrail APPROVE **and** QA PASS together,
 with no HIGH or CRITICAL finding open.
@@ -49,7 +51,7 @@ check that has been proven able to fail.
 Measured at `HEAD` after the host-routing slice:
 
 ```
-747 tests / 47 files    747 passed · 0 failed · 0 skipped
+749 tests / 47 files    749 passed · 0 failed · 0 skipped
 typecheck               0 errors
 boundary                92 files, 0 client -> server imports, 0 privileged handles
 db:verify               42/42 invariants
@@ -78,7 +80,18 @@ Two practices matter more than the numbers:
   partial-evidence verdict then missed. Every review now writes its findings
   incrementally to its own file, and each review keeps its own evidence chain.
 
-## Domain port (Phase 1) - implemented, ungated
+## Domain port (Phase 1) - implemented, gate-approved
+
+Reviewed alongside host routing and the case list. Guardrail: **APPROVE** (0 CRITICAL, 0
+HIGH, 2 LOW). QA: **PASS** (11/11 gate items, 747/747 at the time). The two LOWs are fixed:
+
+- **LOW-1**: `BRAND` had been set to "DSARCheck", an unrecorded divergence from the design
+  brand "Privacyspace" (only the DOMAIN change is permitted, docs/08 §7). Reverted: the
+  product name stays "Privacyspace" in the mail subject, TOTP issuer and page title.
+- **LOW-2**: `issueLink` filtered the magic-link user lookup by the raw `email` column on
+  top of the hash-scoped RLS policy, so a case-variant stored email would be missed and an
+  ambiguous address under-counted. The raw predicate is removed; two new tests (case-variant
+  resolves, cross-case ambiguity refused) both fail under the old predicate.
 
 `src/domain/**` was entirely stubs that threw `not implemented`, and nothing in `src/` or
 `tests/` imported the folder. The case list and header therefore had no SLA, no progress
@@ -103,7 +116,7 @@ the tests now pin down:
 **Parity is now proven, not claimed.** `tests/domain-parity.test.ts` loads the original
 `design/reference/seed/workspace-seed.js` in-process and runs its `sla()`, `progress()`,
 `checks()` and `respText()` over every case it seeds plus eleven synthetic cases, requiring
-our output to match field for field (275 assertions). A mutation that narrowed a copy
+our output to match field for field (275 parameterised test cases). A mutation that narrowed a copy
 string from 7 to 14 days killed 64 of them. Two findings came out of writing it:
 
 - The seeded demo data does not reach every branch - every seeded Completed system has
@@ -166,8 +179,11 @@ Carry-forwards, all still open:
    so an unrelated crash counted as a refusal; it now requires exactly 401. Three mutations
    (used_at guard removed, expiry guard removed, refusal turned into a 500) each fail it.
 3. `users.mfa_required` is a dead column; role policy in `authz.ts` is the live source.
-4. The ambiguous-email guard compares the raw `email` rather than the normalised hash
-   (fails closed; case-sensitivity edge).
+4. ~~The ambiguous-email guard compares the raw email rather than the normalised hash~~ -
+   **RESOLVED** (found independently by the host/case-list guardrail as LOW-2). The magic-link
+   lookup now relies on the `users_email_lookup` hash policy alone; the redundant raw-email
+   predicate is gone, and tests prove a case-variant stored email still resolves while a
+   genuinely ambiguous (two rows, one hash) address is refused.
 5. A recorded test nit from the guardrail.
 6. Multi-workspace sign-in is refused rather than disambiguated - fail-closed, but it
    needs a workspace-selection step before any customer has two.

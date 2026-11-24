@@ -42,7 +42,12 @@ export async function issueLink(
   // outright (the caller still returns the generic response). Choosing among them needs
   // a workspace-selection step that does not exist yet - recorded as a limitation rather
   // than silently resolved.
-  const matches = await tx.select().from(users).where(eq(users.email, normalised));
+  // The lookup transaction has already set app.lookup_email_hash, and the users_email_lookup
+  // policy exposes exactly the rows whose (normalised) hash matches - so a raw `email = ?`
+  // predicate here is both redundant and subtly wrong: a stored email that differs only in
+  // case is in the same hash bucket and MUST count, or an ambiguous address would be
+  // under-counted and one row picked instead of refusing.
+  const matches = await tx.select().from(users);
   if (matches.length > 1) {
     return { token: null, userId: null, orgId: null, workspaceId: null, url: null, role: null };
   }

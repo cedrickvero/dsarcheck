@@ -14,6 +14,12 @@ const RUN = `${Date.now()}`;
 const tag = `t08l-${RUN}`;
 let knownEmail = ""; let unknownEmail = "";
 let userId = ""; let orgId = ""; let wsId = "";
+// Fixtures must be unique per run (the tag carries Date.now): the hash bucket is shared by
+// everything that normalises to the same address, and a fixed email would collide with the
+// PREVIOUS run's row and turn every lookup into an ambiguous one.
+let caseUserId = ""; const caseEmail = `Case.${tag}@example.test`; const caseEmailNormalised = caseEmail.toLowerCase();
+const ambiguousEmail = `${tag}-amb@example.test`;
+const bogusToken = `${tag}-not-a-real-token`;
 
 beforeAll(async () => {
   try {
@@ -27,6 +33,21 @@ beforeAll(async () => {
       orgId: org.id, workspaceId: ws.id, email: knownEmail, emailHash: hashEmail(knownEmail), role: "owner",
     }).returning({ id: users.id }))[0]!;
     userId = u.id;
+
+    // LOW-2 fixture: a user whose STORED email differs in case from its normalised form. The
+    // hash bucket is case-insensitive, so the lookup must resolve by hash, not by raw text.
+    const caseUser = (await systemDb.insert(users).values({
+      orgId: org.id, workspaceId: ws.id, email: caseEmail, emailHash: hashEmail(caseEmailNormalised), role: "owner",
+    }).returning({ id: users.id }))[0]!;
+    caseUserId = caseUser.id;
+
+    // Two users whose emails differ only in case: one hash bucket, two rows -> ambiguous.
+    await systemDb.insert(users).values({
+      orgId: org.id, workspaceId: ws.id, email: ambiguousEmail, emailHash: hashEmail(ambiguousEmail), role: "owner",
+    });
+    await systemDb.insert(users).values({
+      orgId: org.id, workspaceId: ws.id, email: ambiguousEmail.toUpperCase(), emailHash: hashEmail(ambiguousEmail), role: "request_handler",
+    });
   } catch (e) {
     throw new Error(`magic-link suite setup failed - must not pass silently: ${String(e)}`);
   }
@@ -102,7 +123,7 @@ describe("T-08 magic links", () => {
   it("refuses an unknown token with a 401 - not a 500, and not by throwing something else", async () => {
     // The previous version of this test accepted status 0 as a pass, so an unrelated crash
     // counted as a refusal. Anything other than exactly 401 now fails.
-    const { status } = await hit("not-a-real-token");
+    const { status } = await hit(bogusToken);
     expect(status).toBe(401);
   });
 
@@ -146,7 +167,28 @@ describe("T-08 magic links", () => {
 
   it("does not create a session when redemption is refused", async () => {
     const before = await sessionCount();
-    await hit("not-a-real-token");
+    await hit(bogusToken);
     expect(await sessionCount()).toBe(before);
+  });
+
+  it("resolves a user by hash, not by the raw stored email casing", async () => {
+    // The stored email is "Case.User@example.test" but the request is lower-cased: the old
+    // raw-email predicate would have missed this row. It must issue a link anyway.
+    await post(caseEmailNormalised);
+    const rows = await systemDb.select().from(magicLinks).where(eq(magicLinks.userId, caseUserId));
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  it("refuses an address that is ambiguous by hash, even across casing, without creating a row", async () => {
+    // Same normalised email, two rows, differing only in case: the lookup must see BOTH and
+    // refuse, rather than pick one at random (which a raw-email filter would do).
+    const res = await post(ambiguousEmail);
+    expect(res.status).toBe(200); // the generic response either way
+
+    const [row] = await systemDb
+      .select({ n: sql<number>`count(*)::int` })
+      .from(magicLinks)
+      .where(eq(magicLinks.emailHash, hashEmail(ambiguousEmail)));
+    expect(row!.n).toBe(0);
   });
 });

@@ -11,8 +11,14 @@
 /** Apex and wildcard base. `*.dsarcheck.com` is the customer portal space. */
 export const DEFAULT_PLATFORM_DOMAIN = "dsarcheck.com";
 
-/** Product name used in copy, mail subjects and the TOTP issuer. */
-export const BRAND = "DSARCheck";
+/**
+ * Product name used in copy, mail subjects and the TOTP issuer.
+ *
+ * "Privacyspace" is the design handoff's brand, and AGENTS.md requires prototype copy
+ * verbatim. The DOMAIN changed to dsarcheck.com (recorded in docs/08 §7); the product
+ * NAME did not, so this stays "Privacyspace" unless the owner decides otherwise.
+ */
+export const BRAND = "Privacyspace";
 
 /** The CNAME target customers point their own domain at. Serves no page itself. */
 export const CUSTOM_DOMAIN_TARGET_LABEL = "portals";
