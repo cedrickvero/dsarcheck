@@ -6,7 +6,7 @@
 export const QUEUE_NAMES = [
   "sla-reminders", // SLA countdown reminders + escalation
   "dns-checks", // custom domain + sending domain verification
-  "grant-expiry", // time-limited Privacyspace support grants
+  "grant-expiry", // time-limited support grants
   "purge", // raw-export purge + retention deletion after case closure
   "evidence-pack", // evidence pack generation (PDF + ZIP)
 ] as const;

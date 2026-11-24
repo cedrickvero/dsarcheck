@@ -63,7 +63,7 @@ describe("checkSub()", () => {
     const result = checkSub("acme", domain, { taken: ["acme", "nova"] });
     expect(result.status).toBe("none");
     expect(result.reason).toBe("taken");
-    expect(result.message).toBe("acme.privacyspace.com is already in use.");
+    expect(result.message).toBe("acme.dsarcheck.com is already in use.");
   });
 
   it("queues a valid but non-matching name for review, explaining why", () => {
@@ -72,7 +72,7 @@ describe("checkSub()", () => {
     expect(result.matchesDomain).toBe(false);
     expect(result.reason).toBeUndefined();
     expect(result.message).toBe(
-      "acme.privacyspace.com doesn’t match your verified domain (lumen.io), " +
+      "acme.dsarcheck.com doesn’t match your verified domain (lumen.io), " +
         "so a person checks it before it’s released. This usually takes one business day.",
     );
   });

@@ -6,6 +6,12 @@
  * it is accepted and queued for manual review, with that explanation shown to the
  * customer. Only invalid, reserved and taken names are refused.
  */
+import {
+  DEFAULT_PLATFORM_DOMAIN,
+  RESERVED_SLUGS,
+  isValidSlug,
+  portalHost,
+} from "./platform";
 import type { SubdomainStatus } from "./types";
 
 export type SubdomainReason = "invalid" | "reserved" | "taken";
@@ -23,35 +29,20 @@ export interface SubdomainResult {
   reason?: SubdomainReason;
 }
 
-/** Protected brand and system names. */
-export const RESERVED_SUBDOMAINS = [
-  "google",
-  "apple",
-  "microsoft",
-  "amazon",
-  "meta",
-  "facebook",
-  "paypal",
-  "stripe",
-  "admin",
-  "www",
-  "api",
-  "app",
-  "status",
-  "support",
-  "help",
-  "login",
-  "mail",
-  "privacyspace",
-] as const;
-
-const SUBDOMAIN_PATTERN = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
+/**
+ * Protected brand, system and infrastructure names. The list lives in `platform.ts`
+ * because host classification needs it too — a reserved name must be refused whether it
+ * arrives as a slug claim or as a Host header.
+ */
+export const RESERVED_SUBDOMAINS = RESERVED_SLUGS;
 
 export interface CheckSubOptions {
   /** Names already claimed by another workspace. */
   taken?: readonly string[];
   /** Override the reserved list (Admin may reserve more). */
   reserved?: readonly string[];
+  /** The platform domain the host is built from. Defaults to dsarcheck.com. */
+  platformDomain?: string;
 }
 
 /**
@@ -66,8 +57,9 @@ export function checkSub(
   const value = candidate.trim().toLowerCase();
   const taken = options.taken ?? [];
   const reserved = options.reserved ?? RESERVED_SUBDOMAINS;
+  const platform = options.platformDomain ?? DEFAULT_PLATFORM_DOMAIN;
 
-  if (!SUBDOMAIN_PATTERN.test(value)) {
+  if (!isValidSlug(value)) {
     return {
       status: "none",
       subdomain: value,
@@ -94,7 +86,7 @@ export function checkSub(
       subdomain: value,
       matchesDomain: false,
       reason: "taken",
-      message: `${value}.privacyspace.com is already in use.`,
+      message: `${portalHost(value, platform)} is already in use.`,
     };
   }
 
@@ -112,7 +104,7 @@ export function checkSub(
     subdomain: value,
     matchesDomain: false,
     message:
-      `${value}.privacyspace.com doesn’t match your verified domain (${verifiedDomain}), ` +
+      `${portalHost(value, platform)} doesn’t match your verified domain (${verifiedDomain}), ` +
       `so a person checks it before it’s released. This usually takes one business day.`,
   };
 }

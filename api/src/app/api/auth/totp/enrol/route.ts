@@ -12,6 +12,7 @@
  * and it is raised for the guardrail to confirm or overrule.
  */
 import { NextResponse } from "next/server";
+import { BRAND } from "@/domain/platform";
 import { withTenant } from "@/db/client";
 import { writeAuditEvent } from "@/server/db/audit";
 import { route } from "@/server/http/handler";
@@ -47,7 +48,7 @@ export const POST = route(async (req) => {
   );
 
   const label = encodeURIComponent(actor.label);
-  const issuer = encodeURIComponent("Privacyspace");
+  const issuer = encodeURIComponent(BRAND);
   return NextResponse.json({
     otpauthUri: `otpauth://totp/${issuer}:${label}?secret=${secret}&issuer=${issuer}&period=30&digits=6`,
     next: "POST /api/auth/totp/verify with a code to confirm.",

@@ -72,3 +72,23 @@ From the Apple-guidelines review:
 - Intake form uses UK spelling "Privacy request centre"; app uses US ("Organization", "anonymized"). Keep as-is (requester-facing copy is UK/EU English), but don't mix within a surface.
 - Billing seed: Lumen (direct workspace prototype) shows Growth €199 with its own invoices, while in Admin seed Lumen is a Northlight client (billed under Northlight's Agency plan). In the built seed, keep Lumen as a Northlight client and create a separate direct org for the direct-workspace demo (e.g. "Lumen Analytics (direct demo)").
 - Invoice numbers: workspace billing seed (INV-2026-0142/0127/0110) and admin seed (0098–0141) overlap in range; renumber when seeding a single sequence.
+
+## 7. Platform domains and surfaces (owner decision)
+
+The product ships on **dsarcheck.com**. Four surfaces, four origins, deliberately separate:
+
+| Host | Serves | Session |
+|---|---|---|
+| `dsarcheck.com` | Landing, legal, pricing. No tenant, no authenticated content. | none |
+| `admin.dsarcheck.com` | Staff console (organizations, billing, subdomain reviews, domains, staff). | staff only |
+| `<slug>.dsarcheck.com` | One customer portal. Tenant is resolved from the `Host` header alone. | workspace only |
+| `portals.dsarcheck.com` | CNAME target for verified customer domains. Serves no page itself. | — |
+
+Decisions that follow, all recorded in code under `api/src/domain/platform.ts` and `api/src/domain/host.ts`:
+
+- **`slug` is per workspace, not per organisation.** An agency owns several client workspaces, so the customer's name cannot be the identifier for all of them.
+- **`dsarcheck.com/<slug>` is a 301 to the subdomain**, never a served form. Path-based tenants share one origin, so they would share cookies, cache and CSP.
+- **No `Domain=.dsarcheck.com` cookie, ever.** Both session cookies are `__Host-` in production, host-only by definition. A domain-scoped cookie would be readable by every tenant subdomain, so one tenant's XSS would become every tenant's session.
+- **Two cookie names, not one**: `__Host-dsar_session` (workspace) and `__Host-dsar_staff_session` (staff). A cookie presented on the wrong surface is refused, not interpreted.
+- **Reserved names include the infrastructure**: `www admin api app portals status support mail cdn staging …` plus the product's own words, so no tenant can shadow a surface or imply an endorsement.
+- **Brand substitution is deliberate**: the handoff's copy says `{slug}.privacyspace.com`; the product says `{slug}.dsarcheck.com`. This is the ONLY permitted divergence in copy, and `api/tests/domain-parity.test.ts` normalises the domain before comparing against the reference.

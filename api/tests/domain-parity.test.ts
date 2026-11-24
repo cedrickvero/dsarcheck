@@ -22,6 +22,7 @@ import { checks } from "@/domain/checks";
 import { progress } from "@/domain/progress";
 import { respText } from "@/domain/respText";
 import { checkSub } from "@/domain/subdomain";
+import { DEFAULT_PLATFORM_DOMAIN } from "@/domain/platform";
 import type { CaseState, CaseStatus, CaseSystemState, RequestType } from "@/domain/types";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -380,16 +381,21 @@ describe("copy that cannot be parity-tested dynamically", () => {
       checkSub("acme", "lumen.io").message,
     ].join(" | ");
 
+    // The reference was written for privacyspace.com; the product ships as dsarcheck.com.
+    // Normalising the domain is the ONLY permitted difference in this copy, and it is
+    // recorded in docs/08 as a deliberate brand substitution.
+    const normalisedSource = source.split("privacyspace.com").join(DEFAULT_PLATFORM_DOMAIN);
+
     const fragments = [
       "Use 3–30 lowercase letters, numbers or hyphens. It can’t start or end with a hyphen.",
       " is reserved. Brand and system names are protected and can’t be claimed.",
-      ".privacyspace.com is already in use.",
+      `.${DEFAULT_PLATFORM_DOMAIN} is already in use.`,
       "doesn’t match your verified domain (",
       "so a person checks it before it’s released. This usually takes one business day.",
     ];
 
     for (const fragment of fragments) {
-      expect(source.includes(fragment), `fragment missing from the reference: ${fragment}`).toBe(
+      expect(normalisedSource.includes(fragment), `fragment missing from the reference: ${fragment}`).toBe(
         true,
       );
       expect(emitted, `fragment missing from our copy: ${fragment}`).toContain(fragment);

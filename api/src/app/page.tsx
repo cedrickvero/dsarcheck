@@ -1,3 +1,5 @@
+import { BRAND } from "@/domain/platform";
+
 /**
  * Placeholder home so the app boots.
  *
@@ -7,7 +9,7 @@
 export default function HomePage() {
   return (
     <main style={{ padding: "2rem" }}>
-      <h1>Privacyspace</h1>
+      <h1>{BRAND}</h1>
       <p>DSAR fulfillment and evidence workspace.</p>
       <p>
         Health: <a href="/health">/health</a> - <a href="/api/health">/api/health</a>

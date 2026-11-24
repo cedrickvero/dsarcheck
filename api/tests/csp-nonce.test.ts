@@ -23,10 +23,12 @@ describe("T-07 nonce CSP", () => {
   });
 
   it("is UNIQUE per request - a fresh nonce every time", () => {
+    // A real request always carries Host; without one the middleware cannot classify the
+    // surface and (correctly) refuses a cookie-bearing request, so the mock must set it.
     const mk = () =>
       middleware({
-        nextUrl: { pathname: "/app/cases", href: "http://localhost/app/cases" },
-        headers: new Headers({ cookie: "dsar_session=x" }),
+        nextUrl: { pathname: "/app/cases", href: "http://acme.dsarcheck.com/app/cases" },
+        headers: new Headers({ host: "acme.dsarcheck.com", cookie: "dsar_session=x" }),
       } as unknown as Parameters<typeof middleware>[0]);
     const seen = new Set<string>();
     for (let i = 0; i < 25; i += 1) {
@@ -36,6 +38,15 @@ describe("T-07 nonce CSP", () => {
       seen.add(nonce!);
     }
     expect(seen.size).toBe(25);
+  });
+
+  it("refuses a session cookie it cannot attribute to a surface", () => {
+    // Fail closed: an unclassifiable Host must not be treated as a portal.
+    const res = middleware({
+      nextUrl: { pathname: "/app/cases", href: "http://localhost/app/cases" },
+      headers: new Headers({ cookie: "dsar_session=x" }),
+    } as unknown as Parameters<typeof middleware>[0]);
+    expect(res.status).toBe(401);
   });
 
   it("never logs the nonce", () => {

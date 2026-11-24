@@ -46,12 +46,12 @@ check that has been proven able to fail.
 
 ## Verification state
 
-Measured at `ce1a728`:
+Measured at `HEAD` after the host-routing slice:
 
 ```
-649 tests / 43 files    539 passed · 18 failed · 43 skipped · 5 files skipped
+679 tests / 44 files    569 passed · 18 failed · 43 skipped · 5 files skipped
 typecheck               0 errors
-boundary                85 files, 0 client -> server imports, 0 privileged handles
+boundary                87 files, 0 client -> server imports, 0 privileged handles
 11 domain routes        still stubbed (notImplemented -> 501)
 ```
 
@@ -116,6 +116,34 @@ string from 7 to 14 days killed 64 of them. Two findings came out of writing it:
 - The reference omits `deadlineS` on closed cases; ours always returns a string so the UI
   cannot render `undefined`. That divergence is asserted deliberately rather than papered
   over.
+
+## Hosts and surfaces - implemented, ungated
+
+Four origins: `dsarcheck.com` (landing), `admin.dsarcheck.com` (staff), `<slug>.dsarcheck.com`
+(one portal per workspace), and `portals.dsarcheck.com` (CNAME target for customer domains).
+Decided with the owner and recorded in `design/docs/08` §7.
+
+`src/domain/platform.ts` holds the single copy of the platform domain, brand, slug rule,
+reserved names and the two cookie names. `src/domain/host.ts` classifies a `Host` and has no
+I/O, so the edge middleware and the tests use the same code. Middleware now:
+
+- refuses a cookie presented on the wrong surface (staff on a portal, workspace on the console,
+  and any cookie when the host cannot be classified - fail closed);
+- 301s `dsarcheck.com/<slug>/...` to the subdomain, with the query string preserved;
+- refuses the CNAME target, nested subdomains and every reserved name as a tenant.
+
+The slug is per WORKSPACE, not per org: an agency owns several client workspaces, so the
+customer's name cannot be the identifier for all of them. Tenant resolution still happens
+server-side from the session + RLS; nothing in middleware is an authorization control.
+
+Two consequences worth naming:
+
+- The brand is copy, not configuration. `{slug}.privacyspace.com` in the handoff became
+  `{slug}.dsarcheck.com`, and the parity suite normalises the domain before comparing - that
+  substitution is the only permitted divergence from the reference.
+- `tests/csp-nonce.test.ts` had to gain a `Host` header: without one the middleware cannot
+  classify the surface and now refuses a cookie-bearing request. That is the intended
+  fail-closed behaviour, and it is asserted separately.
 
 ## T-08 - complete (see `T08-COMPLETION-NOTES.md`)
 
