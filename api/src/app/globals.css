@@ -104,3 +104,67 @@ input:focus-visible, select:focus-visible, summary:focus-visible, tr:focus-withi
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Case list ───────────────────────────────────────────────────────────── */
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.page-header .subtitle { color: var(--muted); margin: 4px 0 0; }
+
+.view-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 44px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: 999px;
+  color: var(--ink); text-decoration: none; background: #fff;
+}
+.chip[data-active="true"] { background: #0b1f3a; border-color: #0b1f3a; color: #fff; }
+.chip .count { font-variant-numeric: tabular-nums; opacity: 0.75; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin: 0 0 16px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.field input, .field select, .field textarea {
+  min-height: 44px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit;
+}
+.field-search { flex: 1 1 260px; }
+
+.bulk-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  padding: 10px 12px; margin: 0 0 12px;
+  background: #f5fbfb; border: 1px solid var(--line); border-radius: 10px;
+}
+.bulk-bar .button { min-height: 44px; }
+
+.case-table tr[data-selected="true"] { background: #d7f0ef; }
+.case-table .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.case-table .requester { display: block; font-weight: 600; }
+.case-table .email { display: block; color: var(--muted); font-size: 13px; }
+.case-table input[type="checkbox"] { width: 20px; height: 20px; }
+
+.sla-label { display: block; font-weight: 600; }
+.sla-label[data-risk="Overdue"] { color: #b42318; text-decoration: underline; }
+.sla-label[data-risk="Due soon"], .sla-label[data-risk="Strong warning"] { color: #b54708; }
+.sla-bar { display: block; height: 3px; margin-top: 4px; background: #eef1f4; border-radius: 2px; }
+.sla-bar > span { display: block; height: 100%; background: #0e7c7b; border-radius: 2px; }
+
+.pill-high {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  background: #fdf0dc; color: #b54708; font-weight: 600; font-size: 13px;
+}
+
+.status-line { min-height: 24px; margin: 0 0 8px; }
+.error-text { color: #b42318; font-weight: 600; }
+
+.skeleton { display: block; height: 14px; width: 100%; background: #eef1f4; border-radius: 4px; animation: skeleton-pulse 1.2s ease-in-out infinite; }
+@keyframes skeleton-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+/* ── Reason dialog ───────────────────────────────────────────────────────── */
+.reason-dialog {
+  width: min(520px, 92vw); padding: 24px; border: 0; border-radius: 12px;
+  box-shadow: 0 24px 64px rgb(16 24 40 / 24%);
+}
+.reason-dialog::backdrop { background: rgb(16 24 40 / 45%); }
+.reason-dialog h2 { margin: 0 0 6px; font-size: 20px; }
+.reason-dialog p { margin: 0 0 12px; color: var(--muted); }
+.reason-dialog .hint { font-size: 13px; margin-top: 4px; }
+.reason-dialog .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px; }
+.reason-dialog .button { min-height: 44px; }

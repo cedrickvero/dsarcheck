@@ -1,4 +1,4 @@
-import { bigint, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 /**
  * Scaffold subset of docs/04-data-model.md.
@@ -148,6 +148,8 @@ export const users = pgTable(
       .references(() => workspaces.id),
     email: text("email").notNull(),
     emailHash: text("email_hash").notNull(),
+    /** Display name for the case list, assignments and audit labels. Empty falls back to email. */
+    name: text("name").notNull().default(""),
     role: text("role", {
       enum: ["owner", "approver", "workspace_admin", "request_handler", "system_owner"],
     }).notNull(),
@@ -369,11 +371,64 @@ export const cases = pgTable(
     status: text("status", { enum: CASE_STATUSES }).notNull().default("New"),
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
     statutoryDueAt: timestamp("statutory_due_at", { withTimezone: true }).notNull(),
+    /**
+     * Nullable on purpose: T-07 shipped cases before owners existed, and a NOT NULL
+     * column would need a backfill with no correct value to backfill with. The list
+     * renders "Unassigned"; every new case sets it at intake.
+     */
+    ownerId: uuid("owner_id").references(() => users.id),
+    requesterName: text("requester_name").notNull().default(""),
+    requesterEmail: text("requester_email").notNull().default(""),
+    /** 0, 1 or 2 - the statutory extension the workspace has applied. */
+    extensionMonths: smallint("extension_months").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex("cases_workspace_number_idx").on(table.workspaceId, table.caseNumber),
     index("cases_workspace_status_idx").on(table.workspaceId, table.status),
     index("cases_workspace_received_idx").on(table.workspaceId, table.receivedAt),
+    // The case list is sorted by nearest deadline; this is the index that serves it.
+    index("cases_workspace_due_idx").on(table.workspaceId, table.statutoryDueAt),
+  ],
+);
+
+/** Checklist row statuses - the spec's six, verbatim (docs/04). */
+export const CASE_SYSTEM_STATUSES = [
+  "Not started",
+  "In progress",
+  "Completed",
+  "Not found",
+  "Action required",
+  "Retained under exception",
+] as const;
+
+/**
+ * One data-source row per case: what the case list shows as "4 of 7".
+ *
+ * A row rather than a counter on `cases`: the cockpit marks each system individually and
+ * the progress figure has to be derivable from those rows, or the two will disagree.
+ * Tenant-scoped with the same RLS and grant pattern as every other customer table.
+ */
+export const caseSystems = pgTable(
+  "case_systems",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => cases.id),
+    sourceKey: text("source_key").notNull(),
+    status: text("status", { enum: CASE_SYSTEM_STATUSES }).notNull().default("Not started"),
+    evidenceCount: integer("evidence_count").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("case_systems_case_source_idx").on(table.caseId, table.sourceKey),
+    index("case_systems_workspace_status_idx").on(table.workspaceId, table.status),
   ],
 );

@@ -9,3 +9,6 @@ coverage/
 *.log
 .DS_Store
 tsconfig.tsbuildinfo\n*.tsbuildinfo
+
+# The marketing site is its OWN repository - never part of a DSAR commit.
+site/
