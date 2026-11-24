@@ -49,10 +49,11 @@ check that has been proven able to fail.
 Measured at `HEAD` after the host-routing slice:
 
 ```
-701 tests / 45 files    701 passed · 0 failed · 0 skipped
+747 tests / 47 files    747 passed · 0 failed · 0 skipped
 typecheck               0 errors
-boundary                87 files, 0 client -> server imports, 0 privileged handles
+boundary                92 files, 0 client -> server imports, 0 privileged handles
 db:verify               42/42 invariants
+migrations              12 applied, each exactly once
 11 domain routes        still stubbed (notImplemented -> 501)
 ```
 
@@ -171,20 +172,35 @@ Carry-forwards, all still open:
 6. Multi-workspace sign-in is refused rather than disambiguated - fail-closed, but it
    needs a workspace-selection step before any customer has two.
 
-## T-07 - partial
+## T-07 - the case list is built
 
-Built: the `src/app/app/layout.tsx` shell, `cases/page.tsx`, `cases/[caseId]/page.tsx`,
-`case-table.tsx`, `case-header.tsx`, `state-panel.tsx`, loading/error/not-found states,
-CSP nonce, and migrations `0009`/`0010`. `df0e8ab` repaired a rendering suite that had
-never run and widened the boundary rule, which had only caught named imports.
+**Case list (docs/03 § C): complete.** Saved views with counts, search, type and status
+filters held in the URL, ordering by nearest deadline (ties by case number), the full table
+(checkbox, requester, type, status, owner, received, SLA label + bar, checklist, priority),
+bulk assign through the single `ReasonDialog`, audited CSV export, the prototype's empty
+state and skeleton rows while loading.
 
-Not built, against Phase 3 of the build plan: saved views, search, type/status filters,
-bulk select with Assign owner and CSV export, the notification bell and popover, skeleton
-rows, empty states, sorting by days left, and the dashboard KPIs. `listCases()` is a bare
-`select * ... order by received_at desc`; the spec sorts by days left.
+The schema had to move first: `cases` had no owner or requester, and there was no
+per-system row, so "4 of 7" was not derivable from anything. Migration `0011` adds
+`owner_id`, `requester_name`, `requester_email`, `extension_months` (CHECK 0..2) and a
+tenant-scoped `case_systems` table (forced RLS, no DELETE grant, status CHECK); `0012` adds
+`users.name`.
 
-The domain port now supplies what those need; no wiring exists yet, and the slice cannot
-be verified end to end until the DB suites run.
+Two decisions worth keeping: "My cases" matches on `ownerId` rather than a display name
+(two people can be called Priya, and a name match would merge their queues), and a bulk
+action is all-or-nothing - one foreign case number aborts the batch before anything is
+written, rather than applying to the subset that resolved.
+
+Still open in T-07, against Phase 3:
+
+- Dashboard KPIs and "Needs attention" / "Client workspaces" (docs/03 § B).
+- The notification bell + popover (the derivation exists in `domain/notifications.ts`).
+- Cockpit tabs beyond the header (identity, checklist, redaction, erasure, approval,
+  evidence) - the cockpit is still header-only.
+- Sticky header and sortable columns beyond SLA, which the spec marks as approved
+  additions rather than prototype behaviour.
+- The "Open public intake form" link points at `/intake`, which the intake slice has not
+  built. It should point at the workspace's portal host once a workspace has a slug.
 
 ## Open items
 
