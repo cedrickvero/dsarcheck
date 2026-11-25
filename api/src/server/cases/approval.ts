@@ -334,7 +334,12 @@ async function decideClosure(
 
       await tx
         .update(cases)
-        .set({ status, closedAt: input.decision === "approve" || input.decision === "reject" ? new Date() : null })
+        .set({
+          status,
+          closedAt: input.decision === "approve" || input.decision === "reject" ? new Date() : null,
+          // docs/05: a rejection uses the Refusal response template.
+          template: input.decision === "reject" ? "Refusal — documented reason" : row.template,
+        })
         .where(eq(cases.id, caseId));
 
       await writeAuditEvent(tx, {

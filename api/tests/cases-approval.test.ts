@@ -84,6 +84,11 @@ describe("selectTemplate", () => {
     const [ev] = await systemDb.select().from(auditEvents).where(eq(auditEvents.objectId, id));
     expect(ev!.category).toBe("Approval");
   });
+
+  it("rejects an unknown template", async () => {
+    const id = await mkCase();
+    await expect(selectTemplate(handler, id, "Not a real template")).rejects.toThrow("unknown response template");
+  });
 });
 
 describe("sendForApproval", () => {
@@ -123,12 +128,22 @@ describe("closure decisions", () => {
     expect(result.status).toBe("In progress");
   });
 
-  it("an approver rejects and closes", async () => {
+  it("an approver rejects and closes, using the Refusal template", async () => {
     const id = await mkCase({ status: "Awaiting approval", identityVerified: true, template: "Access — copy" });
     const result = await rejectCase(approver, id, "out of scope");
     expect(result.status).toBe("Rejected");
-    const [row] = await systemDb.select({ closedAt: cases.closedAt }).from(cases).where(eq(cases.id, id));
+    const [row] = await systemDb.select({ closedAt: cases.closedAt, template: cases.template }).from(cases).where(eq(cases.id, id));
     expect(row!.closedAt).not.toBeNull();
+    expect(row!.template).toBe("Refusal — documented reason");
+  });
+
+  it("re-verifies the checklist on approve (a drifted checklist blocks closure)", async () => {
+    const id = await mkCase({ status: "Awaiting approval", identityVerified: true, template: "Access — copy" });
+    // drift: an open system appears after send-for-approval
+    await systemDb.insert(caseSystems).values([
+      { orgId, workspaceId: wsId, caseId: id, sourceKey: "db", name: "Production database", status: "Not started", evidenceCount: 0 },
+    ]);
+    await expect(approveAndClose(approver, id, "looks fine")).rejects.toThrow("closure is blocked");
   });
 
   it("requires a reason", async () => {
