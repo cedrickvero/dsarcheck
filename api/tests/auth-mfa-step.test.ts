@@ -115,7 +115,7 @@ describe("T-08 CRITICAL-2 - the MFA step is reachable by an MFA-outstanding sess
         if (statSync(full).isDirectory()) walk(full);
         else if (/\.tsx?$/.test(full)) {
           const body = readFileSync(full, "utf8");
-          if (body.includes("requireAuthForMfaStep") && !/totp\/(enrol|verify)\/route\.ts$/.test(full) && !full.endsWith("require-auth.ts")) {
+          if (body.includes("requireAuthForMfaStep") && !/totp\/(enrol|verify)\/route\.ts$/.test(full) && !full.endsWith("require-auth.ts") && !/\/app\/mfa\//.test(full)) {
             offenders.push(full);
           }
         }

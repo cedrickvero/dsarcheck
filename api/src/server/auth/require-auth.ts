@@ -135,6 +135,23 @@ export async function requireAuthForMfaStep(req: Request): Promise<Actor> {
   return requireAuthFromToken(parseSessionCookie(req.headers.get("cookie")), { allowMfaOutstanding: true });
 }
 
+/**
+ * The same partial gate, for server components (the /mfa page). Reads cookies() from
+ * next/headers like requireAuth(), but with allowMfaOutstanding so the page can render for
+ * exactly the session that still owes MFA. The /mfa page is the UI counterpart of the TOTP
+ * routes and touches nothing but the caller's own mfa_totp row.
+ */
+export async function requireAuthForMfaStepAmbient(): Promise<Actor> {
+  let header: string | null = null;
+  try {
+    const store = await cookies();
+    header = store.toString();
+  } catch {
+    throw new AppError(401, "unauthenticated", "Sign-in required.");
+  }
+  return requireAuthFromToken(parseSessionCookie(header), { allowMfaOutstanding: true });
+}
+
 export async function requireAuth(): Promise<Actor> {
   let header: string | null = null;
   try {

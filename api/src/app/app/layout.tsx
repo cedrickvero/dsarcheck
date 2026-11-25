@@ -45,7 +45,7 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
             tone="signin"
             title="Multi-factor verification required"
             body="Your role requires a verified authenticator code before this workspace can be shown."
-            action={{ href: "/api/auth/totp/verify", label: "Verify with a code" }}
+            action={{ href: "/mfa", label: "Verify with a code" }}
           />
         ) : (
           <StatePanel

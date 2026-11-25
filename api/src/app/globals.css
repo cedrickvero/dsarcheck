@@ -219,3 +219,7 @@ input:focus-visible, select:focus-visible, summary:focus-visible, tr:focus-withi
 .sign-in-form .button { min-height: 44px; }
 .sign-in-status { min-height: 20px; margin: 0; font-size: 14px; }
 .sign-in-form .hint { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* ── MFA step ─────────────────────────────────────────────────────────────── */
+.mfa-instruction { margin: 0 0 4px; }
+.mfa-secret { letter-spacing: 0.08em; word-break: break-all; }
