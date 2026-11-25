@@ -11,10 +11,10 @@ raw gate evidence is under `/opt/data/qa-tmp/`.
 ## Position
 
 **M0 Foundation (R1-R4) complete and gate-approved. T-08 (authentication, sessions, RBAC,
-authorization seam) complete and gate-approved. The domain layer (Phase 1), host routing
-and the case list are implemented AND gate-approved (guardrail APPROVE + QA PASS, evidence
-under /opt/data/qa-tmp/GUARDRAIL-DOMAIN-HOSTS-CASES.md and QA-DOMAIN-HOSTS-CASES.md).
-T-07's dashboard, notification bell and cockpit tabs remain open.**
+authorization seam) complete and gate-approved. The domain layer (Phase 1), host routing,
+the case list, the direct dashboard and the notification bell are all implemented AND
+gate-approved (guardrail APPROVE + QA PASS; evidence under /opt/data/qa-tmp/). The only
+T-07 remainder is the cockpit tabs; the agency "Client workspaces" table is deferred.**
 
 | Prerequisite | Verdict | Commit |
 |---|---|---|
@@ -26,6 +26,8 @@ T-07's dashboard, notification bell and cockpit tabs remain open.**
 | Domain port (Phase 1) | **guardrail APPROVE + QA PASS** (0 CRITICAL, 0 HIGH, 2 LOW - both closed) | `2eba546` |
 | Host routing (4 surfaces, www, TXT-gated custom domains) | **guardrail APPROVE + QA PASS** | `1477812` |
 | T-07 case list (views, filters, bulk, CSV, empty/skeleton) | **guardrail APPROVE + QA PASS** (11/11 gate items) | `5029e60` |
+| T-07 direct dashboard (KPIs + Needs attention) | **guardrail APPROVE + QA PASS** (QA FAILed once, rechecked PASS) | `a5b39d7` |
+| T-07 notification bell | **guardrail APPROVE + QA PASS** (QA FAILed once, rechecked PASS) | `1e5b3a4` |
 
 Every prerequisite was accepted only on guardrail APPROVE **and** QA PASS together,
 with no HIGH or CRITICAL finding open.
@@ -51,11 +53,11 @@ check that has been proven able to fail.
 Measured at `HEAD` after the host-routing slice:
 
 ```
-776 tests / 51 files    776 passed · 0 failed · 0 skipped
+780 tests / 51 files    780 passed · 0 failed · 0 skipped
 typecheck               0 errors
 boundary                97 files, 0 client -> server imports, 0 privileged handles
 db:verify               42/42 invariants
-migrations              14 applied, each exactly once
+migrations              15 applied, each exactly once
 11 domain routes        still stubbed (notImplemented -> 501)
 ```
 
@@ -213,6 +215,16 @@ Action required → due within 7 days → identity pending, ties by days left), 
 and the "Ordered by what blocks closure first" caption. The tiles read `risk` and `closedAt`,
 which migration `0013` added to `cases` (risk CHECK Low/Medium/High; closedAt nullable). The
 "Average time to closure" tile is computed from closed cases rather than a seed constant.
+
+**Dashboard and bell gate results.** Guardrail: **APPROVE** (0 CRITICAL, 0 HIGH, 7 LOW). QA
+**FAILed the bell on one item** — the entries were buttons calling `window.location.assign`
+while the commit claimed "real links" — and the recheck **PASSED** once every entry became an
+`<a href>` with the mark-read running alongside navigation. All 7 LOWs were fixed: Completed
+vs Rejected in "this month" and the closure average (L-1), workspace-timezone month bucketing
+(L-2), user name + "Approver / DPO" label (L-3), owners/admins see both notification lists
+while a pure approver sees only the sign-off list (L-4), mark-read validates the key (L-5),
+`notification_reads` is insert-only and the revoke survives `db:migrate` via the ensure script
+(L-6), and the empty state uses the prototype's copy (L-7).
 
 **Notification bell: built.** The derivation (`domain/notifications.ts`, already tested) is now
 wired end to end: `server/cases/notifications.ts` assembles the minimal case shape from the
