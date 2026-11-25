@@ -8,7 +8,7 @@
  * New/Verifying -> In progress, reject closes the case, and requesting information keeps it
  * in Verifying with infoRequested set.
  */
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { auditEvents, cases } from "@/db/schema";
 import { withTenant } from "@/db/client";
 import { can } from "@/server/authz";
@@ -41,6 +41,16 @@ const APPROVE_ACTIONS: Record<IdentityDecision, { action: string; category: stri
   approve: { action: "Identity approved", category: "Identity" },
   reject: { action: "Identity rejected", category: "Identity" },
   request_info: { action: "More information requested", category: "Identity" },
+};
+
+const DECISION_ACTIONS = ["Identity approved", "Identity rejected", "More information requested"] as const;
+
+/** The reverse map, so the derived decision comes from the deterministic action string,
+ *  never from an optional meta field that a future non-decision event would not set. */
+const DECISION_BY_ACTION: Record<string, IdentityDecision> = {
+  "Identity approved": "approve",
+  "Identity rejected": "reject",
+  "More information requested": "request_info",
 };
 
 /** Approver-or-above: the roles docs/05 allows to approve/reject a high-risk identity. */
@@ -78,6 +88,7 @@ export async function getIdentity(actor: Actor, caseId: string): Promise<Identit
           actorLabel: auditEvents.actorLabel,
           at: auditEvents.at,
           reason: auditEvents.reason,
+          action: auditEvents.action,
           meta: auditEvents.meta,
         })
         .from(auditEvents)
@@ -86,6 +97,7 @@ export async function getIdentity(actor: Actor, caseId: string): Promise<Identit
             eq(auditEvents.objectType, "case"),
             eq(auditEvents.objectId, caseId),
             eq(auditEvents.category, "Identity"),
+            inArray(auditEvents.action, DECISION_ACTIONS),
           ),
         )
         .orderBy(desc(auditEvents.at))
@@ -95,7 +107,7 @@ export async function getIdentity(actor: Actor, caseId: string): Promise<Identit
         ...row,
         decision: event
           ? {
-              decision: (event.meta?.decision as IdentityDecision) ?? "request_info",
+              decision: DECISION_BY_ACTION[event.action]!,
               infoOption: (event.meta?.infoOption as string) ?? null,
               by: event.actorLabel,
               at: event.at,
@@ -121,6 +133,11 @@ export async function recordIdentityDecision(
 ): Promise<{ status: string; identityVerified: boolean }> {
   assertMayDecideIdentity(actor);
 
+  // A malformed decision value must be a 422, not a 500 on a missing map entry.
+  if (!Object.hasOwn(APPROVE_ACTIONS, input.decision)) {
+    throw new ValidationError("unknown identity decision");
+  }
+
   const reason = input.reason.trim();
   if (reason.length < MIN_REASON) {
     throw new ValidationError("a reason is required for an identity decision");
@@ -137,7 +154,11 @@ export async function recordIdentityDecision(
         .limit(1);
       if (!row) throw new ValidationError("unknown case");
 
-      if (row.status !== "New" && row.status !== "Verifying") {
+      if (input.decision === "request_info") {
+        if (row.status !== "Verifying") {
+          throw new ValidationError("information can only be requested while verifying");
+        }
+      } else if (row.status !== "New" && row.status !== "Verifying") {
         throw new ValidationError("identity has already been decided for this case");
       }
       if (row.risk === "High" && input.decision !== "request_info" && !isApprover(actor)) {

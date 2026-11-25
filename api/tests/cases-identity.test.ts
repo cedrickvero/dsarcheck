@@ -48,9 +48,9 @@ beforeAll(async () => {
 });
 afterAll(async () => { await systemPool.end().catch(() => {}); });
 
-const mkCase = async (risk: "Low" | "High") =>
+const mkCase = async (risk: "Low" | "High", status: "New" | "Verifying" = "New") =>
   (await systemDb.insert(cases).values({
-    orgId, workspaceId: wsId, caseNumber: num(), requestType: "Access", status: "New", priority: "Normal",
+    orgId, workspaceId: wsId, caseNumber: num(), requestType: "Access", status, priority: "Normal",
     receivedAt: new Date("2026-09-24T00:00:00Z"), statutoryDueAt: new Date("2026-10-24T00:00:00Z"), risk,
   }).returning({ id: cases.id }))[0]!.id;
 
@@ -77,7 +77,7 @@ describe("recordIdentityDecision", () => {
   });
 
   it("requesting information keeps the case verifying and records what is needed", async () => {
-    const id = await mkCase("Low");
+    const id = await mkCase("Low", "Verifying");
     await recordIdentityDecision(handler, id, { decision: "request_info", reason: "need proof of address", infoOption: "Proof of address" });
     const identity = await getIdentity(handler, id);
     expect(identity!.infoRequested).toBe(true);
@@ -86,7 +86,7 @@ describe("recordIdentityDecision", () => {
   });
 
   it("a handler cannot approve or reject a high-risk case", async () => {
-    const id = await mkCase("High");
+    const id = await mkCase("High", "Verifying");
     await expect(recordIdentityDecision(handler, id, { decision: "approve", reason: "matches" })).rejects.toThrow("High-risk identity needs an approver");
     await expect(recordIdentityDecision(handler, id, { decision: "reject", reason: "not the holder" })).rejects.toThrow("High-risk identity needs an approver");
     // but may request more information
@@ -102,6 +102,16 @@ describe("recordIdentityDecision", () => {
   it("requires a reason", async () => {
     const id = await mkCase("Low");
     await expect(recordIdentityDecision(handler, id, { decision: "approve", reason: "  " })).rejects.toThrow("a reason is required");
+  });
+
+  it("rejects an unknown decision value", async () => {
+    const id = await mkCase("Low");
+    await expect(recordIdentityDecision(handler, id, { decision: "bogus" as "approve", reason: "reason" })).rejects.toThrow("unknown identity decision");
+  });
+
+  it("can only request information while verifying", async () => {
+    const id = await mkCase("Low"); // New
+    await expect(recordIdentityDecision(handler, id, { decision: "request_info", reason: "need more" })).rejects.toThrow("information can only be requested while verifying");
   });
 
   it("refuses a second decision once the case has moved on", async () => {
