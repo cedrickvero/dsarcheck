@@ -51,11 +51,11 @@ check that has been proven able to fail.
 Measured at `HEAD` after the host-routing slice:
 
 ```
-763 tests / 49 files    763 passed · 0 failed · 0 skipped
+776 tests / 51 files    776 passed · 0 failed · 0 skipped
 typecheck               0 errors
-boundary                94 files, 0 client -> server imports, 0 privileged handles
+boundary                97 files, 0 client -> server imports, 0 privileged handles
 db:verify               42/42 invariants
-migrations              13 applied, each exactly once
+migrations              14 applied, each exactly once
 11 domain routes        still stubbed (notImplemented -> 501)
 ```
 
@@ -214,12 +214,20 @@ and the "Ordered by what blocks closure first" caption. The tiles read `risk` an
 which migration `0013` added to `cases` (risk CHECK Low/Medium/High; closedAt nullable). The
 "Average time to closure" tile is computed from closed cases rather than a seed constant.
 
+**Notification bell: built.** The derivation (`domain/notifications.ts`, already tested) is now
+wired end to end: `server/cases/notifications.ts` assembles the minimal case shape from the
+rows, resolves the approver/handler split through the `approve_closure` permission, reads
+the per-user marks, and `markNotificationRead` / `markAllNotificationsRead` persist them as
+idempotent upserts (no delete needed, so the no-DELETE invariant is untouched). Migration
+`0014` adds `case_systems.name` (so "Production database on Maya's case" names the system
+rather than a key) and the `notification_reads` table (forced RLS, no DELETE grant). The
+bell lives in the workspace shell with the announced count, the 9+ badge, Escape-to-close
+and focus return; "Mark all as read" clears it via a server action.
+
 Still open in T-07:
 
 - The agency "Client workspaces" table (docs/03 § B) - deferred until the multi-workspace
   membership model exists; the current app is single-workspace.
-- The notification bell + popover (the derivation exists in `domain/notifications.ts`, and
-  the per-user read marks need a `notification_reads` table).
 - Cockpit tabs beyond the header (identity, checklist, redaction, erasure, approval,
   evidence) - the cockpit is still header-only.
 - Sticky header and sortable columns beyond SLA, which the spec marks as approved

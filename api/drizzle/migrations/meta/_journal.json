@@ -99,6 +99,13 @@
       "when": 1795564268639,
       "tag": "0013_dashboard_risk_closed",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795566106304,
+      "tag": "0014_notification_bell",
+      "breakpoints": true
     }
   ]
 }

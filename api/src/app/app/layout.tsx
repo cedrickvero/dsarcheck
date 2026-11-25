@@ -10,10 +10,22 @@
  */
 import "../globals.css";
 import { requireAuth } from "@/server/auth/require-auth";
+import { now } from "@/server/time";
+import { listNotifications } from "@/server/cases/notifications";
 import { UnauthenticatedError, MfaRequiredError } from "@/server/http/errors";
 import { StatePanel } from "./_components/state-panel";
+import { NotificationBell } from "./_components/notification-bell";
+import { markAllRead, markRead } from "./actions";
 
 export const dynamic = "force-dynamic";
+
+const ROLE_LABELS: Record<string, string> = {
+  owner: "Workspace admin",
+  workspace_admin: "Workspace admin",
+  approver: "Approver",
+  request_handler: "Request handler",
+  system_owner: "System owner",
+};
 
 export default async function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   let actor = null;
@@ -47,14 +59,26 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
     );
   }
 
+  const feed = await listNotifications(actor, now());
+  const roleLabel = ROLE_LABELS[actor.roles[0] ?? ""] ?? "Workspace";
+
   return (
     <>
       <a className="skip-link" href="#main">Skip to main content</a>
       <div className="shell">
-        <nav aria-label="Workspace">
-          <a href="/app">Dashboard</a>
-          <a href="/app/cases">Cases</a>
-        </nav>
+        <header className="shell-bar">
+          <nav aria-label="Workspace">
+            <a href="/app">Dashboard</a>
+            <a href="/app/cases">Cases</a>
+          </nav>
+          <NotificationBell
+            notifications={feed.notifications}
+            unread={feed.unread}
+            label={`For ${actor.label} · ${roleLabel}`}
+            onMarkAll={markAllRead}
+            onMarkRead={markRead}
+          />
+        </header>
         <main id="main">{children}</main>
       </div>
     </>

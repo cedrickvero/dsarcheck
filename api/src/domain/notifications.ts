@@ -10,7 +10,7 @@
  * derivation, not an implementation detail.
  */
 import { sla } from "./sla";
-import type { CaseState, Tone } from "./types";
+import type { CaseStatus, Risk, Tone } from "./types";
 
 export type NotificationKind = "ap" | "hr" | "nw" | "cr" | "ar" | "dl";
 
@@ -32,9 +32,27 @@ export interface DerivedNotification {
   unread: boolean;
 }
 
+/**
+ * The narrow case shape the derivation reads. It is a subset of `CaseState` so both the
+ * full domain type and a minimal server projection satisfy it without any adapter.
+ */
+export interface NotificationCase {
+  id: string;
+  type: string;
+  status: CaseStatus;
+  risk: Risk;
+  name: string;
+  receivedAt: Date;
+  extensionMonths: 0 | 1 | 2;
+  closedAt?: Date | null;
+  systems: { key: string; status: string; outcome?: string | null }[];
+  lastAuditAction?: string;
+  lastAuditReason?: string;
+}
+
 export interface DeriveNotificationsInput {
   role: Role;
-  cases: CaseState[];
+  cases: NotificationCase[];
   now: Date;
   /** Data-source display names, keyed by `sourceKey`. */
   sourceNames: Record<string, string>;

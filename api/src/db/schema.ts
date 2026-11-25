@@ -431,6 +431,9 @@ export const caseSystems = pgTable(
       .notNull()
       .references(() => cases.id),
     sourceKey: text("source_key").notNull(),
+    /** Display name, e.g. "Production database". Stored on the row so a notification can
+     *  name the system without a lookup table. */
+    name: text("name").notNull().default(""),
     status: text("status", { enum: CASE_SYSTEM_STATUSES }).notNull().default("Not started"),
     evidenceCount: integer("evidence_count").notNull().default(0),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -438,5 +441,34 @@ export const caseSystems = pgTable(
   (table) => [
     uniqueIndex("case_systems_case_source_idx").on(table.caseId, table.sourceKey),
     index("case_systems_workspace_status_idx").on(table.workspaceId, table.status),
+  ],
+);
+
+/**
+ * Per-user notification read marks.
+ *
+ * Notifications themselves are DERIVED from case state on every render and never stored;
+ * only the read/unread mark is persisted, keyed by `caseId + kind` per user. Marking read
+ * is an idempotent INSERT (upsert); there is no DELETE because nothing here ever needs one.
+ */
+export const notificationReads = pgTable(
+  "notification_reads",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    notificationKey: text("notification_key").notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("notification_reads_user_key_idx").on(table.userId, table.notificationKey),
+    index("notification_reads_workspace_user_idx").on(table.workspaceId, table.userId),
   ],
 );
