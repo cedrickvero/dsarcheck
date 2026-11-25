@@ -17,6 +17,7 @@ import { listCaseAuditEvents } from "@/server/cases/audit";
 import { listCaseSystems } from "@/server/cases/checklist";
 import { getIdentity } from "@/server/cases/identity";
 import { getApproval } from "@/server/cases/approval";
+import { getErasureOutcomes } from "@/server/cases/erasure";
 import { can } from "@/server/authz";
 import { now } from "@/server/time";
 import { summarise } from "@/server/cases/format";
@@ -27,8 +28,9 @@ import { AuditTab } from "../../_components/audit-tab";
 import { ChecklistTab } from "../../_components/checklist-tab";
 import { IdentityTab } from "../../_components/identity-tab";
 import { ApprovalTab } from "../../_components/approval-tab";
+import { ErasureTab } from "../../_components/erasure-tab";
 import { TabStub } from "../../_components/tab-stub";
-import { setSystemStatus, recordIdentityDecision, selectTemplate, sendForApproval, approveAndClose, requestChanges, rejectCase } from "../actions";
+import { setSystemStatus, recordIdentityDecision, selectTemplate, sendForApproval, approveAndClose, requestChanges, rejectCase, recordErasureOutcome } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -83,9 +85,18 @@ export default async function CaseCockpitPage(props: {
           action={setSystemStatus}
         />
       ) : null}
-      {tab === "collection"
-        ? stub(collectionTitle, `${collectionTitle} is a separate slice and is not implemented in this foundation.`)
-        : null}
+      {tab === "collection" ? (
+        overview.case.requestType === "Erasure" ? (
+          <ErasureTab
+            caseId={overview.case.id}
+            caseNumber={overview.case.caseNumber}
+            view={await getErasureOutcomes(actor, overview.case.id).then((v) => v ?? notFound())}
+            action={recordErasureOutcome}
+          />
+        ) : (
+          stub(collectionTitle, `${collectionTitle} is a separate slice and is not implemented in this foundation.`)
+        )
+      ) : null}
       {tab === "approval" ? (
         <ApprovalTab
           caseId={overview.case.id}

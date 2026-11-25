@@ -21,6 +21,7 @@ import {
   selectTemplate as setTemplate,
   sendForApproval as sendApproval,
 } from "@/server/cases/approval";
+import { recordErasureOutcome as recordOutcome } from "@/server/cases/erasure";
 import { AppError } from "@/server/http/errors";
 
 export interface ActionResult<T> {
@@ -174,6 +175,29 @@ export async function rejectCase(input: {
   try {
     const actor = await requireAuth();
     const result = await rejectClosure(actor, input.caseId, input.reason);
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function recordErasureOutcome(input: {
+  caseId: string;
+  caseNumber: string;
+  sourceKey: string;
+  outcome: string;
+  reason: string;
+  exceptionCategory?: string;
+}): Promise<ActionResult<{ outcome: string }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await recordOutcome(actor, input.caseId, {
+      sourceKey: input.sourceKey,
+      outcome: input.outcome,
+      reason: input.reason,
+      exceptionCategory: input.exceptionCategory,
+    });
     revalidatePath(`/app/cases/${input.caseNumber}`);
     return { ok: true, data: result };
   } catch (error) {

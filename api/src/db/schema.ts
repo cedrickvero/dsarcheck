@@ -459,6 +459,10 @@ export const caseSystems = pgTable(
     reason: text("reason").notNull().default(""),
     /** The exception category when status is "Retained under exception". */
     exceptionCategory: text("exception_category"),
+    /** Erasure outcome (docs/04 CaseSystem.outcome), for erasure cases. */
+    outcome: text("outcome"),
+    /** When the outcome was recorded. */
+    outcomeAt: timestamp("outcome_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

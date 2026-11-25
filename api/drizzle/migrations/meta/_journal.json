@@ -148,6 +148,13 @@
       "when": 1795632305831,
       "tag": "0020_cases_template",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "5",
+      "when": 1795633292847,
+      "tag": "0021_case_systems_outcome",
+      "breakpoints": true
     }
   ]
 }
