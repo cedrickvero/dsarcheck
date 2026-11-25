@@ -266,7 +266,7 @@ export const mfaTotp = pgTable(
     lastUsedStep: bigint("last_used_step", { mode: "number" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("mfa_totp_user_id_idx").on(table.userId)],
+  (table) => [uniqueIndex("mfa_totp_user_id_idx").on(table.userId)],
 );
 
 /**

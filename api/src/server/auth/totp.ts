@@ -16,6 +16,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { mfaTotp } from "@/db/schema";
 import type { Transaction } from "@/db/client";
+import { AppError } from "@/server/http/errors";
 import { decryptSecret, encryptSecret } from "./crypto";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -108,21 +109,40 @@ export function verifyCode(
   return { ok: false, step: null };
 }
 
-/** Begin enrolment: store an encrypted, UNCONFIRMED secret. */
+/** Begin enrolment: store an encrypted, UNCONFIRMED secret. Idempotent - re-enrolling
+ *  replaces an UNCONFIRMED secret (one TOTP row per user), but refuses to touch a confirmed
+ *  one, which would lock the user out of their own authenticator. */
 export async function beginEnrolment(
   tx: Transaction,
   args: { userId: string; orgId: string; workspaceId: string },
 ): Promise<string> {
+  const [existing] = await tx
+    .select({ confirmedAt: mfaTotp.confirmedAt })
+    .from(mfaTotp)
+    .where(eq(mfaTotp.userId, args.userId))
+    .limit(1);
+  if (existing?.confirmedAt) {
+    throw new AppError(409, "already_enrolled", "MFA is already enrolled.");
+  }
+
   const secret = generateSecret();
   const enc = encryptSecret(secret);
-  await tx.insert(mfaTotp).values({
-    userId: args.userId,
-    orgId: args.orgId,
-    workspaceId: args.workspaceId,
+  const values = {
     secretCiphertext: enc.ciphertext,
     secretIv: enc.iv,
     secretTag: enc.tag,
-  });
+  };
+
+  if (existing) {
+    await tx.update(mfaTotp).set(values).where(eq(mfaTotp.userId, args.userId));
+  } else {
+    await tx.insert(mfaTotp).values({
+      userId: args.userId,
+      orgId: args.orgId,
+      workspaceId: args.workspaceId,
+      ...values,
+    });
+  }
   return secret;
 }
 

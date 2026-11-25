@@ -15,6 +15,12 @@ function formatSecret(secret: string): string {
   return secret.replace(/(.{4})/g, "$1 ").trim();
 }
 
+/** The client-side code check, extracted so it is testable (the API would also refuse a
+ *  malformed code, but the form must not send garbage). */
+export function isValidVerificationCode(code: string): boolean {
+  return /^\d{6}$/.test(code.trim());
+}
+
 export function MfaForm({ enrolled, email }: { enrolled: boolean; email: string }) {
   const [secret, setSecret] = useState<string | null>(null);
   const [otpauth, setOtpauth] = useState<string | null>(null);
@@ -48,7 +54,7 @@ export function MfaForm({ enrolled, email }: { enrolled: boolean; email: string 
     event.preventDefault();
     if (busy) return;
     const value = code.trim();
-    if (!/^\d{6}$/.test(value)) {
+    if (!isValidVerificationCode(value)) {
       setError(true);
       return;
     }
@@ -115,7 +121,7 @@ export function MfaForm({ enrolled, email }: { enrolled: boolean; email: string 
         />
       </label>
 
-      <button type="submit" className="button">
+      <button type="submit" className="button button--primary">
         {busy ? "Checking…" : enrolled ? "Verify" : "Confirm and continue"}
       </button>
 

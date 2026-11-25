@@ -43,6 +43,17 @@ describe("T-08 TOTP", () => {
     expect(row!.confirmedAt).toBeNull();
   });
 
+  it("re-enrolling before confirmation overwrites the secret, never a second row", async () => {
+    await systemDb.delete(mfaTotp).where(eq(mfaTotp.userId, userId));
+    const first = await appTx((tx) => beginEnrolment(tx, { userId, orgId, workspaceId: wsId }));
+    const second = await appTx((tx) => beginEnrolment(tx, { userId, orgId, workspaceId: wsId }));
+    expect(second).not.toBe(first);
+    const rows = await systemDb.select({ id: mfaTotp.id }).from(mfaTotp).where(eq(mfaTotp.userId, userId));
+    expect(rows).toHaveLength(1);
+    // the LATEST secret is the one that confirms - the old code read the stale first row
+    expect(await appTx((tx) => confirmEnrolment(tx, userId, codeForStep(second, currentStep())))).toBe(true);
+  });
+
   it("verifies a live code once, then refuses the SAME code (replay defence)", async () => {
     const secret = await appTx(async (tx) => {
       // fresh enrolment for this user

@@ -85,6 +85,18 @@ input:focus-visible, select:focus-visible, summary:focus-visible, tr:focus-withi
   text-decoration: none;
   color: var(--ink);
 }
+.button--primary {
+  background: #0e7c7b;
+  border-color: #0e7c7b;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 8px;
+}
+.button--primary:hover { background: #0a6463; border-color: #0a6463; }
+.button:focus-visible, .button--primary:focus-visible {
+  outline: 2px solid #14919b;
+  outline-offset: 2px;
+}
 
 .case-header dl { display: flex; flex-wrap: wrap; gap: 24px; }
 .case-header dt { font-size: 12px; text-transform: uppercase; color: var(--muted); }

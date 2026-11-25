@@ -7,7 +7,7 @@
 import React from "react";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MfaForm } from "@/app/mfa/_components/mfa-form";
+import { MfaForm, isValidVerificationCode } from "@/app/mfa/_components/mfa-form";
 
 describe("MfaForm", () => {
   it("a first-time user sees setup instructions and a confirm button", () => {
@@ -37,5 +37,19 @@ describe("MfaForm", () => {
   it("shows who the code is for", () => {
     const html = renderToStaticMarkup(<MfaForm enrolled={true} email="sara@lumen.io" />);
     expect(html).toContain("Signed in as sara@lumen.io.");
+  });
+});
+
+describe("isValidVerificationCode", () => {
+  it("accepts exactly six digits", () => {
+    expect(isValidVerificationCode("123456")).toBe(true);
+    expect(isValidVerificationCode(" 123456 ")).toBe(true);
+  });
+
+  it("refuses anything that is not six digits", () => {
+    expect(isValidVerificationCode("12345")).toBe(false);
+    expect(isValidVerificationCode("1234567")).toBe(false);
+    expect(isValidVerificationCode("12345a")).toBe(false);
+    expect(isValidVerificationCode("")).toBe(false);
   });
 });

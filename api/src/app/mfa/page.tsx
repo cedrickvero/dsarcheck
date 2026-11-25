@@ -9,8 +9,7 @@
 import { redirect } from "next/navigation";
 import { withTenant } from "@/db/client";
 import { isEnrolled } from "@/server/auth/totp";
-import { requireAuthForMfaStepAmbient } from "@/server/auth/require-auth";
-import { requiresMfa } from "@/server/authz";
+import { requireAuthForMfaStepAmbient, mfaStepDestination } from "@/server/auth/require-auth";
 import { BRAND } from "@/domain/platform";
 import { MfaForm } from "./_components/mfa-form";
 
@@ -18,14 +17,13 @@ export const dynamic = "force-dynamic";
 
 export default async function MfaPage() {
   const actor = await requireAuthForMfaStepAmbient().catch(() => null);
-  if (!actor) redirect("/");
+  const destination = mfaStepDestination(actor);
+  if (destination) redirect(destination);
 
-  const role = actor.roles[0]!;
-  if (!requiresMfa(role) || actor.mfaSatisfied) redirect("/app");
-
+  // destination is null only for a non-null, MFA-owing session.
   const enrolled = await withTenant(
-    { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
-    (tx) => isEnrolled(tx, actor.userId),
+    { orgId: actor!.orgId, workspaceId: actor!.workspaceId, actorId: actor!.userId },
+    (tx) => isEnrolled(tx, actor!.userId),
   );
 
   return (
@@ -33,7 +31,7 @@ export default async function MfaPage() {
       <section className="auth-card" aria-labelledby="mfa-title">
         <h1 id="mfa-title">{BRAND}</h1>
         <p className="auth-sub">Two-factor verification.</p>
-        <MfaForm enrolled={enrolled} email={actor.label} />
+        <MfaForm enrolled={enrolled} email={actor!.label} />
       </section>
     </main>
   );

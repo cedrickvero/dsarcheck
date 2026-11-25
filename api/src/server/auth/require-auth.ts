@@ -152,6 +152,21 @@ export async function requireAuthForMfaStepAmbient(): Promise<Actor> {
   return requireAuthFromToken(parseSessionCookie(header), { allowMfaOutstanding: true });
 }
 
+/**
+ * The /mfa page routing decision, extracted so it is testable: where a session should go,
+ * or null when the MFA form itself should render. A missing session goes to sign-in; a role
+ * that does not require MFA, or an already-satisfied session, goes straight to /app.
+ */
+export type MfaStepDestination = "/app" | "/";
+export function mfaStepDestination(actor: Actor | null): MfaStepDestination | null {
+  if (!actor) return "/";
+  const role = actor.roles[0];
+  if (!role) return "/";
+  if (!requiresMfa(role)) return "/app";
+  if (actor.mfaSatisfied) return "/app";
+  return null;
+}
+
 export async function requireAuth(): Promise<Actor> {
   let header: string | null = null;
   try {

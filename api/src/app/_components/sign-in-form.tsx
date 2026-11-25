@@ -54,7 +54,7 @@ export function SignInForm({ initiallySent = false }: { initiallySent?: boolean 
         />
       </label>
 
-      <button type="submit" className="button">
+      <button type="submit" className="button button--primary">
         Email me a sign-in link
       </button>
 
