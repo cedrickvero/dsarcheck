@@ -12,6 +12,11 @@ import type { Actor } from "@/server/auth/require-auth";
 
 const RUN = `${Date.now()}`;
 const tag = `t11ag-${RUN}`;
+// Client workspace names are unique per run: the seed-demo and sibling test files also create
+// workspaces named "Kesto Health" / "Fernwood & Co", and constant names let a same-named
+// workspace from another org be picked up by name — the same collision class as the seed bug.
+const kestoName = `Kesto Health ${RUN}`;
+const fernwoodName = `Fernwood & Co ${RUN}`;
 
 let agencyOrgId = ""; let agencyRootWsId = ""; let kestoWsId = ""; let fernwoodWsId = "";
 let directOrgId = ""; let directWsId = "";
@@ -25,8 +30,8 @@ beforeAll(async () => {
     const agencyOrg = (await systemDb.insert(orgs).values({ name: `${tag}-agency`, kind: "agency" }).returning({ id: orgs.id }))[0]!;
     agencyOrgId = agencyOrg.id;
     agencyRootWsId = (await systemDb.insert(workspaces).values({ orgId: agencyOrgId, name: `${tag}-root` }).returning({ id: workspaces.id }))[0]!.id;
-    kestoWsId = (await systemDb.insert(workspaces).values({ orgId: agencyOrgId, name: "Kesto Health" }).returning({ id: workspaces.id }))[0]!.id;
-    fernwoodWsId = (await systemDb.insert(workspaces).values({ orgId: agencyOrgId, name: "Fernwood & Co" }).returning({ id: workspaces.id }))[0]!.id;
+    kestoWsId = (await systemDb.insert(workspaces).values({ orgId: agencyOrgId, name: kestoName }).returning({ id: workspaces.id }))[0]!.id;
+    fernwoodWsId = (await systemDb.insert(workspaces).values({ orgId: agencyOrgId, name: fernwoodName }).returning({ id: workspaces.id }))[0]!.id;
 
     const mkUser = async (orgId: string, wsId: string, role: "owner" | "request_handler" | "workspace_admin", label: string) =>
       (await systemDb.insert(users).values({
@@ -41,13 +46,13 @@ beforeAll(async () => {
     // A workspace_admin who is a member of only ONE client (Kesto) — must not see Fernwood.
     const wsAdminId = await mkUser(agencyOrgId, agencyRootWsId, "workspace_admin", "wsadmin");
     await systemDb.insert(memberships).values([
-      { orgId: agencyOrgId, userId: wsAdminId, workspaceId: kestoWsId, workspaceName: "Kesto Health", role: "workspace_admin" },
+      { orgId: agencyOrgId, userId: wsAdminId, workspaceId: kestoWsId, workspaceName: kestoName, role: "workspace_admin" },
     ]);
     wsAdmin = { userId: wsAdminId, orgId: agencyOrgId, workspaceId: agencyRootWsId, roles: ["workspace_admin"], label: `${tag}-wsadmin`, mfaSatisfied: true };
 
     await systemDb.insert(memberships).values([
-      { orgId: agencyOrgId, userId: maraId, workspaceId: kestoWsId, workspaceName: "Kesto Health", role: "owner" },
-      { orgId: agencyOrgId, userId: maraId, workspaceId: fernwoodWsId, workspaceName: "Fernwood & Co", role: "owner" },
+      { orgId: agencyOrgId, userId: maraId, workspaceId: kestoWsId, workspaceName: kestoName, role: "owner" },
+      { orgId: agencyOrgId, userId: maraId, workspaceId: fernwoodWsId, workspaceName: fernwoodName, role: "owner" },
     ]);
 
     // A couple of cases per client: Kesto awaiting approval; Fernwood one open + one high-risk.
@@ -83,13 +88,13 @@ describe("getAgencyDashboard", () => {
   it("an agency owner sees every client workspace with per-client stats", async () => {
     const dash = await getAgencyDashboard(mara);
     expect(dash).not.toBeNull();
-    expect(dash!.clients.map((c) => c.name)).toEqual(["Fernwood & Co", "Kesto Health"]);
+    expect(dash!.clients.map((c) => c.name)).toEqual([fernwoodName, kestoName]);
     expect(dash!.totalOpen).toBe(3);
     expect(dash!.awaitingApproval).toBe(1);
     expect(dash!.actionRequired).toBe(1);
     expect(dash!.highRisk).toBe(1);
 
-    const fernwood = dash!.clients.find((c) => c.name === "Fernwood & Co")!;
+    const fernwood = dash!.clients.find((c) => c.name === fernwoodName)!;
     expect(fernwood.open).toBe(2);
     expect(fernwood.actionRequired).toBe(1);
     expect(fernwood.highRisk).toBe(1);
@@ -106,6 +111,6 @@ describe("getAgencyDashboard", () => {
   it("scopes the client list to the actor's own memberships", async () => {
     const dash = await getAgencyDashboard(wsAdmin);
     expect(dash).not.toBeNull();
-    expect(dash!.clients.map((c) => c.name)).toEqual(["Kesto Health"]);
+    expect(dash!.clients.map((c) => c.name)).toEqual([kestoName]);
   });
 });

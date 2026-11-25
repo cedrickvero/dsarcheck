@@ -1,4 +1,4 @@
-import { bigint, boolean, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, foreignKey, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 /**
  * Scaffold subset of docs/04-data-model.md.
@@ -35,7 +35,10 @@ export const workspaces = pgTable(
     subdomain: text("subdomain"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("workspaces_org_id_idx").on(table.orgId)],
+  (table) => [
+    index("workspaces_org_id_idx").on(table.orgId),
+    unique("workspaces_id_org_id_unique").on(table.id, table.orgId),
+  ],
 );
 
 /**
@@ -651,5 +654,13 @@ export const memberships = pgTable(
     uniqueIndex("memberships_user_workspace_idx").on(table.userId, table.workspaceId),
     index("memberships_org_idx").on(table.orgId),
     index("memberships_workspace_idx").on(table.workspaceId),
+    // Composite FK (migration 0026): a membership's org_id must equal its
+    // workspace's org_id, so an (org A, workspace of org B) row is structurally
+    // impossible, not merely unlikely.
+    foreignKey({
+      columns: [table.workspaceId, table.orgId],
+      foreignColumns: [workspaces.id, workspaces.orgId],
+      name: "memberships_workspace_org_fk",
+    }),
   ],
 );

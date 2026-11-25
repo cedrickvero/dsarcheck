@@ -39,7 +39,10 @@ async function ensureOrg(name, kind = "direct") {
 }
 
 async function ensureWorkspace(orgId, name, subdomain) {
-  let row = await one(`select id from workspaces where name = $1`, [name]);
+  // Match by name AND org: workspace names are not globally unique, and a name-only lookup
+  // would reuse another org's same-named workspace (which then breaks the memberships
+  // org-consistency FK).
+  let row = await one(`select id from workspaces where org_id = $1 and name = $2`, [orgId, name]);
   if (!row) {
     row = await one(
       `insert into workspaces (org_id, name, subdomain) values ($1,$2,$3) returning id`,

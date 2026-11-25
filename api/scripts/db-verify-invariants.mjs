@@ -252,6 +252,26 @@ try {
     membershipsQual,
   );
 
+  // Migration 0026 ties memberships(workspace_id, org_id) to workspaces(id, org_id): the
+  // composite FK (and its prerequisite unique constraint) make an (org A, workspace of org B)
+  // row structurally impossible. Assert BOTH exist so a dropped or failed apply is caught.
+  const membershipFk = await q(
+    `select conname from pg_constraint where conrelid = 'memberships'::regclass and contype = 'f' and conname = 'memberships_workspace_org_fk'`,
+  );
+  check(
+    membershipFk.length === 1,
+    "memberships composite FK (workspace_id, org_id) -> workspaces(id, org_id) exists",
+    membershipFk.map((r) => r.conname).join(",") || "absent",
+  );
+  const workspacesUnique = await q(
+    `select conname from pg_constraint where conrelid = 'workspaces'::regclass and conname = 'workspaces_id_org_id_unique'`,
+  );
+  check(
+    workspacesUnique.length === 1,
+    "workspaces unique (id, org_id) exists (prerequisite for the memberships composite FK)",
+    workspacesUnique.map((r) => r.conname).join(",") || "absent",
+  );
+
   // 4 · append-only needs BOTH the row trigger and the statement-level guard
   const trg = await q(
     `select t.tgname, t.tgenabled, pg_get_triggerdef(t.oid) as def
