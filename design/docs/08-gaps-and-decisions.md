@@ -139,3 +139,10 @@ Decisions that follow, all recorded in code under `api/src/domain/platform.ts` a
   this slice does not build. No original content is rendered anywhere today, so nothing is
   exposed; when the preview is built it MUST ship with the logged-reason gate, not as a plain
   viewer.
+
+- **The evidence pack stores the document, not the download.** `evidence_packs` snapshots the
+  nine-section document (`content`) and tracks version + draft/final state; the PDF/ZIP render,
+  the "Download" with its 24-hour signed link, and "Share signed link" (expiry + recipient/purpose
+  reason + access logging + 410 on expiry, docs/05 § Evidence pack) belong to the storage slice
+  and are deferred. "Generate/Regenerate" and the approval auto-final are implemented and
+  audited here, so the version history is correct even though the bytes are not yet rendered.
