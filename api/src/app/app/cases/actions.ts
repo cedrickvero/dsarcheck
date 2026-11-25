@@ -13,6 +13,7 @@ import { requireAuth } from "@/server/auth/require-auth";
 import { now } from "@/server/time";
 import { bulkAssignOwner, exportCasesCsv } from "@/server/cases/bulk";
 import { updateSystemStatus } from "@/server/cases/checklist";
+import { recordIdentityDecision as decideIdentity } from "@/server/cases/identity";
 import { AppError } from "@/server/http/errors";
 
 export interface ActionResult<T> {
@@ -72,6 +73,27 @@ export async function setSystemStatus(input: {
     });
     revalidatePath(`/app/cases/${input.caseNumber}`);
     return { ok: true, data: { status: input.status } };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function recordIdentityDecision(input: {
+  caseId: string;
+  caseNumber: string;
+  decision: "approve" | "reject" | "request_info";
+  reason: string;
+  infoOption?: string;
+}): Promise<ActionResult<{ status: string }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await decideIdentity(actor, input.caseId, {
+      decision: input.decision,
+      reason: input.reason,
+      infoOption: input.infoOption,
+    });
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: { status: result.status } };
   } catch (error) {
     return failure(error);
   }

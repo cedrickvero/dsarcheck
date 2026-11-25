@@ -15,6 +15,8 @@ import { requireAuth } from "@/server/auth/require-auth";
 import { getCaseOverview } from "@/server/cases/overview";
 import { listCaseAuditEvents } from "@/server/cases/audit";
 import { listCaseSystems } from "@/server/cases/checklist";
+import { getIdentity } from "@/server/cases/identity";
+import { can } from "@/server/authz";
 import { now } from "@/server/time";
 import { summarise } from "@/server/cases/format";
 import { CaseHeader } from "../../_components/case-header";
@@ -22,8 +24,9 @@ import { CockpitTabs, resolveCockpitTab } from "../../_components/cockpit-tabs";
 import { OverviewTab } from "../../_components/overview-tab";
 import { AuditTab } from "../../_components/audit-tab";
 import { ChecklistTab } from "../../_components/checklist-tab";
+import { IdentityTab } from "../../_components/identity-tab";
 import { TabStub } from "../../_components/tab-stub";
-import { setSystemStatus } from "../actions";
+import { setSystemStatus, recordIdentityDecision } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -60,9 +63,15 @@ export default async function CaseCockpitPage(props: {
 
       {tab === "overview" ? <OverviewTab overview={overview} /> : null}
       {tab === "audit" ? <AuditTab events={await listCaseAuditEvents(actor, overview.case.id)} /> : null}
-      {tab === "identity"
-        ? stub("Identity", "Identity verification is a separate slice and is not implemented in this foundation.")
-        : null}
+      {tab === "identity" ? (
+        <IdentityTab
+          caseId={overview.case.id}
+          caseNumber={overview.case.caseNumber}
+          identity={await getIdentity(actor, overview.case.id).then((i) => i ?? notFound())}
+          canDecide={actor.roles.some((r) => can(r, "approve_identity"))}
+          action={recordIdentityDecision}
+        />
+      ) : null}
       {tab === "checklist" ? (
         <ChecklistTab
           caseId={overview.case.id}

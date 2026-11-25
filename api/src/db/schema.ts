@@ -1,4 +1,4 @@
-import { bigint, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, jsonb, pgTable, primaryKey, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 /**
  * Scaffold subset of docs/04-data-model.md.
@@ -390,6 +390,13 @@ export const cases = pgTable(
     extensionMonths: smallint("extension_months").notNull().default(0),
     /** Low / Medium / High - decided at intake, drives the identity queue and dashboard. */
     risk: text("risk", { enum: RISK_LEVELS }).notNull().default("Low"),
+    /** Identity verification facts (docs/04 Case). The recorded decision is the audit log. */
+    emailConfirmedAt: timestamp("email_confirmed_at", { withTimezone: true }),
+    identifierMatch: text("identifier_match").notNull().default(""),
+    identifierNote: text("identifier_note").notNull().default(""),
+    idDocumentProvided: boolean("id_document_provided").notNull().default(false),
+    identityVerified: boolean("identity_verified").notNull().default(false),
+    infoRequested: boolean("info_requested").notNull().default(false),
     /** Set when the case is closed; null otherwise. The dashboard's "completed this
      *  month" and "average time to closure" both read it. */
     closedAt: timestamp("closed_at", { withTimezone: true }),
