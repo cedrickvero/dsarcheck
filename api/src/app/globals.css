@@ -209,3 +209,13 @@ input:focus-visible, select:focus-visible, summary:focus-visible, tr:focus-withi
 .notif-title { font-size: 14px; font-weight: 500; }
 .notif-sub { font-size: 13px; color: var(--muted); }
 .notif-meta { font-size: 12px; color: var(--muted); }
+
+/* ── Sign-in landing ──────────────────────────────────────────────────────── */
+.auth-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f7f8fa; padding: 24px; }
+.auth-card { width: min(400px, 100%); background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 28px; }
+.auth-card h1 { margin: 0 0 4px; font-size: 24px; }
+.auth-sub { color: var(--muted); margin: 0 0 20px; }
+.sign-in-form { display: flex; flex-direction: column; gap: 12px; }
+.sign-in-form .button { min-height: 44px; }
+.sign-in-status { min-height: 20px; margin: 0; font-size: 14px; }
+.sign-in-form .hint { font-size: 13px; color: var(--muted); margin: 0; }

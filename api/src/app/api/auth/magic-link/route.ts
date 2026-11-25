@@ -38,7 +38,14 @@ export const POST = route(async (req) => {
       workspaceId: null,
     });
 
-    const result = await issueLink(tx, email, new URL(req.url).origin);
+    // The link's origin must be the address the requester actually reached us on, not the
+    // server's listen host: Next reconstructs req.url from `next dev -H 0.0.0.0`, which
+    // yields http://0.0.0.0:3000 - a bind address that is not dialable from the requester's
+    // browser. The Host header is the address they typed, so that is what the link uses.
+    const forwardedProto = req.headers.get("x-forwarded-proto");
+    const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "localhost:3000";
+    const origin = `${forwardedProto === "https" ? "https" : "http"}://${host}`;
+    const result = await issueLink(tx, email, origin);
     if (result.userId && result.orgId && result.workspaceId) {
       await writeAuditEvent(tx, {
         orgId: result.orgId,
