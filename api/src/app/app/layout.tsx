@@ -43,9 +43,9 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
         {mfaRequired ? (
           <StatePanel
             tone="signin"
-            title="Multi-factor verification required"
-            body="Your role requires a verified authenticator code before this workspace can be shown."
-            action={{ href: "/mfa", label: "Verify with a code" }}
+            title="Two-factor verification required"
+            body="Set up two-factor verification first: add this account to your authenticator app, then enter the 6-digit code it shows."
+            action={{ href: "/mfa", label: "Set up two-factor verification" }}
           />
         ) : (
           <StatePanel
