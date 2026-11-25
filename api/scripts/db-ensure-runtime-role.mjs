@@ -63,6 +63,10 @@ try {
   // DELETE is deliberately NOT granted: deletion is an approved, audited action (R4),
   // never a blanket privilege. Guardrail F-1.
   await client.query(`grant select, insert, update on all tables in schema public to ${role}`);
+  // Per-table least-privilege exceptions, applied after the blanket grant so they hold
+  // across every migrate run: notification_reads is insert-only (read marks are idempotent
+  // upserts) and never needs UPDATE.
+  await client.query(`revoke update on notification_reads from ${role}`);
   await client.query(`revoke delete on all tables in schema public from ${role}`);
   await client.query(`revoke truncate, references, trigger on all tables in schema public from ${role}`);
   await client.query(`revoke create on schema public from ${role}`);

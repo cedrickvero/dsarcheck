@@ -43,6 +43,8 @@ export interface Actor {
   userId: string;
   /** Display label written into audit rows (never PII beyond a name). */
   label: string;
+  /** The user's stored display name (users.name); falls back to email when unset. */
+  name?: string;
   orgId: string;
   workspaceId: string;
   roles: Role[];
@@ -103,6 +105,7 @@ export async function requireAuthFromToken(
   return {
     userId: user.id,
     label: user.email,
+    name: user.name || user.email,
     orgId: user.orgId,
     workspaceId: user.workspaceId,
     roles: [role],

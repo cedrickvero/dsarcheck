@@ -9,18 +9,28 @@ import { and, desc, eq } from "drizzle-orm";
 import { auditEvents, cases, caseSystems, notificationReads } from "@/db/schema";
 import { withTenant } from "@/db/client";
 import { can } from "@/server/authz";
-import { ForbiddenError } from "@/server/http/errors";
+import { ForbiddenError, ValidationError } from "@/server/http/errors";
 import type { Actor } from "@/server/auth/require-auth";
 import {
   deriveNotifications,
   type DerivedNotification,
   type NotificationCase,
-  type Role,
 } from "@/domain/notifications";
 
-/** The approver role is the one that signs off; everyone else sees the handler's list. */
-function roleFor(actor: Actor): Role {
-  return actor.roles.some((role) => can(role, "approve_closure")) ? "Approver" : "Handler";
+/**
+ * Which of the two lists an actor sees. The prototype's Handler/Approver toggle maps onto
+ * role names, not the permission matrix: `approver` also holds `view_and_update_cases`, so
+ * deriving "the handler list for anyone who can view cases" would hand an approver the
+ * handler's queue. An owner or workspace admin holds BOTH hats and sees both lists.
+ */
+const HANDLER_ROLES = ["owner", "workspace_admin", "request_handler", "system_owner"];
+const APPROVER_ROLES = ["owner", "workspace_admin", "approver"];
+
+function rolesFor(actor: Actor): { handler: boolean; approver: boolean } {
+  return {
+    handler: actor.roles.some((role) => HANDLER_ROLES.includes(role)),
+    approver: actor.roles.some((role) => APPROVER_ROLES.includes(role)),
+  };
 }
 
 export interface NotificationFeed {
@@ -115,13 +125,17 @@ export async function listNotifications(actor: Actor, now: Date): Promise<Notifi
         lastAuditReason: auditByCaseId.get(row.id)?.reason,
       }));
 
-      const notifications = deriveNotifications({
-        role: roleFor(actor),
-        cases: notificationCases,
-        now,
-        sourceNames,
-        read,
-      });
+      const { handler, approver } = rolesFor(actor);
+      const feeds: DerivedNotification[] = [];
+      if (handler) {
+        feeds.push(...deriveNotifications({ role: "Handler", cases: notificationCases, now, sourceNames, read }));
+      }
+      if (approver) {
+        feeds.push(...deriveNotifications({ role: "Approver", cases: notificationCases, now, sourceNames, read }));
+      }
+      // The two lists do not overlap today, but a future shared kind must not count twice.
+      const seen = new Set<string>();
+      const notifications = feeds.filter((n) => (seen.has(n.id) ? false : (seen.add(n.id), true)));
 
       return { notifications, unread: notifications.filter((n) => n.unread).length };
     },
@@ -130,6 +144,11 @@ export async function listNotifications(actor: Actor, now: Date): Promise<Notifi
 
 /** Mark one notification read. Idempotent: re-marking the same key is a no-op. */
 export async function markNotificationRead(actor: Actor, notificationKey: string): Promise<void> {
+  // A client may send any key; only a key this actor actually sees is a valid mark (L-5).
+  const feed = await listNotifications(actor, new Date());
+  if (!feed.notifications.some((n) => n.id === notificationKey)) {
+    throw new ValidationError("unknown notification");
+  }
   await withTenant(
     { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
     async (tx) => {

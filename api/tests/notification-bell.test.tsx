@@ -51,6 +51,12 @@ describe("NotificationBell", () => {
     expect(html).toContain('aria-expanded="true"');
   });
 
+  it("renders every entry as a REAL link, so middle-click and Enter work natively", () => {
+    const html = renderToStaticMarkup(bell({ defaultOpen: true }));
+    expect(html).toContain('<a class="notif-item" href="/app/cases/DSAR-2026-00418">');
+    expect(html).not.toContain("window.location.assign");
+  });
+
   it("caps the badge at 9+ and drops it entirely at zero", () => {
     expect(renderToStaticMarkup(bell({ unread: 10 }))).toContain("9+");
     expect(renderToStaticMarkup(bell({ unread: 0 }))).not.toContain("badge");
@@ -76,7 +82,7 @@ describe("NotificationBell", () => {
 
   it("shows an empty state with text, never an empty list that looks broken", () => {
     const html = renderToStaticMarkup(bell({ notifications: [], unread: 0, defaultOpen: true }));
-    expect(html).toContain("No notifications.");
+    expect(html).toContain("Nothing needs you right now.");
   });
 
   it("keeps the unread distinction as text on the item, not only styling", () => {

@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 const ROLE_LABELS: Record<string, string> = {
   owner: "Workspace admin",
   workspace_admin: "Workspace admin",
-  approver: "Approver",
+  approver: "Approver / DPO",
   request_handler: "Request handler",
   system_owner: "System owner",
 };
@@ -74,7 +74,7 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
           <NotificationBell
             notifications={feed.notifications}
             unread={feed.unread}
-            label={`For ${actor.label} · ${roleLabel}`}
+            label={`For ${actor.name ?? actor.label} · ${roleLabel}`}
             onMarkAll={markAllRead}
             onMarkRead={markRead}
           />

@@ -12,7 +12,7 @@ import type { Actor } from "@/server/auth/require-auth";
 const RUN = `${Date.now()}`;
 const tag = `t07notif-${RUN}`;
 let orgId = ""; let wsId = "";
-let handler: Actor; let approver: Actor;
+let handler: Actor; let approver: Actor; let owner: Actor;
 const NOW = new Date(Date.UTC(2026, 9, 13, 10, 42));
 
 beforeAll(async () => {
@@ -22,13 +22,14 @@ beforeAll(async () => {
     const ws = (await systemDb.insert(workspaces).values({ orgId, name: `${tag}-ws` }).returning({ id: workspaces.id }))[0]!;
     wsId = ws.id;
 
-    const mkUser = async (name: string, email: string, role: "request_handler" | "approver") =>
+    const mkUser = async (name: string, email: string, role: "request_handler" | "approver" | "owner") =>
       (await systemDb.insert(users).values({
         orgId, workspaceId: wsId, email, emailHash: hashEmail(email), name, role,
       }).returning({ id: users.id }))[0]!.id;
 
     const priyaId = await mkUser("Priya Shah", `${tag}-priya@example.test`, "request_handler");
     await mkUser("Daniel Okafor", `${tag}-daniel@example.test`, "approver");
+    const saraId = await mkUser("Sara Lind", `${tag}-sara@example.test`, "owner");
     handler = {
       userId: priyaId, orgId, workspaceId: wsId, roles: ["request_handler"],
       label: "Priya Shah", mfaSatisfied: true,
@@ -36,6 +37,10 @@ beforeAll(async () => {
     approver = {
       userId: priyaId, orgId, workspaceId: wsId, roles: ["approver"],
       label: "Daniel Okafor", mfaSatisfied: true,
+    };
+    owner = {
+      userId: saraId, orgId, workspaceId: wsId, roles: ["owner"],
+      label: "Sara Lind", mfaSatisfied: true,
     };
 
     const mkCase = async (caseNumber: string, over: {
@@ -80,6 +85,12 @@ describe("listNotifications()", () => {
     expect(kinds).toEqual(["ap", "hr"]);
   });
 
+  it("gives an owner BOTH lists - sign-off and working queue", async () => {
+    const feed = await listNotifications(owner, NOW);
+    const kinds = feed.notifications.map((n) => n.kind).sort();
+    expect(kinds).toEqual(["ap", "ar", "dl", "hr", "nw"]);
+  });
+
   it("names the system in the Action-required notification", async () => {
     const feed = await listNotifications(handler, NOW);
     const ar = feed.notifications.find((n) => n.kind === "ar");
@@ -114,5 +125,15 @@ describe("read marks", () => {
     await markNotificationRead(handler, "DSAR-2026-00418nw");
     const feed = await listNotifications(handler, NOW);
     expect(feed.unread).toBe(0);
+  });
+
+  it("refuses to mark a key the actor is not actually seeing", async () => {
+    await expect(markNotificationRead(handler, "DSAR-2026-00412ap")).rejects.toMatchObject({
+      status: 422,
+    });
+    // A key that exists for the APPROVER is not valid for the handler.
+    await expect(markNotificationRead(handler, "DSAR-2026-99999dl")).rejects.toMatchObject({
+      status: 422,
+    });
   });
 });

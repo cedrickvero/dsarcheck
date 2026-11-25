@@ -48,10 +48,11 @@ export function NotificationBell(props: NotificationBellProps) {
     });
   };
 
-  const openNotification = (id: string, href: string) => {
+  // A real <a href> so middle-click and Enter work natively; the mark-read runs alongside
+  // navigation (fire-and-forget) and the anchor is not prevented from navigating.
+  const openNotification = (id: string) => {
     startTransition(async () => {
       await props.onMarkRead(id);
-      window.location.assign(href);
     });
   };
 
@@ -81,20 +82,20 @@ export function NotificationBell(props: NotificationBellProps) {
           </div>
 
           {props.notifications.length === 0 ? (
-            <p className="notif-empty">No notifications.</p>
+            <p className="notif-empty">Nothing needs you right now.</p>
           ) : (
             <ul className="notif-list">
               {props.notifications.map((n) => (
                 <li key={n.id} className={n.unread ? "unread" : ""}>
-                  <button
-                    type="button"
+                  <a
                     className="notif-item"
-                    onClick={() => openNotification(n.id, `/app/cases/${n.caseId}`)}
+                    href={`/app/cases/${n.caseId}`}
+                    onClick={() => openNotification(n.id)}
                   >
                     <span className="notif-title">{n.title}</span>
                     <span className="notif-sub">{n.sub}</span>
                     <span className="notif-meta">{n.meta}</span>
-                  </button>
+                  </a>
                 </li>
               ))}
             </ul>

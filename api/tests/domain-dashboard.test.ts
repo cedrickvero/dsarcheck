@@ -63,12 +63,13 @@ describe("caseStats()", () => {
     });
   });
 
-  it("averages time-to-closure over closed cases only, to one decimal", () => {
-    // One closure: 3 Oct - 1 Sep = 32 days.
+  it("averages time-to-closure over COMPLETED cases only, to one decimal", () => {
+    // One completion: 3 Oct - 1 Sep = 32 days.
     const stats = caseStats(ROWS, NOW);
     expect(stats.avgClosureDays).toBe(32);
 
-    const two = caseStats(
+    // A Rejected case is closed but is not a completion: it must not drag the average.
+    const withRejected = caseStats(
       [
         ...ROWS,
         row({
@@ -80,8 +81,7 @@ describe("caseStats()", () => {
       ],
       NOW,
     );
-    // 32 and 32 days -> 32.0 (Rejected 4 Oct - 2 Sep = 32).
-    expect(two.avgClosureDays).toBe(32);
+    expect(withRejected.avgClosureDays).toBe(32);
   });
 
   it("reports no average when nothing has closed", () => {
@@ -89,15 +89,32 @@ describe("caseStats()", () => {
     expect(widgetValues(caseStats([row({ caseNumber: "DSAR-2026-00430" })], NOW))[7]).toBe("—");
   });
 
-  it("counts completed-this-month by closedAt, not by status alone", () => {
+  it("counts completed-this-month by closedAt, and Rejected never counts as completed", () => {
     const closedLastMonth = row({
       caseNumber: "DSAR-2026-00388",
       status: "Completed",
       closedAt: new Date(Date.UTC(2026, 8, 20)),
     });
-    const stats = caseStats([closedLastMonth], NOW);
-    expect(stats.completedThisMonth).toBe(0);
-    expect(stats.open).toBe(0);
+    expect(caseStats([closedLastMonth], NOW).completedThisMonth).toBe(0);
+
+    const rejectedThisMonth = row({
+      caseNumber: "DSAR-2026-00387",
+      status: "Rejected",
+      closedAt: new Date(Date.UTC(2026, 9, 5)),
+    });
+    expect(caseStats([rejectedThisMonth], NOW).completedThisMonth).toBe(0);
+  });
+
+  it("buckets 'this month' in the workspace timezone, not the server's UTC", () => {
+    // 31 Oct 23:00 UTC is already 1 Nov in Europe/Berlin (CEST, UTC+2).
+    const late = row({
+      caseNumber: "DSAR-2026-00389",
+      status: "Completed",
+      receivedAt: day(5),
+      closedAt: new Date(Date.UTC(2026, 9, 31, 23, 0)),
+    });
+    expect(caseStats([late], NOW, "UTC").completedThisMonth).toBe(1);
+    expect(caseStats([late], NOW, "Europe/Berlin").completedThisMonth).toBe(0);
   });
 
   it("orders the widget values to match the fixed label list", () => {

@@ -45,7 +45,12 @@ function isOpen(row: DashboardRow, at: Date): boolean {
   }).open;
 }
 
-export function caseStats(rows: readonly DashboardRow[], at: Date): CaseStats {
+/** `YYYY-MM` of a date in a given IANA timezone - the workspace's month, not the server's. */
+export function monthKey(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit" }).format(date);
+}
+
+export function caseStats(rows: readonly DashboardRow[], at: Date, timeZone = "UTC"): CaseStats {
   const open = rows.filter((row) => isOpen(row, at));
   const closed = rows.filter((row) => row.closedAt !== null);
 
@@ -71,15 +76,17 @@ export function caseStats(rows: readonly DashboardRow[], at: Date): CaseStats {
     return left < 0;
   }).length;
 
-  const completedThisMonth = closed.filter((row) => {
-    const closedAt = row.closedAt!;
-    return (
-      closedAt.getUTCFullYear() === at.getUTCFullYear() &&
-      closedAt.getUTCMonth() === at.getUTCMonth()
-    );
-  }).length;
+  // "Completed this month" is about COMPLETED cases: a Rejected case has a closedAt but is
+  // not a completion, so it must not count (guardrail L-1). The month is the workspace's,
+  // not the server's (L-2): a closure at 23:00 UTC on the last day of the month is often
+  // already the first of the next month in Europe/Berlin.
+  const completed = closed.filter((row) => row.status === "Completed");
+  const thisMonth = monthKey(at, timeZone);
+  const completedThisMonth = completed.filter(
+    (row) => monthKey(row.closedAt!, timeZone) === thisMonth,
+  ).length;
 
-  const closures = closed
+  const closures = completed
     .map((row) => (row.closedAt!.getTime() - row.receivedAt.getTime()) / 86_400_000)
     .filter((days) => days >= 0);
 
