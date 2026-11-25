@@ -72,7 +72,19 @@ export const GET = route(async (req) => {
   if (!result) throw new UnauthenticatedError();
 
   const production = process.env.NODE_ENV === "production";
-  const res = NextResponse.json({ ok: true, mfaRequired: result.mfaRequired });
+
+  // A browser click gets a redirect into the app; an API caller gets the JSON. Both set the
+  // session cookie. If the role still owes MFA, /app renders the MFA-required panel instead
+  // of case content - so one destination works for both.
+  const accept = req.headers.get("accept") ?? "";
+  const forwardedProto = req.headers.get("x-forwarded-proto");
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "localhost:3000";
+  const origin = `${forwardedProto === "https" ? "https" : "http"}://${host}`;
+
+  const res = accept.includes("text/html")
+    ? NextResponse.redirect(new URL("/app", origin), 303)
+    : NextResponse.json({ ok: true, mfaRequired: result.mfaRequired });
+
   res.cookies.set(sessionCookieName(), result.created.token, {
     httpOnly: true,
     secure: production,
