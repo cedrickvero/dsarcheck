@@ -382,6 +382,10 @@ export const cases = pgTable(
     ownerId: uuid("owner_id").references(() => users.id),
     requesterName: text("requester_name").notNull().default(""),
     requesterEmail: text("requester_email").notNull().default(""),
+    /** The request text as the requester wrote it (quoted in the Overview "Request" card). */
+    details: text("details").notNull().default(""),
+    /** The account identifier the requester gave (customer ID, account email, phone...). */
+    identifier: text("identifier").notNull().default(""),
     /** 0, 1 or 2 - the statutory extension the workspace has applied. */
     extensionMonths: smallint("extension_months").notNull().default(0),
     /** Low / Medium / High - decided at intake, drives the identity queue and dashboard. */

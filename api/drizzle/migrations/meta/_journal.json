@@ -120,6 +120,13 @@
       "when": 1795601991151,
       "tag": "0016_mfa_totp_unique_user",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "5",
+      "when": 1795602590915,
+      "tag": "0017_cases_details_identifier",
+      "breakpoints": true
     }
   ]
 }
