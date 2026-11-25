@@ -23,7 +23,21 @@ import { enforceRateLimit, bucketKey } from "@/server/auth/rate-limit";
 const GENERIC = { ok: true, message: "If that address has an account, a sign-in link is on its way." };
 
 export const POST = route(async (req) => {
-  const body = (await req.json().catch(() => ({}))) as { email?: unknown };
+  // The origin must be the address the requester actually reached us on, not the server's
+  // listen host: Next reconstructs req.url from `next dev -H 0.0.0.0`, which yields
+  // http://0.0.0.0:3000 - a bind address that is not dialable from the requester's browser.
+  const forwardedProto = req.headers.get("x-forwarded-proto");
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "localhost:3000";
+  const origin = `${forwardedProto === "https" ? "https" : "http"}://${host}`;
+
+  // Accept both a JSON API call and a plain HTML form post (the sign-in page posts without
+  // JavaScript as a fallback, so the request can never be gated on hydration succeeding).
+  const contentType = req.headers.get("content-type") ?? "";
+  const isFormPost = contentType.includes("application/x-www-form-urlencoded");
+  const body = isFormPost
+    ? Object.fromEntries(new URLSearchParams(await req.text().catch(() => "")))
+    : ((await req.json().catch(() => ({}))) as { email?: unknown });
+
   if (typeof body.email !== "string" || body.email.trim() === "") {
     throw new ValidationError("an email address is required");
   }
@@ -38,13 +52,6 @@ export const POST = route(async (req) => {
       workspaceId: null,
     });
 
-    // The link's origin must be the address the requester actually reached us on, not the
-    // server's listen host: Next reconstructs req.url from `next dev -H 0.0.0.0`, which
-    // yields http://0.0.0.0:3000 - a bind address that is not dialable from the requester's
-    // browser. The Host header is the address they typed, so that is what the link uses.
-    const forwardedProto = req.headers.get("x-forwarded-proto");
-    const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "localhost:3000";
-    const origin = `${forwardedProto === "https" ? "https" : "http"}://${host}`;
     const result = await issueLink(tx, email, origin);
     if (result.userId && result.orgId && result.workspaceId) {
       await writeAuditEvent(tx, {
@@ -70,6 +77,12 @@ export const POST = route(async (req) => {
   if (issued.url) {
     const { sendSignInLink } = await import("@/server/auth/mailer");
     await sendSignInLink(email, issued.url).catch(() => undefined);
+  }
+
+  // A browser form gets a redirect to the "check your email" state; an API caller gets the
+  // generic JSON. Both paths leak the same amount: nothing.
+  if (isFormPost) {
+    return NextResponse.redirect(new URL("/?sent=1", origin), 303);
   }
   return NextResponse.json(GENERIC, { status: 200 });
 });
