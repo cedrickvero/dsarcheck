@@ -97,3 +97,10 @@ Decisions that follow, all recorded in code under `api/src/domain/platform.ts` a
 - **Reserved names include the infrastructure**: `www admin api app portals status support mail cdn staging …` plus the product's own words, so no tenant can shadow a surface or imply an endorsement.
 - **What the application cannot do, and must not pretend to:** the apex and `*.dsarcheck.com` need SEPARATE certificates (a wildcard never covers its apex), and customer-owned domains need on-demand certificate issuance after the TXT check passes. Certificate provisioning and DNS remain deployment-platform responsibilities; the app's job is to refuse to classify an unverified custom domain as a tenant, and to expose which domains are eligible.
 - **Brand substitution is deliberate**: the handoff's copy says `{slug}.privacyspace.com`; the product says `{slug}.dsarcheck.com`. This is the ONLY permitted divergence in copy, and `api/tests/domain-parity.test.ts` normalises the domain before comparing against the reference.
+
+- **Checklist status changes always require a reason**, including "In progress" and
+  "Completed" - the prototype's `setSys` applies those without one. This is stricter than
+  the handoff and deliberate: the reason is the audit row's "why", and the audit invariant
+  (every sensitive action records a reason) overrides the prototype's convenience. The
+  reason is also stored on the system row for the outcome states. Recorded here so the
+  divergence is a decision, not an accident.

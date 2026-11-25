@@ -34,6 +34,16 @@ export const CHECKLIST_STATUSES = [
 ] as const;
 export type ChecklistStatus = (typeof CHECKLIST_STATUSES)[number];
 
+/** The statuses a user may SET. "Not started" is an initial state, not a target: docs/03 E3
+ *  lists the five transition buttons and excludes it, so a system cannot be moved back. */
+export const SETTABLE_STATUSES = [
+  "In progress",
+  "Completed",
+  "Not found",
+  "Action required",
+  "Retained under exception",
+] as const;
+
 const MIN_REASON = 3;
 
 export interface ChecklistSystemRow {
@@ -104,7 +114,7 @@ export async function updateSystemStatus(
   assertMayWorkCases(actor);
 
   const status = input.status as ChecklistStatus;
-  if (!CHECKLIST_STATUSES.includes(status)) {
+  if (!(SETTABLE_STATUSES as readonly string[]).includes(status)) {
     throw new ValidationError("unknown system status");
   }
   const reason = (input.reason ?? "").trim();

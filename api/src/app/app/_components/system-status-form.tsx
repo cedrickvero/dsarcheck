@@ -7,8 +7,7 @@
  */
 import { useState } from "react";
 
-const STATUSES = [
-  "Not started",
+const SETTABLE_STATUSES = [
   "In progress",
   "Completed",
   "Not found",
@@ -71,7 +70,12 @@ export function SystemStatusForm(props: {
         onChange={(event) => setStatus(event.target.value)}
         aria-label={`Status for ${props.sourceKey}`}
       >
-        {STATUSES.map((s) => (
+        {status === "Not started" ? (
+          <option value="Not started" disabled>
+            Not started
+          </option>
+        ) : null}
+        {SETTABLE_STATUSES.map((s) => (
           <option key={s} value={s}>
             {s}
           </option>

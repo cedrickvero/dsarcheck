@@ -30,6 +30,8 @@ describe("ChecklistTab", () => {
     expect(html).toContain("2 files");
     expect(html).toContain("None");
     expect(html).toContain("tickets attached");
+    expect(html).toContain("20 Oct 2026");
+    expect(html).toContain("Completed");
   });
 
   it("has an empty state", () => {
@@ -46,9 +48,10 @@ describe("SystemStatusForm", () => {
     exceptionCategories: ["A", "B"],
   };
 
-  it("offers all six statuses and a reason field", () => {
+  it("offers the five settable statuses and a reason field", () => {
     const html = renderToStaticMarkup(<SystemStatusForm {...base} currentStatus="In progress" action={noop} />);
-    expect(html).toContain("Not started");
+    expect(html).not.toContain("Not started");
+    expect(html).toContain("In progress");
     expect(html).toContain("Completed");
     expect(html).toContain("Action required");
     expect(html).toContain("Reason (required)");
@@ -60,5 +63,13 @@ describe("SystemStatusForm", () => {
     expect(retained).toContain("Exception category");
     const inProgress = renderToStaticMarkup(<SystemStatusForm {...base} currentStatus="In progress" action={noop} />);
     expect(inProgress).not.toContain("Exception category");
+  });
+
+  it("does not offer Not started as a target, only as the current (disabled) value", () => {
+    const notStarted = renderToStaticMarkup(<SystemStatusForm {...base} currentStatus="Not started" action={noop} />);
+    expect(notStarted).toContain("Not started");
+    expect(notStarted).toContain("disabled");
+    const inProgress = renderToStaticMarkup(<SystemStatusForm {...base} currentStatus="In progress" action={noop} />);
+    expect(inProgress).not.toContain("Not started");
   });
 });

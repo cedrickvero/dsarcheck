@@ -106,6 +106,10 @@ describe("updateSystemStatus", () => {
     await expect(updateSystemStatus(actor, caseId, { sourceKey: "db", status: "In progress", reason: "  " })).rejects.toThrow("a reason is required");
   });
 
+  it("refuses to move a system back to Not started", async () => {
+    await expect(updateSystemStatus(actor, caseId, { sourceKey: "db", status: "Not started", reason: "reset" })).rejects.toThrow("unknown system status");
+  });
+
   it("treats a cross-tenant system as unknown (RLS hides it)", async () => {
     await expect(
       updateSystemStatus(actor, otherCaseId, { sourceKey: "db", status: "In progress", reason: "should not work" }),
