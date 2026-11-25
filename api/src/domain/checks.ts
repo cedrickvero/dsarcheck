@@ -124,7 +124,7 @@ export function checks(
       label: "Redaction reviewed",
       satisfied:
         input.tokens.length === 0 ||
-        (input.redactionReview === "done" && input.finalExportDone),
+        (unredacted === 0 && input.redactionReview === "done" && input.finalExportDone),
       detail:
         input.tokens.length === 0
           ? "No files require redaction"

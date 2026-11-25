@@ -132,3 +132,10 @@ Decisions that follow, all recorded in code under `api/src/domain/platform.ts` a
   (a new `case_files` row whose `is_redacted_export` is set, original v1 untouched) belongs to
   the file-upload/storage slice, which is deferred. The rule "export only after review done"
   is enforced here regardless, so the state can never claim an export exists before review.
+
+- **The E4a file-preview control is deferred to the storage slice.** "Original v1 ·
+  access-controlled", the blurred preview, and "Open original · logged" (which needs a
+  per-viewer logged-reason gate, docs/03 E4a / docs/05) require the file-bytes pipeline that
+  this slice does not build. No original content is rendered anywhere today, so nothing is
+  exposed; when the preview is built it MUST ship with the logged-reason gate, not as a plain
+  viewer.

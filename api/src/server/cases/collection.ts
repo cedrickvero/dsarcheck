@@ -57,6 +57,13 @@ function requirePermission(actor: Actor, permission: Parameters<typeof can>[1], 
   }
 }
 
+/** The collection/redaction state machine is for non-erasure cases only (docs/03 E4a). */
+function assertCollectionCase(requestType: string): void {
+  if (requestType === "Erasure") {
+    throw new ValidationError("erasure cases use erasure outcomes, not collection");
+  }
+}
+
 export async function getCollection(actor: Actor, caseId: string): Promise<CollectionView | null> {
   return withTenant(
     { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
@@ -129,6 +136,14 @@ export async function recordRedaction(
     async (tx) => {
       requirePermission(actor, "view_and_update_cases", "Your role does not permit redacting data.");
 
+      const [caseRow] = await tx
+        .select({ requestType: cases.requestType })
+        .from(cases)
+        .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))
+        .limit(1);
+      if (!caseRow) throw new ValidationError("unknown case");
+      assertCollectionCase(caseRow.requestType);
+
       const [token] = await tx
         .select()
         .from(redactionTokens)
@@ -187,11 +202,12 @@ export async function requestRedactionReview(actor: Actor, caseId: string): Prom
       requirePermission(actor, "view_and_update_cases", "Your role does not permit requesting a redaction review.");
 
       const [row] = await tx
-        .select({ id: cases.id, review: cases.redactionReview })
+        .select({ id: cases.id, review: cases.redactionReview, requestType: cases.requestType })
         .from(cases)
         .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))
         .limit(1);
       if (!row) throw new ValidationError("unknown case");
+      assertCollectionCase(row.requestType);
       if (row.review !== "none") {
         throw new ValidationError("a review is already in progress or complete");
       }
@@ -232,11 +248,12 @@ export async function completeRedactionReview(
       requirePermission(actor, "complete_redaction_review", "Only an approver can complete the redaction review.");
 
       const [row] = await tx
-        .select({ id: cases.id, review: cases.redactionReview })
+        .select({ id: cases.id, review: cases.redactionReview, requestType: cases.requestType })
         .from(cases)
         .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))
         .limit(1);
       if (!row) throw new ValidationError("unknown case");
+      assertCollectionCase(row.requestType);
       if (row.review !== "requested") {
         throw new ValidationError("no review is awaiting completion");
       }
@@ -277,11 +294,12 @@ export async function markFinalExportDone(actor: Actor, caseId: string): Promise
       requirePermission(actor, "export_evidence_packs", "Your role does not permit generating the final export.");
 
       const [row] = await tx
-        .select({ id: cases.id, review: cases.redactionReview })
+        .select({ id: cases.id, review: cases.redactionReview, requestType: cases.requestType })
         .from(cases)
         .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))
         .limit(1);
       if (!row) throw new ValidationError("unknown case");
+      assertCollectionCase(row.requestType);
       if (row.review !== "done") {
         throw new ValidationError("the redaction review must be completed before the export");
       }

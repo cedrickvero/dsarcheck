@@ -148,3 +148,13 @@ describe("tenant isolation", () => {
     await expect(requestRedactionReview(handler, otherCaseId)).rejects.toThrow("unknown case");
   });
 });
+
+describe("request-type guard", () => {
+  it("rejects an erasure case (erasure cases use erasure outcomes)", async () => {
+    const caseId = (await systemDb.insert(cases).values({
+      orgId, workspaceId: wsId, caseNumber: num(), requestType: "Erasure", status: "In progress", priority: "Normal",
+      receivedAt: new Date("2026-09-24T00:00:00Z"), statutoryDueAt: new Date("2026-10-24T00:00:00Z"),
+    }).returning({ id: cases.id }))[0]!.id;
+    await expect(requestRedactionReview(handler, caseId)).rejects.toThrow("erasure cases use erasure outcomes");
+  });
+});

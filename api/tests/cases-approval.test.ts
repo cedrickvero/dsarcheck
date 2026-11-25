@@ -197,6 +197,23 @@ describe("redaction check", () => {
     expect(view!.checks.allPass).toBe(false);
     expect(view!.checks.blockers.some((b) => b.id === "red")).toBe(true);
   });
+
+  it("an unredacted flagged token blocks closure even after review done and export generated", async () => {
+    const id = await mkCase({ identityVerified: true, template: "Access — copy" });
+    await systemDb.insert(caseSystems).values([
+      { orgId, workspaceId: wsId, caseId: id, sourceKey: "db", name: "Production database", status: "Completed", evidenceCount: 1 },
+    ]);
+    const fileId = (await systemDb.insert(caseFiles).values({
+      orgId, workspaceId: wsId, caseId: id, sourceKey: "Zendesk", name: "ticket.pdf", type: "PDF", needsRedaction: true,
+    }).returning({ id: caseFiles.id }))[0]!.id;
+    await systemDb.insert(redactionTokens).values([
+      { orgId, workspaceId: wsId, caseId: id, fileId, category: "Email", snippet: "a@b…", flagged: true, redacted: false },
+    ]);
+    await systemDb.update(cases).set({ redactionReview: "done", finalExportDone: true }).where(eq(cases.id, id));
+    const view = await getApproval(handler, id);
+    expect(view!.checks.allPass).toBe(false);
+    expect(view!.checks.blockers.some((b) => b.id === "red")).toBe(true);
+  });
 });
 
 describe("tenant isolation", () => {
