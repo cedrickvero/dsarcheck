@@ -5,6 +5,7 @@
  */
 import type { EvidenceView } from "@/server/cases/evidence";
 import type { EvidencePackData } from "@/domain/evidence";
+import { formatDateTime } from "@/server/cases/format";
 import { GeneratePackButton, type GeneratePackAction } from "./generate-pack-button";
 
 export function EvidenceTab(props: {
@@ -32,7 +33,9 @@ export function EvidenceTab(props: {
       ) : null}
 
       {v.versions.length === 0 ? (
-        <p className="muted">No evidence pack generated yet.</p>
+        <p className="muted">
+          No pack generated yet. A draft can be generated at any time; the final pack is created on approval.
+        </p>
       ) : (
         <>
           <h3>Versions</h3>
@@ -43,6 +46,7 @@ export function EvidenceTab(props: {
                 <span className="status" data-status={ver.draft ? "In progress" : "Completed"}>
                   {ver.draft ? "Draft" : "Final"}
                 </span>
+                <span className="system-sub">{formatDateTime(ver.generatedAt)}</span>
               </li>
             ))}
           </ul>

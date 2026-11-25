@@ -47,7 +47,7 @@ describe("EvidenceTab", () => {
   it("shows the empty state when no version exists", () => {
     const empty = { ...view(), versions: [], latest: null };
     const html = renderToStaticMarkup(<EvidenceTab caseId="c1" caseNumber="X" view={empty} canGenerate={true} action={noop} />);
-    expect(html).toContain("No evidence pack generated yet.");
+    expect(html).toContain("No pack generated yet. A draft can be generated at any time; the final pack is created on approval.");
     expect(html).toContain("Generate evidence pack");
   });
 });
