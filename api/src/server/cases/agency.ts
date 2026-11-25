@@ -46,10 +46,18 @@ type StatRow = {
   high_risk: number;
   completed_month: number;
   closed_count: number;
-  closure_days_total: number | null;
+  // Postgres `numeric` (from sum(EXTRACT(EPOCH...))) surfaces as a STRING via the pg
+  // driver; coerced to number in workspaceStats's return shape (see WorkspaceStats).
+  closure_days_total: string | null;
 };
 
-async function workspaceStats(tx: Transaction, workspaceId: string): Promise<StatRow & { nextDeadline: AgencyClientRow["nextDeadline"] }> {
+/** The coerced per-workspace stats: raw SQL values are mapped to JS numbers at the boundary. */
+type WorkspaceStats = Omit<StatRow, "closure_days_total"> & {
+  closure_days_total: number | null;
+  nextDeadline: AgencyClientRow["nextDeadline"];
+};
+
+async function workspaceStats(tx: Transaction, workspaceId: string): Promise<WorkspaceStats> {
   await tx.execute(sql`select set_config('app.workspace_id', ${workspaceId}, true)`);
 
   const stats = await tx.execute<StatRow>(sql`
@@ -84,7 +92,7 @@ async function workspaceStats(tx: Transaction, workspaceId: string): Promise<Sta
     high_risk: s?.high_risk ?? 0,
     completed_month: s?.completed_month ?? 0,
     closed_count: s?.closed_count ?? 0,
-    closure_days_total: s?.closure_days_total ?? null,
+    closure_days_total: s?.closure_days_total == null ? null : Number(s.closure_days_total),
     nextDeadline: n && n.statutory_due_at ? { caseNumber: n.case_number, dueAt: new Date(n.statutory_due_at) } : null,
   };
 }

@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import qrcodeModule from "@/lib/qrcode";
 
 // jsQR (MIT) is a QR DECODER - the inverse of the vendored encoder. Using it here proves
 // the encoder emits a scannable matrix that decodes back to the exact input.
-const require = createRequire(import.meta.url);
-const jsQR = require("./fixtures/jsqr.js") as (
+// The bundle is UMD; its top-level `this` is undefined under vitest's transform, so run it
+// in a Function scope with an explicit `this` and read the value off the browser-global branch.
+const jsQRSrc = readFileSync(new URL("./fixtures/jsqr.js", import.meta.url), "utf8");
+const jsQR = new Function(`${jsQRSrc}\n;return this.jsQR;`).call({}) as (
   data: Uint8ClampedArray,
   w: number,
   h: number,
