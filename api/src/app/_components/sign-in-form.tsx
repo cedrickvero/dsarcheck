@@ -67,8 +67,10 @@ export function SignInForm({ initiallySent = false }: { initiallySent?: boolean 
       </p>
 
       <p className="hint">
-        Development build: the email is delivered to MailHog, not a real inbox — open the
-        MailHog web UI to read it.
+        Development build — sign in with a seeded demo account:{" "}
+        <code>priya@lumen.io</code>, <code>daniel@lumen.io</code> or{" "}
+        <code>sara@lumen.io</code>. The link is delivered to MailHog (this host, port 8025),
+        not a real inbox.
       </p>
     </form>
   );
