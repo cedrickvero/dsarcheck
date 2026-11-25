@@ -189,6 +189,7 @@ export async function recordErasureOutcome(input: {
   outcome: string;
   reason: string;
   exceptionCategory?: string;
+  hasOutcomeRecord?: boolean;
 }): Promise<ActionResult<{ outcome: string }>> {
   try {
     const actor = await requireAuth();
@@ -197,6 +198,7 @@ export async function recordErasureOutcome(input: {
       outcome: input.outcome,
       reason: input.reason,
       exceptionCategory: input.exceptionCategory,
+      hasOutcomeRecord: input.hasOutcomeRecord,
     });
     revalidatePath(`/app/cases/${input.caseNumber}`);
     return { ok: true, data: result };

@@ -104,3 +104,18 @@ Decisions that follow, all recorded in code under `api/src/domain/platform.ts` a
   (every sensitive action records a reason) overrides the prototype's convenience. The
   reason is also stored on the system row for the outcome states. Recorded here so the
   divergence is a decision, not an accident.
+
+- **Erasure outcomes require evidence or an attached outcome record.** The R4 contract's
+  `evidenceRequirementSatisfied` rule is enforced at the case layer: deleted / suppressed /
+  retained-under-exception / not-found each need either a stored evidence ref or the
+  handler's "Outcome record attached" confirmation; only "Action required" is exempt. This
+  is stricter than the prototype (which records an outcome with no evidence gate) and is
+  deliberate — it matches the R4 erasure policy, which is the gate-approved authority.
+
+- **The requester-never-decides invariant is consumed but not yet exercisable at the case
+  layer.** `assertRequesterIsNotTheDecider` is called with `requesterActorId: null` because
+  the current model stores the requester as an external email (`cases.requester_email`), with
+  no linkage from a requester to a workspace actor. The invariant is retained as a
+  placeholder so that the day a requester↔actor link exists, the rule fires without a code
+  change; until then it is a no-op, not a protection gap (an external requester cannot hold
+  a workspace role today).
