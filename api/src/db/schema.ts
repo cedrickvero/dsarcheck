@@ -620,3 +620,36 @@ export const evidencePacks = pgTable(
     index("evidence_packs_workspace_case_idx").on(table.workspaceId, table.caseId),
   ],
 );
+
+/**
+ * A user's access to a workspace (docs/04 Membership). One row per (user, workspace) — the
+ * multi-workspace model the agency dashboard and the future workspace switcher need. RLS is
+ * ORG-scoped (a user sees their org's roster, like a team directory), NOT workspace-scoped,
+ * because listing the org's client workspaces is the point. `workspace_name` is denormalised
+ * from `workspaces` because that table's RLS hides sibling workspaces, and the agency view
+ * must name clients it does not currently have selected.
+ */
+export const memberships = pgTable(
+  "memberships",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    workspaceName: text("workspace_name").notNull().default(""),
+    role: text("role", { enum: ["owner", "approver", "workspace_admin", "request_handler", "system_owner"] }).notNull(),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("memberships_user_workspace_idx").on(table.userId, table.workspaceId),
+    index("memberships_org_idx").on(table.orgId),
+    index("memberships_workspace_idx").on(table.workspaceId),
+  ],
+);

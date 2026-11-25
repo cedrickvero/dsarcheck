@@ -9,7 +9,9 @@
 import { requireAuth } from "@/server/auth/require-auth";
 import { now } from "@/server/time";
 import { dashboardRows } from "@/server/cases/dashboard";
+import { getAgencyDashboard } from "@/server/cases/agency";
 import { workspaceNameFor } from "@/server/cases/query";
+import { AgencyDashboard } from "./_components/agency-dashboard";
 import { sla } from "@/domain/sla";
 import {
   attentionItems,
@@ -23,6 +25,10 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const actor = await requireAuth();
   const at = now();
+
+  // An agency owner/admin gets the cross-client view; everyone else gets the direct one.
+  const agency = await getAgencyDashboard(actor);
+  if (agency) return <AgencyDashboard data={agency} at={at} />;
 
   const [{ rows }, client] = await Promise.all([
     dashboardRows(actor),

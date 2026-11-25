@@ -57,6 +57,7 @@ export async function withTenant<T>(
   fn: (tx: Transaction) => Promise<T>,
 ): Promise<T> {
   return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.org_id', ${ctx.orgId}, true)`);
     await tx.execute(sql`select set_config('app.workspace_id', ${ctx.workspaceId}, true)`);
     await tx.execute(sql`select set_config('app.actor_id', ${ctx.actorId}, true)`);
     await tx.execute(sql`set local role app_tenant`);

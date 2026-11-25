@@ -176,6 +176,13 @@
       "when": 1795640511801,
       "tag": "0024_evidence_packs",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1795643643143,
+      "tag": "0025_memberships",
+      "breakpoints": true
     }
   ]
 }

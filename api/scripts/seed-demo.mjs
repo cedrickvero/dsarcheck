@@ -100,6 +100,15 @@ async function ensureFile(wsId, orgId, caseId, sourceKey, name, type, sizeBytes,
   );
 }
 
+async function ensureMembership(orgId, userId, workspaceId, workspaceName, role) {
+  await client.query(
+    `insert into memberships (org_id, user_id, workspace_id, workspace_name, role, active)
+     values ($1,$2,$3,$4,$5,true)
+     on conflict (user_id, workspace_id) do update set workspace_name = excluded.workspace_name, role = excluded.role, active = true`,
+    [orgId, userId, workspaceId, workspaceName, role],
+  );
+}
+
 const day = (n) => new Date(Date.now() - n * 86_400_000);
 const plusDays = (d, n) => new Date(d.getTime() + n * 86_400_000);
 
@@ -173,6 +182,35 @@ if (tokenCount.n === 0) {
     );
   }
 }
+
+// ── Agency org (Northlight Privacy) + client workspaces + memberships ──
+const northOrgId = await ensureOrg("Northlight Privacy", "agency");
+const northRootWsId = await ensureWorkspace(northOrgId, "Northlight Privacy", "northlight");
+const kestoWsId = await ensureWorkspace(northOrgId, "Kesto Health", "kesto-health");
+const fernwoodWsId = await ensureWorkspace(northOrgId, "Fernwood & Co", "fernwood");
+const maraId = await ensureUser(northRootWsId, northOrgId, "Mara Voss", "mara@northlight.io", "owner");
+// Mara (agency owner) is a member of both client workspaces.
+await ensureMembership(northOrgId, maraId, kestoWsId, "Kesto Health", "owner");
+await ensureMembership(northOrgId, maraId, fernwoodWsId, "Fernwood & Co", "owner");
+
+// A couple of cases per client so the agency KPIs have data.
+const kestoCase = await ensureCase(kestoWsId, northOrgId, "DSAR-2026-00061", {
+  requestType: "Access", status: "Awaiting approval", risk: "Low",
+  receivedAt: day(46), dueAt: plusDays(day(46), 30),
+  ownerId: maraId, requesterName: "Liisa Korhonen", requesterEmail: "liisa.korhonen@elisa.fi",
+});
+await ensureSystem(kestoWsId, northOrgId, kestoCase, "pg", "Production database", "Completed");
+const fernwoodCase = await ensureCase(fernwoodWsId, northOrgId, "DSAR-2026-00117", {
+  requestType: "Access", status: "In progress", risk: "Low",
+  receivedAt: day(40), dueAt: plusDays(day(40), 30),
+  ownerId: maraId, requesterName: "Ruth Abernathy", requesterEmail: "ruth.a@btinternet.com",
+});
+await ensureSystem(fernwoodWsId, northOrgId, fernwoodCase, "mixpanel", "Mixpanel", "Action required");
+const fernwoodHigh = await ensureCase(fernwoodWsId, northOrgId, "DSAR-2026-00119", {
+  requestType: "Erasure", status: "Verifying", risk: "High",
+  receivedAt: day(12), dueAt: plusDays(day(12), 30),
+  ownerId: null, requesterName: "Pablo Ortega", requesterEmail: "p.ortega@telefonica.net",
+});
 
 console.log("Seed complete.");
 console.log("  Sign-in user: priya@lumen.io (Request handler)");
