@@ -17,7 +17,7 @@ import { listCaseAuditEvents } from "@/server/cases/audit";
 import { now } from "@/server/time";
 import { summarise } from "@/server/cases/format";
 import { CaseHeader } from "../../_components/case-header";
-import { COCKPIT_TABS, CockpitTabs, type CockpitTab } from "../../_components/cockpit-tabs";
+import { CockpitTabs, resolveCockpitTab } from "../../_components/cockpit-tabs";
 import { OverviewTab } from "../../_components/overview-tab";
 import { AuditTab } from "../../_components/audit-tab";
 import { TabStub } from "../../_components/tab-stub";
@@ -36,8 +36,8 @@ export default async function CaseCockpitPage(props: {
   const overview = await getCaseOverview(actor, number);
   if (!overview) notFound();
 
-  const raw = typeof sp.tab === "string" ? sp.tab : "overview";
-  const tab: CockpitTab = COCKPIT_TABS.includes(raw as CockpitTab) ? (raw as CockpitTab) : "overview";
+  const raw = typeof sp.tab === "string" ? sp.tab : undefined;
+  const tab = resolveCockpitTab(raw);
 
   const collectionTitle = overview.case.requestType === "Erasure" ? "Erasure outcomes" : "Collection & redaction";
   const stub = (title: string, body: string) => <TabStub title={title} body={body} />;

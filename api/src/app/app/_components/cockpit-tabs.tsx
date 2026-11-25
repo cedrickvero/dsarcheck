@@ -17,6 +17,14 @@ export const COCKPIT_TABS: readonly CockpitTab[] = [
   "audit",
 ];
 
+/** The ?tab= decision, extracted so it is testable: a known tab passes through, anything
+ *  else (unknown, missing, array) falls back to overview. */
+export function resolveCockpitTab(raw: string | undefined): CockpitTab {
+  return raw !== undefined && COCKPIT_TABS.includes(raw as CockpitTab)
+    ? (raw as CockpitTab)
+    : "overview";
+}
+
 /** The tab bar. Links (not buttons) so middle-click and back/forward work, and the active
  *  tab is in the URL per docs/03. */
 export function CockpitTabs(props: {

@@ -6,7 +6,7 @@
 import React from "react";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CockpitTabs } from "@/app/app/_components/cockpit-tabs";
+import { CockpitTabs, resolveCockpitTab } from "@/app/app/_components/cockpit-tabs";
 import { OverviewTab } from "@/app/app/_components/overview-tab";
 import { AuditTab } from "@/app/app/_components/audit-tab";
 import { TabStub } from "@/app/app/_components/tab-stub";
@@ -49,6 +49,20 @@ describe("CockpitTabs", () => {
     );
     expect(html).toContain("Erasure outcomes");
     expect(html).not.toContain("Collection &amp; redaction");
+  });
+});
+
+describe("resolveCockpitTab", () => {
+  it("passes a known tab through unchanged", () => {
+    expect(resolveCockpitTab("audit")).toBe("audit");
+    expect(resolveCockpitTab("collection")).toBe("collection");
+    expect(resolveCockpitTab("overview")).toBe("overview");
+  });
+
+  it("falls back to overview for unknown or missing tabs", () => {
+    expect(resolveCockpitTab("nonsense")).toBe("overview");
+    expect(resolveCockpitTab("")).toBe("overview");
+    expect(resolveCockpitTab(undefined)).toBe("overview");
   });
 });
 
