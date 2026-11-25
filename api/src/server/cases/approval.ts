@@ -18,7 +18,9 @@ import { ForbiddenError, ValidationError } from "@/server/http/errors";
 import type { Actor } from "@/server/auth/require-auth";
 import { checks, type PreClosureChecks } from "@/domain/checks";
 import { respText, RESPONSE_TEMPLATES } from "@/domain/respText";
-import type { CaseSystemState } from "@/domain/types";
+import type { CaseSystemState, ErasureOutcome as DomainErasureOutcome } from "@/domain/types";
+import { isErasureOutcome, outcomeRule } from "@/server/erasure/outcomes";
+import { CHECKLIST_STATUS_BY_OUTCOME } from "./erasure";
 
 const MIN_REASON = 3;
 
@@ -64,22 +66,44 @@ interface CaseRowNeeded {
   template: string;
 }
 
-function toDomainSystems(sysRows: { sourceKey: string; name: string; status: string; evidenceCount: number; reason: string; exceptionCategory: string | null }[]): CaseSystemState[] {
-  return sysRows.map((s) => ({
-    key: s.sourceKey,
-    status: s.status as CaseSystemState["status"],
-    outcome: null,
-    evidence: s.evidenceCount > 0 ? [""] : [],
-    reason: s.reason,
-    exceptionCategory: s.exceptionCategory as CaseSystemState["exceptionCategory"],
-  }));
+interface SystemRow {
+  sourceKey: string;
+  name: string;
+  status: string;
+  evidenceCount: number;
+  reason: string;
+  exceptionCategory: string | null;
+  outcome: string | null;
+}
+
+/** Map DB system rows to the domain shape. For an erasure case the checklist status is
+ *  DERIVED from the outcome (an undecided system reads as open work, "Action required"
+ *  blocks), so the seed-parity checks() gates closure correctly; the outcome itself is
+ *  passed as its display label so respText() renders the erasure letter. */
+function toDomainSystems(sysRows: SystemRow[], isErasure: boolean): CaseSystemState[] {
+  return sysRows.map((s) => {
+    const outcome = isErasureOutcome(s.outcome) ? s.outcome : null;
+    const status = isErasure
+      ? outcome
+        ? CHECKLIST_STATUS_BY_OUTCOME[outcome]
+        : "In progress"
+      : s.status;
+    return {
+      key: s.sourceKey,
+      status: status as CaseSystemState["status"],
+      outcome: outcome ? (outcomeRule(outcome).label as CaseSystemState["outcome"]) : null,
+      evidence: s.evidenceCount > 0 ? [""] : [],
+      reason: s.reason,
+      exceptionCategory: s.exceptionCategory as CaseSystemState["exceptionCategory"],
+    };
+  });
 }
 
 async function buildChecks(
   tx: Transaction,
   actor: Actor,
   row: CaseRowNeeded,
-  sysRows: { sourceKey: string; name: string; status: string; evidenceCount: number; reason: string; exceptionCategory: string | null }[],
+  sysRows: SystemRow[],
 ): Promise<PreClosureChecks> {
   let ownerName = "Unassigned";
   if (row.ownerId) {
@@ -89,7 +113,7 @@ async function buildChecks(
   return checks({
     type: row.requestType as "Access",
     idVerified: row.identityVerified,
-    systems: toDomainSystems(sysRows),
+    systems: toDomainSystems(sysRows, row.requestType === "Erasure"),
     tokens: [],
     template: row.template,
     redactionReview: "none",
@@ -128,6 +152,7 @@ export async function getApproval(actor: Actor, caseId: string): Promise<Approva
           evidenceCount: caseSystems.evidenceCount,
           reason: caseSystems.reason,
           exceptionCategory: caseSystems.exceptionCategory,
+          outcome: caseSystems.outcome,
         })
         .from(caseSystems)
         .where(eq(caseSystems.caseId, caseId))
@@ -144,7 +169,12 @@ export async function getApproval(actor: Actor, caseId: string): Promise<Approva
           type: row.requestType,
           receivedAt: row.receivedAt,
           template: row.template || null,
-          systems: sysRows.map((s) => ({ key: s.sourceKey, outcome: null })),
+          systems: sysRows.map((s) => ({
+            key: s.sourceKey,
+            outcome: isErasureOutcome(s.outcome)
+              ? (outcomeRule(s.outcome).label as DomainErasureOutcome)
+              : null,
+          })),
         },
         { sender: senderName },
         sysRows.map((s) => ({ key: s.sourceKey, name: s.name })),
@@ -250,6 +280,7 @@ export async function sendForApproval(actor: Actor, caseId: string, reason: stri
           evidenceCount: caseSystems.evidenceCount,
           reason: caseSystems.reason,
           exceptionCategory: caseSystems.exceptionCategory,
+          outcome: caseSystems.outcome,
         })
         .from(caseSystems)
         .where(eq(caseSystems.caseId, caseId))
@@ -318,6 +349,7 @@ async function decideClosure(
             evidenceCount: caseSystems.evidenceCount,
             reason: caseSystems.reason,
             exceptionCategory: caseSystems.exceptionCategory,
+            outcome: caseSystems.outcome,
           })
           .from(caseSystems)
           .where(eq(caseSystems.caseId, caseId))

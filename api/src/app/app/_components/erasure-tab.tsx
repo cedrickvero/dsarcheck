@@ -3,7 +3,7 @@
  * the outcome, recorded time and reason are shown as text.
  */
 import type { ErasureView } from "@/server/cases/erasure";
-import { EXCEPTION_CATEGORIES } from "@/server/cases/checklist";
+import { RETENTION_EXCEPTION_CATEGORIES } from "@/server/cases/erasure";
 import { formatDateTime } from "@/server/cases/format";
 import { ErasureOutcomeForm, type ErasureOutcomeAction } from "./erasure-outcome-form";
 
@@ -44,7 +44,7 @@ export function ErasureTab(props: {
                 </td>
                 <td>
                   <span className="status" data-status={s.outcome ?? ""}>
-                    {s.outcome ?? "Not recorded"}
+                    {s.outcomeLabel ?? "Not recorded"}
                   </span>
                 </td>
                 <td>{s.outcomeAt ? formatDateTime(s.outcomeAt) : "—"}</td>
@@ -58,7 +58,7 @@ export function ErasureTab(props: {
                     caseNumber={props.caseNumber}
                     sourceKey={s.sourceKey}
                     currentOutcome={s.outcome}
-                    exceptionCategories={[...EXCEPTION_CATEGORIES]}
+                    exceptionCategories={[...RETENTION_EXCEPTION_CATEGORIES]}
                     action={props.action}
                   />
                 </td>

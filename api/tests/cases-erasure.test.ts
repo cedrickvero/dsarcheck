@@ -1,15 +1,14 @@
 /**
- * Erasure outcomes, against the real database: an outcome is recorded with a reason, a
- * retained outcome needs an exception category, a high-risk case needs an approver, and a
- * cross-tenant case is unknown (RLS).
+ * Erasure outcomes, against the real database: the R4 invariants hold (named human actor,
+ * high-risk approver-only, retention exception category, evidence/outcome-record), the
+ * checklist status syncs to the outcome, and a cross-tenant case is unknown (RLS).
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { systemDb, systemPool } from "@/db/client";
 import { auditEvents, cases, caseSystems, orgs, users, workspaces } from "@/db/schema";
 import { hashEmail } from "@/server/auth/crypto";
-import { EXCEPTION_CATEGORIES } from "@/server/cases/checklist";
-import { getErasureOutcomes, recordErasureOutcome } from "@/server/cases/erasure";
+import { getErasureOutcomes, recordErasureOutcome, RETENTION_EXCEPTION_CATEGORIES } from "@/server/cases/erasure";
 import type { Actor } from "@/server/auth/require-auth";
 
 const RUN = `${Date.now()}`;
@@ -62,50 +61,64 @@ const mkCase = async (risk: "Low" | "High") => {
 };
 
 describe("recordErasureOutcome", () => {
-  it("records an outcome with a reason and writes an erasure audit row", async () => {
+  it("records an outcome, syncs the checklist status, and writes an erasure audit row", async () => {
     const id = await mkCase("Low");
-    const result = await recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "Deleted", reason: "rows hard-deleted" });
-    expect(result.outcome).toBe("Deleted");
+    const result = await recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "deleted", reason: "rows hard-deleted", hasOutcomeRecord: true });
+    expect(result.outcome).toBe("deleted");
+
+    const [sys] = await systemDb.select({ status: caseSystems.status }).from(caseSystems).where(eq(caseSystems.sourceKey, "db"));
+    expect(sys!.status).toBe("Completed"); // outcome drives the checklist status
+
     const [ev] = await systemDb.select().from(auditEvents).where(eq(auditEvents.objectId, id));
-    expect(ev!.category).toBe("Erasure");
-    expect(ev!.action).toContain("Deleted");
+    expect(ev!.category).toBe("erasure");
+    expect(ev!.action).toBe("erasure.outcome.recorded");
   });
 
   it("a retained outcome needs an exception category", async () => {
     const id = await mkCase("Low");
     await expect(
-      recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "Retained under exception", reason: "tax law" }),
-    ).rejects.toThrow("an exception category is required");
+      recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "retained_under_exception", reason: "tax law", hasOutcomeRecord: true }),
+    ).rejects.toThrow("requires a documented retention exception category");
     await expect(
-      recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "Retained under exception", reason: "tax law", exceptionCategory: EXCEPTION_CATEGORIES[0] }),
+      recordErasureOutcome(handler, id, {
+        sourceKey: "db", outcome: "retained_under_exception", reason: "tax law",
+        exceptionCategory: RETENTION_EXCEPTION_CATEGORIES[0], hasOutcomeRecord: true,
+      }),
     ).resolves.toBeTruthy();
   });
 
-  it("rejects an unknown outcome and a missing reason", async () => {
+  it("deleted needs evidence or an attached outcome record", async () => {
     const id = await mkCase("Low");
-    await expect(recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "Bogus", reason: "x" })).rejects.toThrow("unknown erasure outcome");
-    await expect(recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "Deleted", reason: "  " })).rejects.toThrow("a reason is required");
+    await expect(recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "deleted", reason: "deleted" })).rejects.toThrow("requires evidence or an automatically attached outcome record");
   });
 
-  it("a handler cannot record an outcome on a high-risk case", async () => {
+  it("rejects an invalid outcome and a missing reason", async () => {
+    const id = await mkCase("Low");
+    await expect(recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "Bogus", reason: "x" })).rejects.toThrow("invalid erasure outcome");
+    await expect(recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "deleted", reason: "  " })).rejects.toThrow("a reason is required");
+  });
+
+  it("a handler cannot record a high-risk outcome; an approver can", async () => {
     const id = await mkCase("High");
-    await expect(recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "Deleted", reason: "deleted" })).rejects.toThrow("High-risk erasure outcomes need an approver");
-    await expect(recordErasureOutcome(approver, id, { sourceKey: "db", outcome: "Deleted", reason: "deleted" })).resolves.toBeTruthy();
+    await expect(recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "deleted", reason: "deleted", hasOutcomeRecord: true })).rejects.toThrow("High-risk erasure outcomes need an approver");
+    await expect(recordErasureOutcome(approver, id, { sourceKey: "db", outcome: "deleted", reason: "deleted", hasOutcomeRecord: true })).resolves.toBeTruthy();
   });
 
   it("treats a cross-tenant case as unknown", async () => {
-    await expect(recordErasureOutcome(handler, otherCaseId, { sourceKey: "db", outcome: "Deleted", reason: "nope" })).rejects.toThrow("unknown case");
+    await expect(recordErasureOutcome(handler, otherCaseId, { sourceKey: "db", outcome: "deleted", reason: "nope", hasOutcomeRecord: true })).rejects.toThrow("unknown case");
     expect(await getErasureOutcomes(handler, otherCaseId)).toBeNull();
   });
 });
 
 describe("getErasureOutcomes", () => {
-  it("returns the systems and counts by outcome", async () => {
+  it("returns the systems with their labels", async () => {
     const id = await mkCase("Low");
-    await recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "Deleted", reason: "deleted" });
+    await recordErasureOutcome(handler, id, { sourceKey: "db", outcome: "deleted", reason: "deleted", hasOutcomeRecord: true });
     const view = await getErasureOutcomes(handler, id);
     expect(view!.systems).toHaveLength(2);
-    expect(view!.counts.Deleted).toBe(1);
-    expect(view!.counts["Action required"]).toBe(0);
+    const db = view!.systems.find((s) => s.sourceKey === "db")!;
+    expect(db.outcome).toBe("deleted");
+    expect(db.outcomeLabel).toBe("Deleted");
+    expect(view!.systems.find((s) => s.sourceKey === "stripe")!.outcome).toBeNull();
   });
 });

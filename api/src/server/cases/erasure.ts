@@ -1,11 +1,13 @@
 /**
- * Erasure outcomes (docs/03 E4b, docs/05 erasure rules): each system in an erasure case
- * records one outcome (Deleted / Suppressed / Retained under exception / Not found / Action
- * required). "Retained under exception" needs a category + reason; every outcome needs a
- * reason. A high-risk case may only have outcomes recorded by an approver (owner /
- * workspace_admin included), matching the identity high-risk rule.
+ * The case-level erasure-outcome surface: records one system's outcome on an erasure case,
+ * REUSING the R4 contract in src/server/erasure for the invariants (named human actor, no
+ * autonomous path, requester-never-decides, high-risk approver-only, evidence requirement,
+ * retention exception category) and the canonical snake_case outcome keys.
  *
- * The recording writes the outcome row AND its audit event in ONE transaction.
+ * This module persists the outcome to case_systems (the table the R4 contract deferred to)
+ * and keeps the checklist status in sync, so the seed-parity checks() sees "Action required"
+ * as a blocker. It writes ONE case-scoped audit event (action "erasure.outcome.recorded",
+ * category "erasure") in the same transaction as the row update.
  */
 import { and, asc, eq } from "drizzle-orm";
 import { cases, caseSystems, users } from "@/db/schema";
@@ -14,23 +16,46 @@ import { can } from "@/server/authz";
 import { writeAuditEvent } from "@/server/db/audit";
 import { ForbiddenError, ValidationError } from "@/server/http/errors";
 import type { Actor } from "@/server/auth/require-auth";
-import { EXCEPTION_CATEGORIES } from "./checklist";
+import {
+  assertHighRiskIsApproverOnly,
+  assertNamedHumanActor,
+  assertRequesterIsNotTheDecider,
+} from "@/server/erasure/approval-gate";
+import {
+  ERASURE_OUTCOMES,
+  isErasureOutcome,
+  outcomeRule,
+  type ErasureOutcome,
+} from "@/server/erasure/outcomes";
+import {
+  evidenceRequirementSatisfied,
+  isRetentionExceptionCategory,
+  RETENTION_EXCEPTION_CATEGORIES,
+} from "@/server/erasure/policy";
 
 const MIN_REASON = 3;
 
-export const ERASURE_OUTCOMES = [
-  "Deleted",
-  "Suppressed / anonymized",
-  "Retained under exception",
-  "Not found",
-  "Action required",
-] as const;
-export type ErasureOutcome = (typeof ERASURE_OUTCOMES)[number];
+export { ERASURE_OUTCOMES, RETENTION_EXCEPTION_CATEGORIES };
+export type { ErasureOutcome };
+
+/** The checklist status an erasure outcome maps to (the seed's CODE mapping): the outcome
+ *  drives the resolution state, so "Action required" blocks and Deleted/Suppressed close it. */
+export const CHECKLIST_STATUS_BY_OUTCOME: Record<
+  ErasureOutcome,
+  "Completed" | "Retained under exception" | "Not found" | "Action required"
+> = {
+  deleted: "Completed",
+  suppressed: "Completed",
+  retained_under_exception: "Retained under exception",
+  not_found: "Not found",
+  action_required: "Action required",
+};
 
 export interface ErasureSystemRow {
   sourceKey: string;
   name: string;
-  outcome: string | null;
+  outcome: ErasureOutcome | null;
+  outcomeLabel: string | null;
   outcomeAt: Date | null;
   reason: string;
   exceptionCategory: string | null;
@@ -42,16 +67,15 @@ export interface ErasureView {
   requestType: string;
   risk: string;
   systems: ErasureSystemRow[];
-  counts: Record<ErasureOutcome, number>;
 }
 
-function assertMayRecordOutcome(actor: Actor, risk: string): void {
-  // The two erasure permissions are alternatives by risk, not layers: high-risk is
-  // approver/owner only; ordinary cases are handler/owner/admin/system_owner (not approver).
+function assertMayRecord(actor: Actor, risk: string): void {
   if (risk === "High") {
+    // The R4 contract is stricter than the permission matrix: the APPROVER role decides.
     if (!actor.roles.some((r) => can(r, "erasure.outcome.record.high_risk"))) {
       throw new ForbiddenError("High-risk erasure outcomes need an approver to decide");
     }
+    assertHighRiskIsApproverOnly({ actor, risk: "high" });
     return;
   }
   if (!actor.roles.some((r) => can(r, "erasure.outcome.record"))) {
@@ -86,19 +110,16 @@ export async function getErasureOutcomes(actor: Actor, caseId: string): Promise<
         .where(eq(caseSystems.caseId, caseId))
         .orderBy(asc(caseSystems.sourceKey));
 
-      const counts = Object.fromEntries(ERASURE_OUTCOMES.map((o) => [o, 0])) as Record<ErasureOutcome, number>;
-      for (const s of systems) {
-        if (s.outcome && (ERASURE_OUTCOMES as readonly string[]).includes(s.outcome)) {
-          counts[s.outcome as ErasureOutcome] += 1;
-        }
-      }
-
       return {
         caseId,
         requestType: row.requestType,
         risk: row.risk,
-        systems: systems.map((s) => ({ ...s, ownerName: s.ownerName || s.ownerEmail })),
-        counts,
+        systems: systems.map((s) => ({
+          ...s,
+          outcome: isErasureOutcome(s.outcome) ? s.outcome : null,
+          outcomeLabel: isErasureOutcome(s.outcome) ? outcomeRule(s.outcome).label : null,
+          ownerName: s.ownerName || s.ownerEmail,
+        })),
       };
     },
   );
@@ -109,25 +130,44 @@ export interface RecordErasureOutcomeInput {
   outcome: string;
   reason: string;
   exceptionCategory?: string;
+  /** True when the system auto-attached an outcome record (satisfies the evidence rule). */
+  hasOutcomeRecord?: boolean;
 }
 
 export async function recordErasureOutcome(
   actor: Actor,
   caseId: string,
   input: RecordErasureOutcomeInput,
-): Promise<{ outcome: string }> {
-  if (!(ERASURE_OUTCOMES as readonly string[]).includes(input.outcome)) {
-    throw new ValidationError("unknown erasure outcome");
+): Promise<{ outcome: ErasureOutcome }> {
+  // The R4 invariant: no autonomous path. requireAuth already yields a named human, but this
+  // is the contract's explicit gate and stays here so a worker/cron actor cannot record.
+  assertNamedHumanActor(actor);
+
+  if (!isErasureOutcome(input.outcome)) {
+    throw new ValidationError("invalid erasure outcome");
   }
+  const outcome: ErasureOutcome = input.outcome;
+  const rule = outcomeRule(outcome);
   const reason = input.reason.trim();
   if (reason.length < MIN_REASON) {
     throw new ValidationError("a reason is required to record an erasure outcome");
   }
   const exCat = (input.exceptionCategory ?? "").trim() || null;
-  if (input.outcome === "Retained under exception") {
-    if (!exCat || !(EXCEPTION_CATEGORIES as readonly string[]).includes(exCat)) {
-      throw new ValidationError("an exception category is required to retain data under exception");
-    }
+  if (rule.requiresExceptionCategory && !isRetentionExceptionCategory(exCat)) {
+    throw new ValidationError(
+      `outcome "${rule.label}" requires a documented retention exception category`,
+    );
+  }
+  if (
+    !evidenceRequirementSatisfied({
+      outcome,
+      evidenceRef: null,
+      hasOutcomeRecord: input.hasOutcomeRecord,
+    })
+  ) {
+    throw new ValidationError(
+      `outcome "${rule.label}" requires evidence or an automatically attached outcome record`,
+    );
   }
 
   return withTenant(
@@ -139,7 +179,8 @@ export async function recordErasureOutcome(
         .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))
         .limit(1);
       if (!row) throw new ValidationError("unknown case");
-      assertMayRecordOutcome(actor, row.risk);
+      assertMayRecord(actor, row.risk);
+      assertRequesterIsNotTheDecider({ actor, requesterActorId: null });
 
       const [system] = await tx
         .select({ id: caseSystems.id, name: caseSystems.name })
@@ -148,13 +189,16 @@ export async function recordErasureOutcome(
         .limit(1);
       if (!system) throw new ValidationError("unknown system");
 
+      const status = CHECKLIST_STATUS_BY_OUTCOME[outcome];
+
       await tx
         .update(caseSystems)
         .set({
-          outcome: input.outcome,
+          outcome,
           outcomeAt: new Date(),
           reason,
-          exceptionCategory: input.outcome === "Retained under exception" ? exCat : null,
+          exceptionCategory: outcome === "retained_under_exception" ? exCat : null,
+          status,
           updatedAt: new Date(),
         })
         .where(eq(caseSystems.id, system.id));
@@ -164,15 +208,22 @@ export async function recordErasureOutcome(
         workspaceId: actor.workspaceId,
         actorId: actor.userId,
         actorLabel: actor.label,
-        action: `System "${system.name || input.sourceKey}" outcome recorded as ${input.outcome}`,
-        category: "Erasure",
+        action: "erasure.outcome.recorded",
+        category: "erasure",
         reason,
         objectType: "case",
         objectId: caseId,
-        meta: { systemKey: input.sourceKey, outcome: input.outcome },
+        meta: {
+          systemRef: input.sourceKey,
+          caseId,
+          outcome,
+          outcomeLabel: rule.label,
+          exceptionCategory: outcome === "retained_under_exception" ? exCat : null,
+          hasOutcomeRecord: input.hasOutcomeRecord === true,
+        },
       });
 
-      return { outcome: input.outcome };
+      return { outcome };
     },
   );
 }

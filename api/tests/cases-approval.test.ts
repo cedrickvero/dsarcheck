@@ -152,6 +152,35 @@ describe("closure decisions", () => {
   });
 });
 
+describe("erasure closure gate (outcome drives the check)", () => {
+  const mkErasure = async () =>
+    (await systemDb.insert(cases).values({
+      orgId, workspaceId: wsId, caseNumber: num(), requestType: "Erasure", status: "In progress", priority: "Normal",
+      receivedAt: new Date("2026-09-24T00:00:00Z"), statutoryDueAt: new Date("2026-10-24T00:00:00Z"),
+      identityVerified: true, template: "Erasure — confirmation of outcomes",
+    }).returning({ id: cases.id }))[0]!.id;
+
+  it("an 'Action required' outcome blocks closure even when the checklist status says Completed", async () => {
+    const id = await mkErasure();
+    await systemDb.insert(caseSystems).values([
+      { orgId, workspaceId: wsId, caseId: id, sourceKey: "db", name: "Production database", status: "Completed", evidenceCount: 1, outcome: "action_required", reason: "blocked" },
+    ]);
+    const view = await getApproval(handler, id);
+    expect(view!.checks.allPass).toBe(false);
+    expect(view!.checks.blockers.some((b) => b.id === "er")).toBe(true);
+  });
+
+  it("a system with no recorded outcome blocks closure", async () => {
+    const id = await mkErasure();
+    await systemDb.insert(caseSystems).values([
+      { orgId, workspaceId: wsId, caseId: id, sourceKey: "db", name: "Production database", status: "Completed", evidenceCount: 1, outcome: null },
+    ]);
+    const view = await getApproval(handler, id);
+    expect(view!.checks.allPass).toBe(false);
+    expect(view!.checks.blockers.some((b) => b.id === "er")).toBe(true);
+  });
+});
+
 describe("tenant isolation", () => {
   it("treats a cross-tenant case as unknown", async () => {
     expect(await getApproval(handler, otherCaseId)).toBeNull();

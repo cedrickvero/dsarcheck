@@ -3,15 +3,16 @@
 /**
  * Per-system erasure outcome form. "Retained under exception" reveals the exception
  * category; every outcome needs a reason (surfaced verbatim from the action on failure).
+ * Submits the canonical snake_case key; the display label is shown to the user.
  */
 import { useState } from "react";
 
 const OUTCOMES = [
-  "Deleted",
-  "Suppressed / anonymized",
-  "Retained under exception",
-  "Not found",
-  "Action required",
+  { key: "deleted", label: "Deleted" },
+  { key: "suppressed", label: "Suppressed / anonymized" },
+  { key: "retained_under_exception", label: "Retained under exception" },
+  { key: "not_found", label: "Not found" },
+  { key: "action_required", label: "Action required" },
 ] as const;
 
 export type ErasureOutcomeAction = (input: {
@@ -21,6 +22,7 @@ export type ErasureOutcomeAction = (input: {
   outcome: string;
   reason: string;
   exceptionCategory?: string;
+  hasOutcomeRecord?: boolean;
 }) => Promise<{ ok: boolean; message?: string }>;
 
 export function ErasureOutcomeForm(props: {
@@ -34,6 +36,7 @@ export function ErasureOutcomeForm(props: {
   const [outcome, setOutcome] = useState(props.currentOutcome ?? "");
   const [reason, setReason] = useState("");
   const [exCat, setExCat] = useState<string>(props.exceptionCategories[0] ?? "");
+  const [hasOutcomeRecord, setHasOutcomeRecord] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -48,13 +51,15 @@ export function ErasureOutcomeForm(props: {
       sourceKey: props.sourceKey,
       outcome,
       reason,
-      exceptionCategory: outcome === "Retained under exception" ? exCat : undefined,
+      exceptionCategory: outcome === "retained_under_exception" ? exCat : undefined,
+      hasOutcomeRecord,
     });
     setBusy(false);
     if (!result.ok) {
       setError(result.message ?? "Could not record the outcome.");
     } else {
       setReason("");
+      setHasOutcomeRecord(false);
     }
   };
 
@@ -65,13 +70,13 @@ export function ErasureOutcomeForm(props: {
           Choose an outcome…
         </option>
         {OUTCOMES.map((o) => (
-          <option key={o} value={o}>
-            {o}
+          <option key={o.key} value={o.key}>
+            {o.label}
           </option>
         ))}
       </select>
       <input type="text" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Reason (required)" required />
-      {outcome === "Retained under exception" ? (
+      {outcome === "retained_under_exception" ? (
         <select value={exCat} onChange={(event) => setExCat(event.target.value)} aria-label="Exception category">
           {props.exceptionCategories.map((c) => (
             <option key={c} value={c}>
@@ -80,6 +85,10 @@ export function ErasureOutcomeForm(props: {
           ))}
         </select>
       ) : null}
+      <label className="check-field">
+        <input type="checkbox" checked={hasOutcomeRecord} onChange={(event) => setHasOutcomeRecord(event.target.checked)} />
+        <span>Outcome record attached</span>
+      </label>
       <button type="submit" className="button button--primary">
         {busy ? "Saving…" : "Record"}
       </button>
