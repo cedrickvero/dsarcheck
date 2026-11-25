@@ -7,7 +7,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { systemDb, systemPool } from "@/db/client";
-import { auditEvents, cases, caseSystems, orgs, users, workspaces } from "@/db/schema";
+import { auditEvents, cases, caseFiles, caseSystems, orgs, redactionTokens, users, workspaces } from "@/db/schema";
 import { hashEmail } from "@/server/auth/crypto";
 import {
   approveAndClose,
@@ -178,6 +178,24 @@ describe("erasure closure gate (outcome drives the check)", () => {
     const view = await getApproval(handler, id);
     expect(view!.checks.allPass).toBe(false);
     expect(view!.checks.blockers.some((b) => b.id === "er")).toBe(true);
+  });
+});
+
+describe("redaction check", () => {
+  it("an Access case with an unredacted flagged token blocks the redaction check", async () => {
+    const id = await mkCase({ identityVerified: true, template: "Access — copy" });
+    await systemDb.insert(caseSystems).values([
+      { orgId, workspaceId: wsId, caseId: id, sourceKey: "db", name: "Production database", status: "Completed", evidenceCount: 1 },
+    ]);
+    const fileId = (await systemDb.insert(caseFiles).values({
+      orgId, workspaceId: wsId, caseId: id, sourceKey: "Zendesk", name: "ticket.pdf", type: "PDF", needsRedaction: true,
+    }).returning({ id: caseFiles.id }))[0]!.id;
+    await systemDb.insert(redactionTokens).values([
+      { orgId, workspaceId: wsId, caseId: id, fileId, category: "Email", snippet: "a@b…", flagged: true, redacted: false },
+    ]);
+    const view = await getApproval(handler, id);
+    expect(view!.checks.allPass).toBe(false);
+    expect(view!.checks.blockers.some((b) => b.id === "red")).toBe(true);
   });
 });
 
