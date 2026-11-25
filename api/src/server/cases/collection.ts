@@ -1,0 +1,307 @@
+/**
+ * Collection & redaction (Access cases) — the non-erasure branch of the "Collection"
+ * cockpit tab. Files carry flagged redaction tokens; the handler redacts each (reason +
+ * category from the token), requests review, an approver completes the review, and only
+ * then may the final redacted export be generated. The original file is never mutated —
+ * the export is a NEW version.
+ *
+ * Rules (docs/05 § Redaction rules): a redaction reason is required (≥3 chars); any new
+ * redaction after review resets review to "none"; complete review is approver-gated; the
+ * export is rejected until review is "done".
+ */
+import { and, asc, eq } from "drizzle-orm";
+import { cases, caseFiles, redactionTokens } from "@/db/schema";
+import { withTenant } from "@/db/client";
+import { can } from "@/server/authz";
+import { writeAuditEvent } from "@/server/db/audit";
+import { ForbiddenError, ValidationError } from "@/server/http/errors";
+import type { Actor } from "@/server/auth/require-auth";
+
+const MIN_REASON = 3;
+
+export interface CollectionFile {
+  id: string;
+  sourceKey: string | null;
+  name: string;
+  type: string;
+  sizeBytes: number;
+  version: number;
+  needsRedaction: boolean;
+  isRedactedExport: boolean;
+}
+
+export interface CollectionToken {
+  id: string;
+  fileId: string;
+  page: number | null;
+  category: string;
+  snippet: string;
+  flagged: boolean;
+  redacted: boolean;
+}
+
+export interface CollectionView {
+  caseId: string;
+  requestType: string;
+  redactionReview: "none" | "requested" | "done";
+  finalExportDone: boolean;
+  files: CollectionFile[];
+  tokens: CollectionToken[];
+  flaggedCount: number;
+  unredactedCount: number;
+}
+
+function requirePermission(actor: Actor, permission: Parameters<typeof can>[1], message: string): void {
+  if (!actor.roles.some((r) => can(r, permission))) {
+    throw new ForbiddenError(message);
+  }
+}
+
+export async function getCollection(actor: Actor, caseId: string): Promise<CollectionView | null> {
+  return withTenant(
+    { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
+    async (tx) => {
+      const [row] = await tx
+        .select({ id: cases.id, requestType: cases.requestType, redactionReview: cases.redactionReview, finalExportDone: cases.finalExportDone })
+        .from(cases)
+        .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))
+        .limit(1);
+      if (!row) return null;
+
+      const files = await tx
+        .select()
+        .from(caseFiles)
+        .where(eq(caseFiles.caseId, caseId))
+        .orderBy(asc(caseFiles.createdAt));
+      const tokens = await tx
+        .select()
+        .from(redactionTokens)
+        .where(eq(redactionTokens.caseId, caseId))
+        .orderBy(asc(redactionTokens.fileId));
+
+      const flaggedCount = tokens.filter((t) => t.flagged).length;
+      const unredactedCount = tokens.filter((t) => t.flagged && !t.redacted).length;
+
+      return {
+        caseId,
+        requestType: row.requestType,
+        redactionReview: row.redactionReview,
+        finalExportDone: row.finalExportDone,
+        files: files.map((f) => ({
+          id: f.id,
+          sourceKey: f.sourceKey,
+          name: f.name,
+          type: f.type,
+          sizeBytes: f.sizeBytes,
+          version: f.version,
+          needsRedaction: f.needsRedaction,
+          isRedactedExport: f.isRedactedExport,
+        })),
+        tokens: tokens.map((t) => ({
+          id: t.id,
+          fileId: t.fileId,
+          page: t.page,
+          category: t.category,
+          snippet: t.snippet,
+          flagged: t.flagged,
+          redacted: t.redacted,
+        })),
+        flaggedCount,
+        unredactedCount,
+      };
+    },
+  );
+}
+
+/** Redact (or un-redact) one flagged token. Requires a reason; resets the review. */
+export async function recordRedaction(
+  actor: Actor,
+  caseId: string,
+  input: { tokenId: string; redacted: boolean; reason: string },
+): Promise<{ redacted: boolean }> {
+  const reason = input.reason.trim();
+  if (reason.length < MIN_REASON) {
+    throw new ValidationError("A redaction reason is required.");
+  }
+
+  return withTenant(
+    { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
+    async (tx) => {
+      requirePermission(actor, "view_and_update_cases", "Your role does not permit redacting data.");
+
+      const [token] = await tx
+        .select()
+        .from(redactionTokens)
+        .where(and(eq(redactionTokens.id, input.tokenId), eq(redactionTokens.caseId, caseId), eq(redactionTokens.workspaceId, actor.workspaceId)))
+        .limit(1);
+      if (!token) throw new ValidationError("unknown token");
+
+      await tx
+        .update(redactionTokens)
+        .set({ redacted: input.redacted })
+        .where(eq(redactionTokens.id, token.id));
+
+      // Any new redaction invalidates a pending or completed review (docs/05).
+      if (token.redacted !== input.redacted) {
+        const [row] = await tx
+          .select({ review: cases.redactionReview })
+          .from(cases)
+          .where(eq(cases.id, caseId))
+          .limit(1);
+        if (row && row.review !== "none") {
+          await tx
+            .update(cases)
+            .set({ redactionReview: "none", finalExportDone: false })
+            .where(eq(cases.id, caseId));
+        }
+      }
+
+      await writeAuditEvent(tx, {
+        orgId: actor.orgId,
+        workspaceId: actor.workspaceId,
+        actorId: actor.userId,
+        actorLabel: actor.label,
+        action: "redaction.recorded",
+        category: "Redaction",
+        reason,
+        objectType: "case",
+        objectId: caseId,
+        meta: {
+          tokenId: token.id,
+          fileId: token.fileId,
+          category: token.category,
+          snippet: token.snippet,
+          redacted: input.redacted,
+        },
+      });
+
+      return { redacted: input.redacted };
+    },
+  );
+}
+
+export async function requestRedactionReview(actor: Actor, caseId: string): Promise<{ review: string }> {
+  return withTenant(
+    { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
+    async (tx) => {
+      requirePermission(actor, "view_and_update_cases", "Your role does not permit requesting a redaction review.");
+
+      const [row] = await tx
+        .select({ id: cases.id, review: cases.redactionReview })
+        .from(cases)
+        .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))
+        .limit(1);
+      if (!row) throw new ValidationError("unknown case");
+      if (row.review !== "none") {
+        throw new ValidationError("a review is already in progress or complete");
+      }
+
+      await tx.update(cases).set({ redactionReview: "requested" }).where(eq(cases.id, caseId));
+
+      await writeAuditEvent(tx, {
+        orgId: actor.orgId,
+        workspaceId: actor.workspaceId,
+        actorId: actor.userId,
+        actorLabel: actor.label,
+        action: "redaction.review.requested",
+        category: "Redaction",
+        reason: "Review requested",
+        objectType: "case",
+        objectId: caseId,
+        meta: { caseId },
+      });
+
+      return { review: "requested" };
+    },
+  );
+}
+
+export async function completeRedactionReview(
+  actor: Actor,
+  caseId: string,
+  input: { reason: string },
+): Promise<{ review: string }> {
+  const reason = input.reason.trim();
+  if (reason.length < MIN_REASON) {
+    throw new ValidationError("A reason is required to complete the review.");
+  }
+
+  return withTenant(
+    { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
+    async (tx) => {
+      requirePermission(actor, "complete_redaction_review", "Only an approver can complete the redaction review.");
+
+      const [row] = await tx
+        .select({ id: cases.id, review: cases.redactionReview })
+        .from(cases)
+        .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))
+        .limit(1);
+      if (!row) throw new ValidationError("unknown case");
+      if (row.review !== "requested") {
+        throw new ValidationError("no review is awaiting completion");
+      }
+
+      const pending = await tx
+        .select({ id: redactionTokens.id })
+        .from(redactionTokens)
+        .where(and(eq(redactionTokens.caseId, caseId), eq(redactionTokens.flagged, true), eq(redactionTokens.redacted, false)))
+        .limit(1);
+      if (pending.length > 0) {
+        throw new ValidationError("flagged items are not yet redacted");
+      }
+
+      await tx.update(cases).set({ redactionReview: "done" }).where(eq(cases.id, caseId));
+
+      await writeAuditEvent(tx, {
+        orgId: actor.orgId,
+        workspaceId: actor.workspaceId,
+        actorId: actor.userId,
+        actorLabel: actor.label,
+        action: "redaction.review.completed",
+        category: "Redaction",
+        reason,
+        objectType: "case",
+        objectId: caseId,
+        meta: { caseId },
+      });
+
+      return { review: "done" };
+    },
+  );
+}
+
+export async function markFinalExportDone(actor: Actor, caseId: string): Promise<{ finalExportDone: boolean }> {
+  return withTenant(
+    { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
+    async (tx) => {
+      requirePermission(actor, "export_evidence_packs", "Your role does not permit generating the final export.");
+
+      const [row] = await tx
+        .select({ id: cases.id, review: cases.redactionReview })
+        .from(cases)
+        .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))
+        .limit(1);
+      if (!row) throw new ValidationError("unknown case");
+      if (row.review !== "done") {
+        throw new ValidationError("the redaction review must be completed before the export");
+      }
+
+      await tx.update(cases).set({ finalExportDone: true }).where(eq(cases.id, caseId));
+
+      await writeAuditEvent(tx, {
+        orgId: actor.orgId,
+        workspaceId: actor.workspaceId,
+        actorId: actor.userId,
+        actorLabel: actor.label,
+        action: "redaction.export.generated",
+        category: "Redaction",
+        reason: "Final redacted export generated",
+        objectType: "case",
+        objectId: caseId,
+        meta: { caseId },
+      });
+
+      return { finalExportDone: true };
+    },
+  );
+}

@@ -10,7 +10,7 @@
  * send-for-approval.
  */
 import { and, asc, desc, eq } from "drizzle-orm";
-import { auditEvents, cases, caseSystems, users, workspaces } from "@/db/schema";
+import { auditEvents, cases, caseSystems, redactionTokens, users, workspaces } from "@/db/schema";
 import { withTenant, type Transaction } from "@/db/client";
 import { can } from "@/server/authz";
 import { writeAuditEvent } from "@/server/db/audit";
@@ -64,6 +64,8 @@ interface CaseRowNeeded {
   ownerId: string | null;
   identityVerified: boolean;
   template: string;
+  redactionReview: string;
+  finalExportDone: boolean;
 }
 
 interface SystemRow {
@@ -110,14 +112,18 @@ async function buildChecks(
     const [owner] = await tx.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, row.ownerId)).limit(1);
     if (owner) ownerName = owner.name || owner.email;
   }
+  const tokens = await tx
+    .select({ flagged: redactionTokens.flagged, redacted: redactionTokens.redacted })
+    .from(redactionTokens)
+    .where(eq(redactionTokens.caseId, row.id));
   return checks({
     type: row.requestType as "Access",
     idVerified: row.identityVerified,
     systems: toDomainSystems(sysRows, row.requestType === "Erasure"),
-    tokens: [],
+    tokens,
     template: row.template,
-    redactionReview: "none",
-    finalExportDone: false,
+    redactionReview: row.redactionReview as "none" | "requested" | "done",
+    finalExportDone: row.finalExportDone,
     ownerName,
     idDecision: null,
   });
@@ -138,6 +144,8 @@ export async function getApproval(actor: Actor, caseId: string): Promise<Approva
           ownerId: cases.ownerId,
           identityVerified: cases.identityVerified,
           template: cases.template,
+          redactionReview: cases.redactionReview,
+          finalExportDone: cases.finalExportDone,
         })
         .from(cases)
         .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))
@@ -263,6 +271,8 @@ export async function sendForApproval(actor: Actor, caseId: string, reason: stri
           ownerId: cases.ownerId,
           identityVerified: cases.identityVerified,
           template: cases.template,
+          redactionReview: cases.redactionReview,
+          finalExportDone: cases.finalExportDone,
         })
         .from(cases)
         .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))
@@ -331,6 +341,8 @@ async function decideClosure(
           ownerId: cases.ownerId,
           identityVerified: cases.identityVerified,
           template: cases.template,
+          redactionReview: cases.redactionReview,
+          finalExportDone: cases.finalExportDone,
         })
         .from(cases)
         .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))

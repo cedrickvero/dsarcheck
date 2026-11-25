@@ -91,6 +91,15 @@ async function ensureSystem(wsId, orgId, caseId, sourceKey, name, status) {
   );
 }
 
+async function ensureFile(wsId, orgId, caseId, sourceKey, name, type, sizeBytes, uploadedBy, needsRedaction) {
+  await client.query(
+    `insert into case_files (org_id, workspace_id, case_id, source_key, name, type, size_bytes, uploaded_by, needs_redaction)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     on conflict (case_id, name, version) do nothing`,
+    [orgId, wsId, caseId, sourceKey, name, type, sizeBytes, uploadedBy, needsRedaction],
+  );
+}
+
 const day = (n) => new Date(Date.now() - n * 86_400_000);
 const plusDays = (d, n) => new Date(d.getTime() + n * 86_400_000);
 
@@ -141,6 +150,29 @@ for (const [key, name, status] of [
 }
 // One Action-required system on the erasure case -> "System needs action" notification.
 await ensureSystem(wsId, orgId, c420, "pg", "Production database", "Action required");
+
+// Redaction demo on 418: one Zendesk file + 5 tokens (4 flagged), as in the prototype.
+await ensureFile(wsId, orgId, c418, "Zendesk", "zendesk_tickets_00418.pdf", "PDF", 184000, priyaId, true);
+const tokenCount = await one(`select count(*)::int as n from redaction_tokens where case_id = $1`, [c418]);
+if (tokenCount.n === 0) {
+  const zendeskFileId = (await one(
+    `select id from case_files where case_id = $1 and name = $2`,
+    [c418, "zendesk_tickets_00418.pdf"],
+  )).id;
+  for (const [category, snippet, flagged] of [
+    ["Third-party personal data", "Erik…", true],
+    ["Phone number", "+46 …", true],
+    ["Email", "erik…", true],
+    ["Name", "Tom …", false],
+    ["Confidential free-text note", "Cust…", true],
+  ]) {
+    await client.query(
+      `insert into redaction_tokens (org_id, workspace_id, case_id, file_id, category, snippet, flagged, redacted)
+       values ($1,$2,$3,$4,$5,$6,$7,false)`,
+      [orgId, wsId, c418, zendeskFileId, category, snippet, flagged],
+    );
+  }
+}
 
 console.log("Seed complete.");
 console.log("  Sign-in user: priya@lumen.io (Request handler)");

@@ -18,6 +18,7 @@ import { listCaseSystems } from "@/server/cases/checklist";
 import { getIdentity } from "@/server/cases/identity";
 import { getApproval } from "@/server/cases/approval";
 import { getErasureOutcomes } from "@/server/cases/erasure";
+import { getCollection } from "@/server/cases/collection";
 import { can } from "@/server/authz";
 import { now } from "@/server/time";
 import { summarise } from "@/server/cases/format";
@@ -29,8 +30,9 @@ import { ChecklistTab } from "../../_components/checklist-tab";
 import { IdentityTab } from "../../_components/identity-tab";
 import { ApprovalTab } from "../../_components/approval-tab";
 import { ErasureTab } from "../../_components/erasure-tab";
+import { CollectionTab } from "../../_components/collection-tab";
 import { TabStub } from "../../_components/tab-stub";
-import { setSystemStatus, recordIdentityDecision, selectTemplate, sendForApproval, approveAndClose, requestChanges, rejectCase, recordErasureOutcome } from "../actions";
+import { setSystemStatus, recordIdentityDecision, selectTemplate, sendForApproval, approveAndClose, requestChanges, rejectCase, recordErasureOutcome, recordRedaction, requestRedactionReview, completeRedactionReview, markFinalExportDone } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +51,6 @@ export default async function CaseCockpitPage(props: {
   const raw = typeof sp.tab === "string" ? sp.tab : undefined;
   const tab = resolveCockpitTab(raw);
 
-  const collectionTitle = overview.case.requestType === "Erasure" ? "Erasure outcomes" : "Collection & redaction";
   const stub = (title: string, body: string) => <TabStub title={title} body={body} />;
 
   return (
@@ -94,7 +95,18 @@ export default async function CaseCockpitPage(props: {
             action={recordErasureOutcome}
           />
         ) : (
-          stub(collectionTitle, `${collectionTitle} is a separate slice and is not implemented in this foundation.`)
+          <CollectionTab
+            caseId={overview.case.id}
+            caseNumber={overview.case.caseNumber}
+            view={await getCollection(actor, overview.case.id).then((v) => v ?? notFound())}
+            canCompleteReview={actor.roles.some((r) => can(r, "complete_redaction_review"))}
+            actions={{
+              recordRedaction,
+              requestReview: requestRedactionReview,
+              completeReview: completeRedactionReview,
+              markExport: markFinalExportDone,
+            }}
+          />
         )
       ) : null}
       {tab === "approval" ? (

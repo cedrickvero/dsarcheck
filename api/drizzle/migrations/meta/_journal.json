@@ -162,6 +162,13 @@
       "when": 1795634413884,
       "tag": "0022_case_systems_outcome_check",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1795636638361,
+      "tag": "0023_case_redaction",
+      "breakpoints": true
     }
   ]
 }

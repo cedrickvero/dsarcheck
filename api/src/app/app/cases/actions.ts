@@ -22,6 +22,12 @@ import {
   sendForApproval as sendApproval,
 } from "@/server/cases/approval";
 import { recordErasureOutcome as recordOutcome } from "@/server/cases/erasure";
+import {
+  recordRedaction as redact,
+  requestRedactionReview as requestReview,
+  completeRedactionReview as completeReview,
+  markFinalExportDone as markExport,
+} from "@/server/cases/collection";
 import { AppError } from "@/server/http/errors";
 
 export interface ActionResult<T> {
@@ -200,6 +206,70 @@ export async function recordErasureOutcome(input: {
       exceptionCategory: input.exceptionCategory,
       hasOutcomeRecord: input.hasOutcomeRecord,
     });
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function recordRedaction(input: {
+  caseId: string;
+  caseNumber: string;
+  tokenId: string;
+  redacted: boolean;
+  reason: string;
+}): Promise<ActionResult<{ redacted: boolean }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await redact(actor, input.caseId, {
+      tokenId: input.tokenId,
+      redacted: input.redacted,
+      reason: input.reason,
+    });
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function requestRedactionReview(input: {
+  caseId: string;
+  caseNumber: string;
+}): Promise<ActionResult<{ review: string }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await requestReview(actor, input.caseId);
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function completeRedactionReview(input: {
+  caseId: string;
+  caseNumber: string;
+  reason: string;
+}): Promise<ActionResult<{ review: string }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await completeReview(actor, input.caseId, { reason: input.reason });
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function markFinalExportDone(input: {
+  caseId: string;
+  caseNumber: string;
+}): Promise<ActionResult<{ finalExportDone: boolean }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await markExport(actor, input.caseId);
     revalidatePath(`/app/cases/${input.caseNumber}`);
     return { ok: true, data: result };
   } catch (error) {

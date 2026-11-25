@@ -26,6 +26,8 @@ export const WORKSPACE_PERMISSIONS = [
   // High-risk erasure decisions are Approver-only (owner-approved R4 contract).
   "erasure.outcome.record.high_risk",
   "erasure.case.approve",
+  // Redaction review sign-off is approver-gated (docs/05: "Approver: Complete review").
+  "complete_redaction_review",
 ] as const;
 
 export type Permission = (typeof WORKSPACE_PERMISSIONS)[number];
@@ -48,6 +50,7 @@ const MATRIX: Readonly<Record<Permission, readonly Role[]>> = {
   "erasure.outcome.record": ["owner", "workspace_admin", "request_handler", "system_owner"],
   "erasure.outcome.record.high_risk": ["owner", "approver"],
   "erasure.case.approve": ["owner", "workspace_admin", "approver"],
+  complete_redaction_review: ["owner", "workspace_admin", "approver"],
 };
 
 /** Roles that must satisfy MFA. Owner decision: privileged roles only. */

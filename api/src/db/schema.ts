@@ -330,6 +330,19 @@ export const PRIORITIES = ["Normal", "High"] as const;
 /** Risk levels (docs/04). Decided at intake; drives identity verification and escalation. */
 export const RISK_LEVELS = ["Low", "Medium", "High"] as const;
 
+/** Redaction categories (docs/04 RedactionCategory), the spec's six, verbatim. */
+export const REDACTION_CATEGORIES = [
+  "Name",
+  "Email",
+  "Phone number",
+  "ID number",
+  "Third-party personal data",
+  "Confidential free-text note",
+] as const;
+
+/** Redaction review state (docs/04 RedactionReview). */
+export const REDACTION_REVIEW_STATES = ["none", "requested", "done"] as const;
+
 /**
  * Per-workspace, per-year counter for case numbering.
  *
@@ -399,6 +412,11 @@ export const cases = pgTable(
     infoRequested: boolean("info_requested").notNull().default(false),
     /** The selected response template (docs/04 Case.template). Drives respText(). */
     template: text("template").notNull().default(""),
+    /** Redaction review state (docs/04 Case.redactionReview): none -> requested -> done.
+     *  A new redaction after review resets it to none. */
+    redactionReview: text("redaction_review", { enum: REDACTION_REVIEW_STATES }).notNull().default("none"),
+    /** The final redacted export has been generated (docs/04 Case.finalExportDone). */
+    finalExportDone: boolean("final_export_done").notNull().default(false),
     /** Set when the case is closed; null otherwise. The dashboard's "completed this
      *  month" and "average time to closure" both read it. */
     closedAt: timestamp("closed_at", { withTimezone: true }),
@@ -497,5 +515,77 @@ export const notificationReads = pgTable(
   (table) => [
     uniqueIndex("notification_reads_user_key_idx").on(table.userId, table.notificationKey),
     index("notification_reads_workspace_user_idx").on(table.workspaceId, table.userId),
+  ],
+);
+
+/**
+ * One uploaded file per case (docs/04 CaseFile). Holds the storage key and metadata only —
+ * the bytes live in object storage, never here. `needs_redaction`/`is_redacted_export`
+ * mark the two ends of the redaction flow; the original (v1) is always preserved and the
+ * redacted export is a NEW version, never an overwrite.
+ */
+export const caseFiles = pgTable(
+  "case_files",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => cases.id),
+    /** The data source this file came from, if any (e.g. "Zendesk"). */
+    sourceKey: text("source_key"),
+    name: text("name").notNull(),
+    type: text("type").notNull().default(""),
+    sizeBytes: integer("size_bytes").notNull().default(0),
+    uploadedBy: uuid("uploaded_by").references(() => users.id),
+    storageKey: text("storage_key").notNull().default(""),
+    sha256: text("sha256").notNull().default(""),
+    version: integer("version").notNull().default(1),
+    needsRedaction: boolean("needs_redaction").notNull().default(false),
+    isRedactedExport: boolean("is_redacted_export").notNull().default(false),
+    isEvidence: boolean("is_evidence").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("case_files_case_name_version_idx").on(table.caseId, table.name, table.version),
+    index("case_files_workspace_case_idx").on(table.workspaceId, table.caseId),
+  ],
+);
+
+/**
+ * One flagged item inside a file (docs/04 RedactionToken). Only the category and a
+ * first-4-chars-plus-ellipsis snippet are stored — never the full personal-data value.
+ * `flagged` = the scan found it; `redacted` = the handler has redacted it with a reason.
+ */
+export const redactionTokens = pgTable(
+  "redaction_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => cases.id),
+    fileId: uuid("file_id")
+      .notNull()
+      .references(() => caseFiles.id),
+    page: integer("page"),
+    category: text("category", { enum: REDACTION_CATEGORIES }).notNull(),
+    snippet: text("snippet").notNull().default(""),
+    flagged: boolean("flagged").notNull().default(false),
+    redacted: boolean("redacted").notNull().default(false),
+  },
+  (table) => [
+    index("redaction_tokens_file_idx").on(table.fileId),
+    index("redaction_tokens_case_idx").on(table.caseId),
   ],
 );
