@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/server/auth/require-auth";
 import { now } from "@/server/time";
 import { bulkAssignOwner, exportCasesCsv } from "@/server/cases/bulk";
+import { updateSystemStatus } from "@/server/cases/checklist";
 import { AppError } from "@/server/http/errors";
 
 export interface ActionResult<T> {
@@ -48,6 +49,29 @@ export async function exportCases(input: {
     const actor = await requireAuth();
     const result = await exportCasesCsv(actor, { ...input, now: now() });
     return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function setSystemStatus(input: {
+  caseId: string;
+  caseNumber: string;
+  sourceKey: string;
+  status: string;
+  reason: string;
+  exceptionCategory?: string;
+}): Promise<ActionResult<{ status: string }>> {
+  try {
+    const actor = await requireAuth();
+    await updateSystemStatus(actor, input.caseId, {
+      sourceKey: input.sourceKey,
+      status: input.status,
+      reason: input.reason,
+      exceptionCategory: input.exceptionCategory,
+    });
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: { status: input.status } };
   } catch (error) {
     return failure(error);
   }

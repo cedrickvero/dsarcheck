@@ -127,6 +127,13 @@
       "when": 1795602590915,
       "tag": "0017_cases_details_identifier",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1795616848135,
+      "tag": "0018_case_systems_checklist",
+      "breakpoints": true
     }
   ]
 }

@@ -262,3 +262,13 @@ input:focus-visible, select:focus-visible, summary:focus-visible, tr:focus-withi
 .audit-table th { color: var(--muted); font-weight: 600; }
 .audit-category { background: #eef1f4; color: #344054; padding: 1px 8px; border-radius: 999px; font-size: 12px; white-space: nowrap; }
 .muted { color: var(--muted); }
+
+/* ── Data-source checklist ────────────────────────────────────────────────── */
+.checklist-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.checklist-table th, .checklist-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.checklist-table th { color: var(--muted); font-weight: 600; }
+.system-sub { display: block; color: var(--muted); font-size: 13px; }
+.system-status-form { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.system-status-form select, .system-status-form input { min-height: 36px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.system-status-form .button { min-height: 36px; }
+.form-error { color: #b42318; font-size: 13px; }

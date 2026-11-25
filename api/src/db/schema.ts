@@ -440,6 +440,16 @@ export const caseSystems = pgTable(
     name: text("name").notNull().default(""),
     status: text("status", { enum: CASE_SYSTEM_STATUSES }).notNull().default("Not started"),
     evidenceCount: integer("evidence_count").notNull().default(0),
+    /** The assignee. Nullable: older rows and auto-generated checklists may be unassigned. */
+    ownerId: uuid("owner_id").references(() => users.id),
+    /** When this system's search is due. Nullable when not yet scheduled. */
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    /** How to search this system, e.g. "Export by email or customer ID" (the grid's "sub"). */
+    searchMethod: text("search_method").notNull().default(""),
+    /** Why the system is in an outcome state (Not found / Action required / Retained). */
+    reason: text("reason").notNull().default(""),
+    /** The exception category when status is "Retained under exception". */
+    exceptionCategory: text("exception_category"),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
