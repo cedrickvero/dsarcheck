@@ -14,9 +14,9 @@ raw gate evidence is under `/opt/data/qa-tmp/`.
 authorization seam) complete and gate-approved. The domain layer (Phase 1), host routing,
 the case list, the direct dashboard, the notification bell, the sign-in landing page, the
 TOTP MFA step, and the case cockpit (tab shell, Overview, Audit log, Data-source checklist,
-Identity, Approval & response, Erasure outcomes, Collection & redaction) are all implemented AND gate-approved (guardrail APPROVE + QA
-PASS; evidence under /opt/data/qa-tmp/). Remaining: the cockpit's Evidence-pack tab and the
-agency "Client workspaces" table.**
+Identity, Approval & response, Erasure outcomes, Collection & redaction, Evidence pack) are all
+implemented AND gate-approved (guardrail APPROVE + QA PASS; evidence under /opt/data/qa-tmp/).
+Remaining: the agency "Client workspaces" table.**
 
 | Prerequisite | Verdict | Commit |
 |---|---|---|
@@ -38,6 +38,7 @@ agency "Client workspaces" table.**
 | Case cockpit — approval & response | **guardrail APPROVE + QA PASS** (QA FAILed once, rechecked PASS; 1 LOW closed) | `da21c3c` `bc0ca62` |
 | Case cockpit — erasure outcomes (Collection tab, Erasure branch) | **guardrail APPROVE + QA PASS** (R4 contract consumed; 2 HIGH + 2 LOW closed, then 1 HIGH regression closed) | `de76800` `41927e7` |
 | Case cockpit — Collection & redaction (Access) | **guardrail APPROVE + QA PASS** (3 LOWs closed, rechecked APPROVE 0/0/0) | `a26686a` `56f0ed2` `5505221` |
+| Case cockpit — Evidence pack | **guardrail APPROVE + QA PASS** (2 LOWs closed, rechecked APPROVE 0/0/0; PDF/signed-links deferred) | `95ac675` `35ca6fd` `11007a4` |
 
 Every prerequisite was accepted only on guardrail APPROVE **and** QA PASS together,
 with no HIGH or CRITICAL finding open.
