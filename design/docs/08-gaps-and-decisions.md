@@ -146,3 +146,9 @@ Decisions that follow, all recorded in code under `api/src/domain/platform.ts` a
   reason + access logging + 410 on expiry, docs/05 § Evidence pack) belong to the storage slice
   and are deferred. "Generate/Regenerate" and the approval auto-final are implemented and
   audited here, so the version history is correct even though the bytes are not yet rendered.
+
+- **`memberships.workspace_name` is denormalised** (the `workspaces` table's RLS is
+  `id = app.workspace_id`, so a sibling workspace's name is not readable under the tenant GUC).
+  There is no rename feature today, so no sync path exists; when workspace rename lands it MUST
+  update `memberships.workspace_name` for every row of that workspace in the same transaction,
+  or the agency dashboard will show stale client names.

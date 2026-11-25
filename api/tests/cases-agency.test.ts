@@ -16,7 +16,7 @@ const tag = `t11ag-${RUN}`;
 let agencyOrgId = ""; let agencyRootWsId = ""; let kestoWsId = ""; let fernwoodWsId = "";
 let directOrgId = ""; let directWsId = "";
 let maraId = ""; let handlerId = ""; let directOwnerId = "";
-let mara: Actor; let agencyHandler: Actor; let directOwner: Actor;
+let mara: Actor; let agencyHandler: Actor; let directOwner: Actor; let wsAdmin: Actor;
 
 const num = () => `DSAR-2026-${String(10000 + Math.floor(Math.random() * 89999)).padStart(5, "0")}`;
 
@@ -28,7 +28,7 @@ beforeAll(async () => {
     kestoWsId = (await systemDb.insert(workspaces).values({ orgId: agencyOrgId, name: "Kesto Health" }).returning({ id: workspaces.id }))[0]!.id;
     fernwoodWsId = (await systemDb.insert(workspaces).values({ orgId: agencyOrgId, name: "Fernwood & Co" }).returning({ id: workspaces.id }))[0]!.id;
 
-    const mkUser = async (orgId: string, wsId: string, role: "owner" | "request_handler", label: string) =>
+    const mkUser = async (orgId: string, wsId: string, role: "owner" | "request_handler" | "workspace_admin", label: string) =>
       (await systemDb.insert(users).values({
         orgId, workspaceId: wsId, email: `${tag}-${label}@example.test`, emailHash: hashEmail(`${tag}-${label}@example.test`), role,
       }).returning({ id: users.id }))[0]!.id;
@@ -37,6 +37,13 @@ beforeAll(async () => {
 
     mara = { userId: maraId, orgId: agencyOrgId, workspaceId: agencyRootWsId, roles: ["owner"], label: `${tag}-mara`, mfaSatisfied: true };
     agencyHandler = { userId: handlerId, orgId: agencyOrgId, workspaceId: agencyRootWsId, roles: ["request_handler"], label: `${tag}-handler`, mfaSatisfied: true };
+
+    // A workspace_admin who is a member of only ONE client (Kesto) — must not see Fernwood.
+    const wsAdminId = await mkUser(agencyOrgId, agencyRootWsId, "workspace_admin", "wsadmin");
+    await systemDb.insert(memberships).values([
+      { orgId: agencyOrgId, userId: wsAdminId, workspaceId: kestoWsId, workspaceName: "Kesto Health", role: "workspace_admin" },
+    ]);
+    wsAdmin = { userId: wsAdminId, orgId: agencyOrgId, workspaceId: agencyRootWsId, roles: ["workspace_admin"], label: `${tag}-wsadmin`, mfaSatisfied: true };
 
     await systemDb.insert(memberships).values([
       { orgId: agencyOrgId, userId: maraId, workspaceId: kestoWsId, workspaceName: "Kesto Health", role: "owner" },
@@ -94,5 +101,11 @@ describe("getAgencyDashboard", () => {
 
   it("returns null for an agency org non-owner", async () => {
     expect(await getAgencyDashboard(agencyHandler)).toBeNull();
+  });
+
+  it("scopes the client list to the actor's own memberships", async () => {
+    const dash = await getAgencyDashboard(wsAdmin);
+    expect(dash).not.toBeNull();
+    expect(dash!.clients.map((c) => c.name)).toEqual(["Kesto Health"]);
   });
 });

@@ -239,6 +239,19 @@ try {
     check(p && p.n > 0, `tenant policy present on ${t}`, p ? `${p.n} policy/policies` : "none");
   }
 
+  // memberships is the ONE org-scoped table: its policy must read app.org_id (a user sees
+  // their org's roster), not app.workspace_id. A copy-paste workspace-scoped policy would
+  // still "have a policy" above but silently break the agency enumeration scope.
+  const membershipsPol = await q(
+    `select qual from pg_policies where schemaname = 'public' and tablename = 'memberships' limit 1`,
+  );
+  const membershipsQual = membershipsPol[0]?.qual ?? "";
+  check(
+    /app\.org_id/.test(membershipsQual) && !/app\.workspace_id/.test(membershipsQual),
+    "memberships policy is org-scoped (reads app.org_id, not app.workspace_id)",
+    membershipsQual,
+  );
+
   // 4 · append-only needs BOTH the row trigger and the statement-level guard
   const trg = await q(
     `select t.tgname, t.tgenabled, pg_get_triggerdef(t.oid) as def

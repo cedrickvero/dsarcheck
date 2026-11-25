@@ -103,16 +103,21 @@ export async function getAgencyDashboard(actor: Actor): Promise<AgencyDashboard 
       const members = await tx
         .select({ workspaceId: memberships.workspaceId, name: memberships.workspaceName })
         .from(memberships)
-        .where(and(eq(memberships.orgId, actor.orgId), eq(memberships.active, true)))
+        .where(and(eq(memberships.orgId, actor.orgId), eq(memberships.userId, actor.userId), eq(memberships.active, true)))
         .orderBy(asc(memberships.workspaceName));
 
-      // Dedupe by workspace (a workspace may have several members).
+      // Dedupe by workspace (a workspace may have several members) and accumulate the
+      // weighted org average (sum of closure days / sum of closed cases, not a mean of means).
       const byId = new Map<string, string>();
       for (const m of members) if (!byId.has(m.workspaceId)) byId.set(m.workspaceId, m.name);
 
       const clients: AgencyClientRow[] = [];
+      let totalClosed = 0;
+      let totalClosureDays = 0;
       for (const [workspaceId, name] of byId) {
         const s = await workspaceStats(tx, workspaceId);
+        totalClosed += s.closed_count;
+        totalClosureDays += s.closure_days_total ?? 0;
         clients.push({
           workspaceId,
           name,
@@ -128,9 +133,6 @@ export async function getAgencyDashboard(actor: Actor): Promise<AgencyDashboard 
         });
       }
 
-      const totalClosureDays = clients.reduce((sum, c) => sum + (c.avgClosureDays ? c.avgClosureDays * 1 : 0), 0);
-      const closedClients = clients.filter((c) => c.avgClosureDays !== null).length;
-
       return {
         orgName: org.name,
         totalOpen: clients.reduce((s, c) => s + c.open, 0),
@@ -140,7 +142,7 @@ export async function getAgencyDashboard(actor: Actor): Promise<AgencyDashboard 
         actionRequired: clients.reduce((s, c) => s + c.actionRequired, 0),
         highRisk: clients.reduce((s, c) => s + c.highRisk, 0),
         completedThisMonth: clients.reduce((s, c) => s + c.completedThisMonth, 0),
-        avgClosureDays: closedClients > 0 ? totalClosureDays / closedClients : null,
+        avgClosureDays: totalClosed > 0 ? totalClosureDays / totalClosed : null,
         clients,
       };
     },
