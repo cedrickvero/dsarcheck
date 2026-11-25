@@ -10,6 +10,7 @@
  * return the same 401 from the API, so this form can only ever say "that didn't work".
  */
 import { useEffect, useState } from "react";
+import { QrCode } from "./qr-code";
 
 function formatSecret(secret: string): string {
   return secret.replace(/(.{4})/g, "$1 ").trim();
@@ -101,6 +102,7 @@ export function MfaForm({ enrolled, email }: { enrolled: boolean; email: string 
           ) : (
             <p className="hint">Loading setup key…</p>
           )}
+          {otpauth ? <QrCode value={otpauth} /> : null}
           {otpauth ? (
             <a className="hint" href={otpauth}>
               Open in authenticator app
