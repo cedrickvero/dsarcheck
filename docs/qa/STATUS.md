@@ -12,9 +12,10 @@ raw gate evidence is under `/opt/data/qa-tmp/`.
 
 **M0 Foundation (R1-R4) complete and gate-approved. T-08 (authentication, sessions, RBAC,
 authorization seam) complete and gate-approved. The domain layer (Phase 1), host routing,
-the case list, the direct dashboard and the notification bell are all implemented AND
-gate-approved (guardrail APPROVE + QA PASS; evidence under /opt/data/qa-tmp/). The only
-T-07 remainder is the cockpit tabs; the agency "Client workspaces" table is deferred.**
+the case list, the direct dashboard, the notification bell, the sign-in landing page and
+the TOTP MFA step are all implemented AND gate-approved (guardrail APPROVE + QA PASS;
+evidence under /opt/data/qa-tmp/). The only T-07 remainder is the cockpit tabs; the agency
+"Client workspaces" table is deferred.**
 
 | Prerequisite | Verdict | Commit |
 |---|---|---|
@@ -28,6 +29,8 @@ T-07 remainder is the cockpit tabs; the agency "Client workspaces" table is defe
 | T-07 case list (views, filters, bulk, CSV, empty/skeleton) | **guardrail APPROVE + QA PASS** (11/11 gate items) | `5029e60` |
 | T-07 direct dashboard (KPIs + Needs attention) | **guardrail APPROVE + QA PASS** (QA FAILed once, rechecked PASS) | `a5b39d7` |
 | T-07 notification bell | **guardrail APPROVE + QA PASS** (QA FAILed once, rechecked PASS) | `1e5b3a4` |
+| Sign-in landing page + magic-link host origin | **guardrail APPROVE + QA PASS** | `1082077` `1be2665` `578912c` |
+| TOTP MFA step (`/mfa`) | **guardrail APPROVE + QA PASS** (QA FAILed once on two untested paths, rechecked PASS; 3 LOWs closed) | `74f6741` `f29f07d` |
 
 Every prerequisite was accepted only on guardrail APPROVE **and** QA PASS together,
 with no HIGH or CRITICAL finding open.
