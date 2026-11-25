@@ -119,3 +119,16 @@ Decisions that follow, all recorded in code under `api/src/domain/platform.ts` a
   placeholder so that the day a requester↔actor link exists, the rule fires without a code
   change; until then it is a no-op, not a protection gap (an external requester cannot hold
   a workspace role today).
+
+- **Complete redaction review requires every flagged item to be redacted first.** The
+  prototype's pre-closure "Redaction reviewed" check passes on `review done AND export
+  generated` regardless of whether flagged items remain unredacted, which would let a
+  redacted export ship with unresolved personal data. The slice is stricter: an approver
+  cannot complete the review while any flagged token is unredacted. This is a deliberate
+  tightening of the redaction rule, not a defect.
+
+- **Generating the final redacted export is a state marker in this slice.** `final_export_done`
+  records that the human has produced the `_redacted_v2` file; the actual file creation
+  (a new `case_files` row whose `is_redacted_export` is set, original v1 untouched) belongs to
+  the file-upload/storage slice, which is deferred. The rule "export only after review done"
+  is enforced here regardless, so the state can never claim an export exists before review.
