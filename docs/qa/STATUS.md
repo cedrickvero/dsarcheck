@@ -14,9 +14,11 @@ raw gate evidence is under `/opt/data/qa-tmp/`.
 authorization seam) complete and gate-approved. The domain layer (Phase 1), host routing,
 the case list, the direct dashboard, the notification bell, the sign-in landing page, the
 TOTP MFA step, and the case cockpit (tab shell, Overview, Audit log, Data-source checklist,
-Identity, Approval & response, Erasure outcomes, Collection & redaction, Evidence pack) are all
+Identity, Approval & response, Erasure outcomes, Collection & redaction, Evidence pack, and the
+Agency dashboard (Client workspaces table)) are all
 implemented AND gate-approved (guardrail APPROVE + QA PASS; evidence under /opt/data/qa-tmp/).
-Remaining: the agency "Client workspaces" table.**
+Remaining: evidence-pack download/PDF/signed links (deferred to the storage slice) and the
+active-workspace switcher (follow-on slice).**
 
 | Prerequisite | Verdict | Commit |
 |---|---|---|
@@ -39,6 +41,7 @@ Remaining: the agency "Client workspaces" table.**
 | Case cockpit — erasure outcomes (Collection tab, Erasure branch) | **guardrail APPROVE + QA PASS** (R4 contract consumed; 2 HIGH + 2 LOW closed, then 1 HIGH regression closed) | `de76800` `41927e7` |
 | Case cockpit — Collection & redaction (Access) | **guardrail APPROVE + QA PASS** (3 LOWs closed, rechecked APPROVE 0/0/0) | `a26686a` `56f0ed2` `5505221` |
 | Case cockpit — Evidence pack | **guardrail APPROVE + QA PASS** (2 LOWs closed, rechecked APPROVE 0/0/0; PDF/signed-links deferred) | `95ac675` `35ca6fd` `11007a4` |
+| Agency dashboard (Client workspaces table, memberships model) | **guardrail APPROVE + QA PASS** (HIGH seed name-collision closed; composite-FK migration 0026 applied; rechecked APPROVE 0/0/1 + PASS 895/895) | `bb33a60` `06b549c` `4c4ba2f` |
 
 Every prerequisite was accepted only on guardrail APPROVE **and** QA PASS together,
 with no HIGH or CRITICAL finding open.
@@ -61,14 +64,14 @@ check that has been proven able to fail.
 
 ## Verification state
 
-Measured at `HEAD` after the host-routing slice:
+Measured at `HEAD` after the agency-dashboard slice:
 
 ```
-780 tests / 51 files    780 passed · 0 failed · 0 skipped
+895 tests / 71 files    895 passed · 0 failed · 0 skipped
 typecheck               0 errors
-boundary                97 files, 0 client -> server imports, 0 privileged handles
-db:verify               42/42 invariants
-migrations              15 applied, each exactly once
+boundary                128 files, 0 client -> server imports, 0 privileged handles
+db:verify               63/63 invariants
+migrations              27 applied (journal 0000-0026)
 11 domain routes        still stubbed (notImplemented -> 501)
 ```
 
