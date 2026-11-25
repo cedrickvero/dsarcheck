@@ -17,11 +17,13 @@ export interface HeaderPair {
 }
 
 /** The policy in one readable place, so a reviewer can diff it as a whole. */
-export function contentSecurityPolicy(opts: { nonce?: string } = {}): string {
+export function contentSecurityPolicy(opts: { nonce?: string; allowUnsafeEval?: boolean } = {}): string {
   // The nonce is the ONLY way Next's inline bootstrap scripts are permitted to run; there
-  // is no fallback to 'unsafe-inline' or 'unsafe-eval'. When no nonce is supplied - the
-  // static path, which serves no HTML - the policy stays strict and simply omits it.
-  const scriptSrc = opts.nonce ? `script-src 'self' 'nonce-${opts.nonce}'` : "script-src 'self'";
+  // is no fallback to 'unsafe-inline'. 'unsafe-eval' is permitted ONLY when explicitly
+  // requested - the middleware does so in development, because Next's dev runtime (webpack
+  // HMR + React Refresh) evaluates strings and no page hydrates without it. Production
+  // never opts in, so the shipped policy stays eval-free.
+  const scriptSrc = `script-src 'self'${opts.nonce ? ` 'nonce-${opts.nonce}'` : ""}${opts.allowUnsafeEval ? " 'unsafe-eval'" : ""}`;
   return [
     "default-src 'self'",
     scriptSrc,

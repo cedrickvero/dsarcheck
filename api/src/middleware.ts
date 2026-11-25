@@ -117,11 +117,15 @@ export function middleware(req: NextRequest) {
 
   const requestHeaders = new Headers(req.headers);
   // Next reads the nonce from the CSP on the REQUEST and applies it to its inline scripts.
-  requestHeaders.set("Content-Security-Policy", contentSecurityPolicy({ nonce }));
+  // In development we must also allow 'unsafe-eval': Next's dev runtime (webpack HMR +
+  // React Refresh) evaluates strings, and the eval-free policy would stop every page from
+  // hydrating. Production keeps the strict, eval-free policy.
+  const csp = contentSecurityPolicy({ nonce, allowUnsafeEval: !production });
+  requestHeaders.set("Content-Security-Policy", csp);
 
   const res = NextResponse.next({ request: { headers: requestHeaders } });
 
-  res.headers.set("Content-Security-Policy", contentSecurityPolicy({ nonce }));
+  res.headers.set("Content-Security-Policy", csp);
   applyHeaders(res);
   res.headers.set("x-request-nonce-present", "1");
   return res;

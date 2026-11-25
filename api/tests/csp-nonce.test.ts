@@ -22,6 +22,11 @@ describe("T-07 nonce CSP", () => {
     expect(csp).toContain("style-src 'self'");
   });
 
+  it("allows 'unsafe-eval' only when the dev runtime opts in (Next dev needs eval to hydrate)", () => {
+    expect(contentSecurityPolicy({ nonce: "N", allowUnsafeEval: true })).toContain("'unsafe-eval'");
+    expect(contentSecurityPolicy({ nonce: "N" })).not.toContain("unsafe-eval");
+  });
+
   it("is UNIQUE per request - a fresh nonce every time", () => {
     // A real request always carries Host; without one the middleware cannot classify the
     // surface and (correctly) refuses a cookie-bearing request, so the mock must set it.
