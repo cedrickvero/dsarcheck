@@ -13,6 +13,8 @@ dist/
 .env
 .env.*
 !.env.example
+gh_token
+.git-credentials
 
 # logs
 *.log
@@ -24,3 +26,6 @@ coverage/
 
 # graphify knowledge-graph build output
 graphify-out/
+
+# The marketing site is its OWN repository - never part of a DSAR commit.
+site/
