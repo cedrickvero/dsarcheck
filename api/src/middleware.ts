@@ -27,10 +27,12 @@
  * rendered; T-07 is where that decision is revisited, as planned.
  *
  * The nonce is generated with the Web Crypto API (middleware runs on the edge runtime,
- * where node:crypto is unavailable), is never logged, never cached, never reused across
- * requests, and is NOT put on the response - it goes on the REQUEST headers, which is
- * how Next discovers it and stamps its own inline scripts. Putting it on the response
- * would expose it; putting it in props would leak it to the client.
+ * where node:crypto is unavailable), is never logged, never cached, and never reused
+ * across requests. It is placed on BOTH the request headers (how Next discovers it and
+ * stamps its own inline scripts) and the response CSP header (how the browser learns
+ * which scripts to permit) - that is the standard nonce delivery, and its protection
+ * comes from being unpredictable per request, not secret. It is never placed in props,
+ * which would leak it to the client.
  *
  * The matcher covers every route except static assets, so no route can opt out.
  */
