@@ -28,6 +28,7 @@ import {
   completeRedactionReview as completeReview,
   markFinalExportDone as markExport,
 } from "@/server/cases/collection";
+import { generateEvidencePack as generatePack } from "@/server/cases/evidence";
 import { AppError } from "@/server/http/errors";
 
 export interface ActionResult<T> {
@@ -270,6 +271,20 @@ export async function markFinalExportDone(input: {
   try {
     const actor = await requireAuth();
     const result = await markExport(actor, input.caseId);
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function generateEvidencePack(input: {
+  caseId: string;
+  caseNumber: string;
+}): Promise<ActionResult<{ version: number; draft: boolean }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await generatePack(actor, input.caseId);
     revalidatePath(`/app/cases/${input.caseNumber}`);
     return { ok: true, data: result };
   } catch (error) {

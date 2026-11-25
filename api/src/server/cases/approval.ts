@@ -21,6 +21,7 @@ import { respText, RESPONSE_TEMPLATES } from "@/domain/respText";
 import type { CaseSystemState, ErasureOutcome as DomainErasureOutcome } from "@/domain/types";
 import { isErasureOutcome, outcomeRule } from "@/server/erasure/outcomes";
 import { CHECKLIST_STATUS_BY_OUTCOME } from "./erasure";
+import { insertEvidencePackVersion } from "./evidence";
 
 const MIN_REASON = 3;
 
@@ -397,6 +398,12 @@ async function decideClosure(
         objectType: "case",
         objectId: caseId,
       });
+
+      // docs/05: approval auto-creates a FINAL evidence-pack version.
+      if (input.decision === "approve") {
+        await insertEvidencePackVersion(tx, actor, caseId, false);
+      }
+
       return { status };
     },
   );

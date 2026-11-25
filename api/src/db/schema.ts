@@ -589,3 +589,34 @@ export const redactionTokens = pgTable(
     index("redaction_tokens_case_idx").on(table.caseId),
   ],
 );
+
+/**
+ * One evidence-pack version per case (docs/04 EvidencePack). A new version is generated on
+ * demand (draft while the case is open) and a final version is auto-created on approval.
+ * `content` snapshots the nine-section document at generation time so versions are
+ * immutable; the PDF/ZIP bytes are a storage-slice concern, not stored here.
+ */
+export const evidencePacks = pgTable(
+  "evidence_packs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => cases.id),
+    version: integer("version").notNull(),
+    draft: boolean("draft").notNull().default(true),
+    generatedBy: uuid("generated_by").references(() => users.id),
+    generatedAt: timestamp("generated_at", { withTimezone: true }).defaultNow().notNull(),
+    content: jsonb("content"),
+  },
+  (table) => [
+    uniqueIndex("evidence_packs_case_version_idx").on(table.caseId, table.version),
+    index("evidence_packs_workspace_case_idx").on(table.workspaceId, table.caseId),
+  ],
+);
