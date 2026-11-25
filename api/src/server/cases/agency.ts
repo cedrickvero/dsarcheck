@@ -66,7 +66,7 @@ async function workspaceStats(tx: Transaction, workspaceId: string): Promise<Sta
     FROM cases
   `);
 
-  const next = await tx.execute<{ case_number: string; statutory_due_at: Date }>(sql`
+  const next = await tx.execute<{ case_number: string; statutory_due_at: string | null }>(sql`
     SELECT case_number, statutory_due_at FROM cases
     WHERE status NOT IN ('Completed','Rejected')
     ORDER BY statutory_due_at ASC
@@ -85,7 +85,7 @@ async function workspaceStats(tx: Transaction, workspaceId: string): Promise<Sta
     completed_month: s?.completed_month ?? 0,
     closed_count: s?.closed_count ?? 0,
     closure_days_total: s?.closure_days_total ?? null,
-    nextDeadline: n ? { caseNumber: n.case_number, dueAt: n.statutory_due_at } : null,
+    nextDeadline: n && n.statutory_due_at ? { caseNumber: n.case_number, dueAt: new Date(n.statutory_due_at) } : null,
   };
 }
 

@@ -98,6 +98,9 @@ describe("getAgencyDashboard", () => {
     expect(fernwood.open).toBe(2);
     expect(fernwood.actionRequired).toBe(1);
     expect(fernwood.highRisk).toBe(1);
+    // Regression: the raw next-deadline query returned the timestamp as a string, which
+    // formatDateTime threw on ("Invalid time value"). The boundary must deliver a Date.
+    expect(fernwood.nextDeadline?.dueAt).toBeInstanceOf(Date);
   });
 
   it("returns null for a direct-org user", async () => {
