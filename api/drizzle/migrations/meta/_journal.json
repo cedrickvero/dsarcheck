@@ -141,6 +141,13 @@
       "when": 1795619138519,
       "tag": "0019_cases_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "5",
+      "when": 1795632305831,
+      "tag": "0020_cases_template",
+      "breakpoints": true
     }
   ]
 }

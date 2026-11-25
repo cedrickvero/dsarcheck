@@ -14,6 +14,13 @@ import { now } from "@/server/time";
 import { bulkAssignOwner, exportCasesCsv } from "@/server/cases/bulk";
 import { updateSystemStatus } from "@/server/cases/checklist";
 import { recordIdentityDecision as decideIdentity } from "@/server/cases/identity";
+import {
+  approveAndClose as approveClose,
+  rejectCase as rejectClosure,
+  requestChanges as reqChanges,
+  selectTemplate as setTemplate,
+  sendForApproval as sendApproval,
+} from "@/server/cases/approval";
 import { AppError } from "@/server/http/errors";
 
 export interface ActionResult<T> {
@@ -94,6 +101,81 @@ export async function recordIdentityDecision(input: {
     });
     revalidatePath(`/app/cases/${input.caseNumber}`);
     return { ok: true, data: { status: result.status } };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function selectTemplate(input: {
+  caseId: string;
+  caseNumber: string;
+  template: string;
+}): Promise<ActionResult<{ template: string }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await setTemplate(actor, input.caseId, input.template);
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function sendForApproval(input: {
+  caseId: string;
+  caseNumber: string;
+  reason: string;
+}): Promise<ActionResult<{ status: string }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await sendApproval(actor, input.caseId, input.reason);
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function approveAndClose(input: {
+  caseId: string;
+  caseNumber: string;
+  reason: string;
+}): Promise<ActionResult<{ status: string }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await approveClose(actor, input.caseId, input.reason);
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function requestChanges(input: {
+  caseId: string;
+  caseNumber: string;
+  reason: string;
+}): Promise<ActionResult<{ status: string }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await reqChanges(actor, input.caseId, input.reason);
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function rejectCase(input: {
+  caseId: string;
+  caseNumber: string;
+  reason: string;
+}): Promise<ActionResult<{ status: string }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await rejectClosure(actor, input.caseId, input.reason);
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: result };
   } catch (error) {
     return failure(error);
   }

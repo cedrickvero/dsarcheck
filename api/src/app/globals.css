@@ -275,3 +275,18 @@ input:focus-visible, select:focus-visible, summary:focus-visible, tr:focus-withi
 
 /* ── Identity ─────────────────────────────────────────────────────────────── */
 .identity-decision-form { display: flex; flex-direction: column; gap: 12px; }
+
+/* ── Approval & response ──────────────────────────────────────────────────── */
+.check-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.check-list li { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; align-items: baseline; }
+.check-ok { color: #0e6b4d; }
+.check-open { color: #b54708; }
+.check-label { font-weight: 600; }
+.check-detail { color: var(--muted); font-size: 13px; }
+.response-preview { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 13px; background: #f7f8fa; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.approval-form { display: flex; flex-direction: column; gap: 12px; }
+.template-form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+.decision-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.button--danger { background: #b42318; border-color: #b42318; color: #fff; }
+.history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.history-action { font-weight: 600; }

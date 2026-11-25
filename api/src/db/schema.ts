@@ -397,6 +397,8 @@ export const cases = pgTable(
     idDocumentProvided: boolean("id_document_provided").notNull().default(false),
     identityVerified: boolean("identity_verified").notNull().default(false),
     infoRequested: boolean("info_requested").notNull().default(false),
+    /** The selected response template (docs/04 Case.template). Drives respText(). */
+    template: text("template").notNull().default(""),
     /** Set when the case is closed; null otherwise. The dashboard's "completed this
      *  month" and "average time to closure" both read it. */
     closedAt: timestamp("closed_at", { withTimezone: true }),

@@ -16,6 +16,7 @@ import { getCaseOverview } from "@/server/cases/overview";
 import { listCaseAuditEvents } from "@/server/cases/audit";
 import { listCaseSystems } from "@/server/cases/checklist";
 import { getIdentity } from "@/server/cases/identity";
+import { getApproval } from "@/server/cases/approval";
 import { can } from "@/server/authz";
 import { now } from "@/server/time";
 import { summarise } from "@/server/cases/format";
@@ -25,8 +26,9 @@ import { OverviewTab } from "../../_components/overview-tab";
 import { AuditTab } from "../../_components/audit-tab";
 import { ChecklistTab } from "../../_components/checklist-tab";
 import { IdentityTab } from "../../_components/identity-tab";
+import { ApprovalTab } from "../../_components/approval-tab";
 import { TabStub } from "../../_components/tab-stub";
-import { setSystemStatus, recordIdentityDecision } from "../actions";
+import { setSystemStatus, recordIdentityDecision, selectTemplate, sendForApproval, approveAndClose, requestChanges, rejectCase } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -84,9 +86,14 @@ export default async function CaseCockpitPage(props: {
       {tab === "collection"
         ? stub(collectionTitle, `${collectionTitle} is a separate slice and is not implemented in this foundation.`)
         : null}
-      {tab === "approval"
-        ? stub("Approval & response", "Approval & response is a separate slice and is not implemented in this foundation.")
-        : null}
+      {tab === "approval" ? (
+        <ApprovalTab
+          caseId={overview.case.id}
+          caseNumber={overview.case.caseNumber}
+          view={await getApproval(actor, overview.case.id).then((v) => v ?? notFound())}
+          actions={{ selectTemplate, sendForApproval, approveAndClose, requestChanges, rejectCase }}
+        />
+      ) : null}
       {tab === "evidence"
         ? stub("Evidence pack", "The evidence pack is a separate slice and is not implemented in this foundation.")
         : null}
