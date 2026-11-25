@@ -32,9 +32,13 @@ export function MfaForm({ enrolled, email }: { enrolled: boolean; email: string 
   useEffect(() => {
     if (enrolled) return;
     let cancelled = false;
+    const controller = new AbortController();
+    // If the enrol request does not settle, surface a clear retry message instead of
+    // leaving "Loading setup key…" on screen forever.
+    const timeout = setTimeout(() => controller.abort(), 10000);
     (async () => {
       try {
-        const res = await fetch("/api/auth/totp/enrol", { method: "POST" });
+        const res = await fetch("/api/auth/totp/enrol", { method: "POST", signal: controller.signal });
         if (!res.ok) throw new Error(`enrol failed (${res.status})`);
         const data = (await res.json()) as { otpauthUri: string };
         if (cancelled) return;
@@ -43,10 +47,14 @@ export function MfaForm({ enrolled, email }: { enrolled: boolean; email: string 
         setSecret(uri.searchParams.get("secret"));
       } catch {
         if (!cancelled) setSetupFailed(true);
+      } finally {
+        clearTimeout(timeout);
       }
     })();
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
+      controller.abort();
     };
   }, [enrolled]);
 
