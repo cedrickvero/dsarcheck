@@ -120,6 +120,20 @@ describe("recordIdentityDecision", () => {
     await expect(recordIdentityDecision(handler, id, { decision: "reject", reason: "changed my mind" })).rejects.toThrow("identity has already been decided");
   });
 
+  it("derives the decision from the audit action, never a non-decision Identity event", async () => {
+    const id = await mkCase("Low");
+    // A future non-decision Identity event (e.g. opening an ID document) carries no
+    // decision, and must NOT be mislabeled as a decision - the filter + action map exist
+    // exactly for this.
+    await systemDb.insert(auditEvents).values({
+      orgId, workspaceId: wsId, at: new Date(), actorId: handlerId, actorLabel: handler.label,
+      action: "Identity document opened", category: "Identity", reason: "viewed",
+      objectType: "case", objectId: id,
+    });
+    const identity = await getIdentity(handler, id);
+    expect(identity!.decision).toBeNull();
+  });
+
   it("treats a cross-tenant case as unknown", async () => {
     await expect(recordIdentityDecision(handler, otherCaseId, { decision: "approve", reason: "nope" })).rejects.toThrow("unknown case");
   });
