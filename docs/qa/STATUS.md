@@ -58,6 +58,7 @@ active-workspace switcher (multi-workspace auth path) is implemented AND gate-ap
 | "My tasks" view for system owners (gap G8) | **guardrail APPROVE (0/0/2, LOWs fixed) + QA PASS** (947/947; owner/open-case/role-gate filters, role-gate test hardened, lean recheck PASS) | `3027915` `7814d64` |
 | Public intake form (first intake sub-slice) | **guardrail APPROVE (0/0/4, LOWs fixed) + QA PASS** (956/956; Host-only tenant resolution + subdomain uniqueness + server-side anti-spam, tenant-from-host mutation-proven, lean recheck PASS) | `5f29a8b` `2ba1f53` |
 | Requester portal sign-in + confirmation (G2/G3) | **guardrail APPROVE (0/0/4 after 1 HIGH + 4 LOW fixed) + QA PASS** (964/964; link+code single-use/expiry, IP rate-limit on code redemption, no-enumeration + email-scoped list, confirmation flip+audit atomic, lean recheck PASS) | `240e1fb` `bdf34fd` |
+| Requester request detail page (status card + progress) | **guardrail APPROVE (0/0/4, LOWs fixed) + QA PASS** (966/966; email+tenant-scoped detail, plain status/title mapping, terminal-status summary ordering, no internal-field exposure) | `430c7ee` `4f8f7e5` |
 
 Every prerequisite was accepted only on guardrail APPROVE **and** QA PASS together,
 with no HIGH or CRITICAL finding open.
