@@ -410,6 +410,7 @@ export async function openOriginalFile(actor: Actor, caseId: string, fileId: str
         .where(and(eq(caseFiles.id, fileId), eq(caseFiles.workspaceId, actor.workspaceId), eq(caseFiles.caseId, caseId)))
         .limit(1);
       if (!file) throw new ValidationError("unknown file");
+      if (!file.storageKey) throw new ValidationError("unknown file");
 
       await writeAuditEvent(tx, {
         orgId: actor.orgId,
