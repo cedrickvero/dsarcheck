@@ -15,7 +15,7 @@ import { hashEmail } from "@/server/auth/crypto";
 import { enforceRateLimit, bucketKey } from "@/server/auth/rate-limit";
 import { env } from "@/env";
 import { resolvePortalByHost } from "@/server/portal/resolve";
-import { hasRequesterCases, issueSignInCredential } from "@/server/portal/requester";
+import { requestSignInCredential } from "@/server/portal/requester";
 
 function originFrom(req: Request): string {
   const forwardedProto = req.headers.get("x-forwarded-proto");
@@ -44,9 +44,11 @@ export const POST = route(async (req, ctx) => {
         workspaceId: portal.workspaceId,
       });
 
-      if (!(await hasRequesterCases(tx, email))) return null;
-
-      const cred = await issueSignInCredential(tx, portal, email, origin);
+      const cred = await requestSignInCredential(tx, portal, email, origin);
+      if (!cred) {
+        // Unknown address: no credential issued, no audit, no row — identical generic response.
+        return null;
+      }
       await writeAuditEvent(tx, {
         orgId: portal.orgId,
         workspaceId: portal.workspaceId,
@@ -63,14 +65,24 @@ export const POST = route(async (req, ctx) => {
     });
   } catch (err) {
     // Throttling must not become an enumeration oracle: a rate-limited request returns the
-    // SAME generic "check your email" redirect as an unknown address.
-    if (!(err instanceof RateLimitError)) throw err;
-    logError("requester-sign-in.throttled", err, { requestId: ctx.requestId, emailHash: hashEmail(email) });
+    // SAME generic "check your email" redirect as an unknown address. A live-code collision
+    // (the partial unique index) is astronomically rare but must also return the generic
+    // response rather than a 500, so the "identical response" contract holds.
+    if (err instanceof RateLimitError) {
+      logError("requester-sign-in.throttled", err, { requestId: ctx.requestId, emailHash: hashEmail(email) });
+    } else if ((err as { code?: string })?.code === "23505") {
+      logError("requester-sign-in.code-collision", err, { requestId: ctx.requestId, emailHash: hashEmail(email) });
+    } else {
+      throw err;
+    }
   }
 
   if (issued) {
+    // Fire-and-forget: awaiting the SMTP round-trip here would make the known-email path
+    // measurably slower and leak the address's existence by timing. Delivery stays
+    // best-effort; the redirect returns immediately.
     const { sendRequesterSignInLink } = await import("@/server/auth/mailer");
-    await sendRequesterSignInLink(issued.email, issued.url, issued.code).catch(() => undefined);
+    void sendRequesterSignInLink(issued.email, issued.url, issued.code).catch(() => undefined);
   }
 
   return NextResponse.redirect(new URL(`/track?sent=1&email=${encodeURIComponent(email)}`, origin), 303);

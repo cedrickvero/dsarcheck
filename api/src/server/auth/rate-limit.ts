@@ -15,7 +15,7 @@ import type { Transaction } from "@/db/client";
 import { RateLimitError } from "@/server/http/errors";
 import { hashToken } from "./crypto";
 
-export type RateLimitScope = "magic_link_request" | "magic_link_redeem" | "totp_verify" | "requester_sign_in_request";
+export type RateLimitScope = "magic_link_request" | "magic_link_redeem" | "totp_verify" | "requester_sign_in_request" | "requester_sign_in_redeem";
 
 export function bucketKey(parts: readonly (string | null | undefined)[]): string {
   return hashToken(parts.filter((p): p is string => Boolean(p)).join("|"));

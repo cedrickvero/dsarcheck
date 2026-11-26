@@ -44,6 +44,21 @@ export async function hasRequesterCases(tx: Transaction, email: string): Promise
   return (row?.n ?? 0) > 0;
 }
 
+/**
+ * The sign-in request's one gate: issue a credential only when the address has at least one
+ * case. Returns null for an unknown address (the caller still returns the generic response),
+ * so the endpoint cannot enumerate requesters.
+ */
+export async function requestSignInCredential(
+  tx: Transaction,
+  portal: RequesterPortalRef,
+  email: string,
+  origin: string,
+): Promise<SignInCredential | null> {
+  if (!(await hasRequesterCases(tx, email))) return null;
+  return issueSignInCredential(tx, portal, email, origin);
+}
+
 export interface SignInCredential {
   token: string;
   code: string;
@@ -162,6 +177,11 @@ export async function resolveRequesterSession(
   if (row.expiresAt.getTime() <= now) return null;
   if (now - row.lastSeenAt.getTime() > env.REQUESTER_SESSION_IDLE_MINUTES * 60_000) return null;
 
+  // The session row was read via the token-hash policy. Its workspace is the tenant, so set
+  // it before touching last_seen_at — otherwise the UPDATE is invisible under RLS (the
+  // token_lookup policy is SELECT-only) and the 30-minute idle timer would never slide.
+  await tx.execute(sql`select set_config('app.workspace_id', ${row.workspaceId}, true)`);
+  await tx.execute(sql`select set_config('app.org_id', ${row.orgId}, true)`);
   await tx.update(requesterSessions).set({ lastSeenAt: new Date() }).where(eq(requesterSessions.id, row.id));
 
   return { orgId: row.orgId, workspaceId: row.workspaceId, email: row.email };

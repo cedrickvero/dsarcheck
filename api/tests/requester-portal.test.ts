@@ -5,7 +5,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { systemDb, withLookup, withTenant } from "@/db/client";
-import { auditEvents, cases, orgs, workspaces } from "@/db/schema";
+import { auditEvents, cases, orgs, requesterTokens, workspaces } from "@/db/schema";
 import { hashToken } from "@/server/auth/crypto";
 import { createCase } from "@/server/cases/create";
 import {
@@ -16,6 +16,7 @@ import {
   listRequesterRequests,
   redeemSignInCode,
   redeemSignInLink,
+  requestSignInCredential,
   resolveRequesterSession,
 } from "@/server/portal/requester";
 import { submitIntake } from "@/server/portal/intake";
@@ -84,6 +85,47 @@ describe("requester sign-in", () => {
       redeemSignInCode(tx, cred.code),
     );
     expect(redeemed).toMatchObject({ email: EMAIL });
+  });
+
+  it("issues no credential and no row for an unknown email (no enumeration)", async () => {
+    const unknown = `unknown-${RUN}@example.com`;
+    const issued = await withTenant({ orgId, workspaceId: wsId, actorId: "requester" }, (tx) =>
+      requestSignInCredential(tx, portal, unknown, "http://example.test"),
+    );
+    expect(issued).toBeNull();
+    const rows = await systemDb
+      .select({ id: requesterTokens.id })
+      .from(requesterTokens)
+      .where(eq(requesterTokens.email, unknown.toLowerCase()));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("redeems the 6-digit code only once", async () => {
+    const cred = await withTenant({ orgId, workspaceId: wsId, actorId: "requester" }, (tx) =>
+      issueSignInCredential(tx, portal, EMAIL, "http://example.test"),
+    );
+    const first = await withTenant({ orgId, workspaceId: wsId, actorId: "requester" }, (tx) =>
+      redeemSignInCode(tx, cred.code),
+    );
+    expect(first).toMatchObject({ email: EMAIL });
+    const replay = await withTenant({ orgId, workspaceId: wsId, actorId: "requester" }, (tx) =>
+      redeemSignInCode(tx, cred.code),
+    );
+    expect(replay).toBeNull();
+  });
+
+  it("rejects an expired code", async () => {
+    const cred = await withTenant({ orgId, workspaceId: wsId, actorId: "requester" }, (tx) =>
+      issueSignInCredential(tx, portal, EMAIL, "http://example.test"),
+    );
+    await systemDb
+      .update(requesterTokens)
+      .set({ expiresAt: new Date(Date.now() - 60_000) })
+      .where(eq(requesterTokens.tokenHash, hashToken(cred.token)));
+    const redeemed = await withTenant({ orgId, workspaceId: wsId, actorId: "requester" }, (tx) =>
+      redeemSignInCode(tx, cred.code),
+    );
+    expect(redeemed).toBeNull();
   });
 
   it("creates and resolves a session and lists only the requester's own cases", async () => {
