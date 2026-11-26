@@ -214,7 +214,7 @@ try {
   check(mem.length === 1, "app_runtime is a member of app_tenant");
 
   // 2 · RLS must be enabled AND forced on every multi-tenant table
-  const tables = ["audit_events", "cases", "case_systems", "case_files", "redaction_tokens", "evidence_packs", "memberships", "signed_links", "orgs", "workspaces"];
+  const tables = ["audit_events", "cases", "case_systems", "case_files", "redaction_tokens", "evidence_packs", "memberships", "signed_links", "orgs", "workspaces", "requester_tokens", "requester_sessions"];
 // `objects` is verified by checkObjectsTable below, which also asserts the R2
 // constraints - keeping it out of this list avoids printing each check twice.
   const rls = await q(
@@ -275,6 +275,26 @@ try {
     /app\.lookup_subdomain/.test(wsSubdomainPol[0]?.qual ?? ""),
     "workspaces_subdomain_lookup policy reads app.lookup_subdomain (portal resolution)",
     wsSubdomainPol[0]?.qual ?? "absent",
+  );
+
+  // Migration 0032: requester sign-in/confirmation links are redeemed pre-tenant, so the
+  // link policy must be keyed on the presented token hash alone (no workspace term) — the
+  // same reason the staff magic_links_token_lookup policy exists.
+  const reqTokenPol = await q(
+    `select qual from pg_policies where schemaname = 'public' and tablename = 'requester_tokens' and policyname = 'requester_tokens_link_lookup' limit 1`,
+  );
+  check(
+    /app\.requester_token_hash/.test(reqTokenPol[0]?.qual ?? "") && !/app\.workspace_id/.test(reqTokenPol[0]?.qual ?? ""),
+    "requester_tokens_link_lookup policy reads app.requester_token_hash only (not app.workspace_id)",
+    reqTokenPol[0]?.qual ?? "absent",
+  );
+  const reqSessionPol = await q(
+    `select qual from pg_policies where schemaname = 'public' and tablename = 'requester_sessions' and policyname = 'requester_sessions_token_lookup' limit 1`,
+  );
+  check(
+    /app\.requester_session_token_hash/.test(reqSessionPol[0]?.qual ?? ""),
+    "requester_sessions_token_lookup policy reads app.requester_session_token_hash",
+    reqSessionPol[0]?.qual ?? "absent",
   );
 
   // Migration 0026 ties memberships(workspace_id, org_id) to workspaces(id, org_id): the

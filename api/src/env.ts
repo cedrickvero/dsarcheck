@@ -87,6 +87,7 @@ const envSchema = z.object({
   SESSION_ABSOLUTE_DAYS: z.coerce.number().int().positive().default(7),
   SESSION_IDLE_MINUTES: z.coerce.number().int().positive().default(720),
   MAGIC_LINK_TTL_MINUTES: z.coerce.number().int().positive().default(15),
+  REQUESTER_SESSION_IDLE_MINUTES: z.coerce.number().int().positive().default(30),
   RATE_LIMIT_MAGIC_LINK_PER_HOUR: z.coerce.number().int().positive().default(5),
   RATE_LIMIT_REDEEM_PER_HOUR: z.coerce.number().int().positive().default(20),
   RATE_LIMIT_TOTP_PER_HOUR: z.coerce.number().int().positive().default(10),

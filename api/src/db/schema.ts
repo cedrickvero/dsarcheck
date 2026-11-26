@@ -238,6 +238,66 @@ export const magicLinks = pgTable(
 );
 
 /**
+ * Requester credentials. A requester has no user account, so this store backs the
+ * requester portal: single-use sign-in (purpose 'sign_in', a link token plus a 6-digit
+ * code) and single-use email-confirmation links (purpose 'confirm_email'). All hashes at
+ * rest; redemption is an atomic UPDATE ... WHERE used_at IS NULL.
+ */
+export const requesterTokens = pgTable(
+  "requester_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    purpose: text("purpose").notNull(),
+    emailHash: text("email_hash").notNull(),
+    email: text("email").notNull(),
+    caseId: uuid("case_id").references(() => cases.id),
+    tokenHash: text("token_hash").notNull().unique(),
+    codeHash: text("code_hash"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("requester_tokens_workspace_id_idx").on(table.workspaceId),
+    index("requester_tokens_email_purpose_idx").on(table.emailHash, table.purpose),
+  ],
+);
+
+/**
+ * Requester sessions: scoped to a workspace AND an email (there is no user id). Idle
+ * expiry is 30 minutes per docs/05; the token is stored only as a hash.
+ */
+export const requesterSessions = pgTable(
+  "requester_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    emailHash: text("email_hash").notNull(),
+    email: text("email").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("requester_sessions_workspace_id_idx").on(table.workspaceId),
+    index("requester_sessions_email_hash_idx").on(table.emailHash),
+  ],
+);
+
+/**
  * TOTP enrolment.
  *
  * The secret is stored as AES-256-GCM ciphertext with its own IV and auth tag, never
@@ -402,6 +462,8 @@ export const cases = pgTable(
     details: text("details").notNull().default(""),
     /** The account identifier the requester gave (customer ID, account email, phone...). */
     identifier: text("identifier").notNull().default(""),
+    /** G2: flips to 'Confirmed' when the requester clicks the confirmation link. */
+    emailVerification: text("email_verification").notNull().default("Unverified"),
     /** 0, 1 or 2 - the statutory extension the workspace has applied. */
     extensionMonths: smallint("extension_months").notNull().default(0),
     /** Low / Medium / High - decided at intake, drives the identity queue and dashboard. */

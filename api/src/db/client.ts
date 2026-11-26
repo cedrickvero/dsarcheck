@@ -87,6 +87,10 @@ export interface LookupContext {
   signedLinkTokenHash?: string;
   /** A portal subdomain (slug) to resolve the owning workspace pre-tenant (public intake). */
   portalSubdomain?: string;
+  /** sha256 of a presented requester sign-in/confirmation link token. */
+  requesterTokenHash?: string;
+  /** sha256 of a presented requester session token. */
+  requesterSessionTokenHash?: string;
 }
 
 export async function withLookup<T>(
@@ -108,6 +112,12 @@ export async function withLookup<T>(
     }
     if (ctx.portalSubdomain) {
       await tx.execute(sql`select set_config('app.lookup_subdomain', ${ctx.portalSubdomain}, true)`);
+    }
+    if (ctx.requesterTokenHash) {
+      await tx.execute(sql`select set_config('app.requester_token_hash', ${ctx.requesterTokenHash}, true)`);
+    }
+    if (ctx.requesterSessionTokenHash) {
+      await tx.execute(sql`select set_config('app.requester_session_token_hash', ${ctx.requesterSessionTokenHash}, true)`);
     }
     await tx.execute(sql`set local role app_tenant`);
     return fn(tx);

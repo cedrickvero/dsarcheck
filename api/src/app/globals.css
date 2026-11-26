@@ -353,3 +353,16 @@ input:focus-visible, select:focus-visible, summary:focus-visible, tr:focus-withi
 .intake-ref { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
 .intake-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; color: #344054; }
 .intake-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.intake-card--wide { max-width: 760px; }
+.intake-label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 14px; color: #344054; }
+.intake-label input { height: 52px; border: 1px solid #d0d5dd; border-radius: 8px; padding: 0 14px; font-size: 15px; }
+.intake-label input:focus-visible { outline: 2px solid #14919b; outline-offset: 1px; }
+.intake-note { margin: 0; color: #667085; font-size: 13px; }
+.intake-links { display: flex; gap: 16px; font-size: 14px; }
+.intake-links a { color: #0e7c7b; font-weight: 600; text-decoration: none; }
+.button--ghost { background: transparent; border-color: transparent; color: #0e7c7b; }
+.requester-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.requester-card { display: flex; flex-direction: column; gap: 6px; background: #fff; border: 1px solid #e4e7ec; border-radius: 12px; padding: 20px 24px; }
+.requester-title { font-size: 18px; font-weight: 600; color: #101828; }
+.requester-status { align-self: flex-start; padding: 3px 10px; border-radius: 999px; background: #f2f4f7; color: #344054; font-size: 12px; font-weight: 600; }
+.requester-dates { color: #475467; font-size: 13px; }

@@ -225,6 +225,13 @@
       "when": 1795725476034,
       "tag": "0031_workspaces_subdomain_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "5",
+      "when": 1795730823863,
+      "tag": "0032_requester_signin_confirmation",
+      "breakpoints": true
     }
   ]
 }

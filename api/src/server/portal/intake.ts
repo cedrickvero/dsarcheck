@@ -10,6 +10,7 @@ import { createCase, type RequestType } from "@/server/cases/create";
 import { withTenant } from "@/db/client";
 import { ValidationError } from "@/server/http/errors";
 import type { ResolvedPortal } from "./resolve";
+import { issueConfirmationLink } from "./requester";
 
 export interface IntakeType {
   value: RequestType;
@@ -56,7 +57,8 @@ export function validateIntake(input: IntakeInput): Record<string, string> {
 export async function submitIntake(
   portal: ResolvedPortal,
   input: IntakeInput,
-): Promise<{ caseNumber: string; receivedAt: Date; statutoryDueAt: Date }> {
+  origin: string,
+): Promise<{ caseNumber: string; receivedAt: Date; statutoryDueAt: Date; email: string; confirmUrl: string }> {
   const errors = validateIntake(input);
   if (Object.keys(errors).length > 0) throw new ValidationError("Some fields need attention before you can submit.");
 
@@ -69,11 +71,14 @@ export async function submitIntake(
 
   const receivedAt = new Date();
   const statutoryDueAt = new Date(receivedAt.getTime() + 30 * 86_400_000); // EU GDPR 30 days
+  const email = input.email.trim();
 
-  const { caseNumber } = await withTenant(
+  // Create the case AND mint its email-confirmation link (G2) in one transaction, so a
+  // case never exists without a way for its requester to confirm the address.
+  const { caseNumber, confirmUrl } = await withTenant(
     { orgId: portal.orgId, workspaceId: portal.workspaceId, actorId: "system" },
-    (tx) =>
-      createCase(tx, {
+    async (tx) => {
+      const created = await createCase(tx, {
         orgId: portal.orgId,
         workspaceId: portal.workspaceId,
         actorId: "system",
@@ -82,11 +87,14 @@ export async function submitIntake(
         receivedAt,
         statutoryDueAt,
         requesterName: input.name.trim(),
-        requesterEmail: input.email.trim(),
+        requesterEmail: email,
         identifier: `${identKind} ${input.ident.trim()}`,
         details: input.details.trim(),
-      }),
+      });
+      const { url } = await issueConfirmationLink(tx, portal, created.id, email, origin);
+      return { caseNumber: created.caseNumber, confirmUrl: url };
+    },
   );
 
-  return { caseNumber, receivedAt, statutoryDueAt };
+  return { caseNumber, receivedAt, statutoryDueAt, email, confirmUrl };
 }

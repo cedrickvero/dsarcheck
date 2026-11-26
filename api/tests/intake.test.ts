@@ -52,7 +52,7 @@ describe("submitIntake", () => {
       details: "Please delete my account.",
       consent: "on",
       human: "on",
-    });
+    }, "http://example.test");
     expect(result.caseNumber).toMatch(/^DSAR-\d{4}-\d{5}$/);
 
     const [row] = await systemDb
@@ -105,7 +105,7 @@ describe("intake hardening", () => {
   it("whitelists the identifier kind, falling back to Customer ID", async () => {
     const result = await submitIntake(portal, {
       type: "Access", name: "Ada", email: `ada2-${RUN}@example.com`, identKind: "Hacked", ident: "X-9", details: "data please", consent: "on", human: "on",
-    });
+    }, "http://example.test");
     const [row] = await systemDb
       .select({ identifier: cases.identifier })
       .from(cases)
