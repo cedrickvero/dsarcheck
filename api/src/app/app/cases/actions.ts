@@ -9,6 +9,7 @@
  * `src/server/cases/bulk.ts` - the same code the tests drive directly.
  */
 import { revalidatePath } from "next/cache";
+import { randomUUID } from "node:crypto";
 import { requireAuth } from "@/server/auth/require-auth";
 import { now } from "@/server/time";
 import { bulkAssignOwner, exportCasesCsv } from "@/server/cases/bulk";
@@ -26,9 +27,11 @@ import {
   recordRedaction as redact,
   requestRedactionReview as requestReview,
   completeRedactionReview as completeReview,
-  markFinalExportDone as markExport,
+  recordRedactedExport as recordExport,
 } from "@/server/cases/collection";
 import { generateEvidencePack as generatePack } from "@/server/cases/evidence";
+import { issueUploadUrl } from "@/server/storage/signedUrl";
+import { workspacePermissionSource } from "@/server/auth/permission-source";
 import { AppError } from "@/server/http/errors";
 
 export interface ActionResult<T> {
@@ -264,13 +267,47 @@ export async function completeRedactionReview(input: {
   }
 }
 
-export async function markFinalExportDone(input: {
+/** Mint the presigned PUT URL the client uploads the _redacted_v2 file to (R2 contract). */
+export async function issueRedactedExportUpload(input: {
   caseId: string;
   caseNumber: string;
-}): Promise<ActionResult<{ finalExportDone: boolean }>> {
+  contentType: string;
+}): Promise<ActionResult<{ uploadUrl: string; objectKey: string }>> {
   try {
     const actor = await requireAuth();
-    const result = await markExport(actor, input.caseId);
+    const issued = await issueUploadUrl({
+      actor,
+      reason: "Final redacted export upload",
+      requestId: randomUUID(),
+      permissions: workspacePermissionSource,
+      purpose: "redacted_export",
+      contentType: input.contentType,
+    });
+    return { ok: true, data: { uploadUrl: issued.url, objectKey: issued.objectKey } };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** Record the uploaded redacted export as a version-2 case_files row + finalExportDone. */
+export async function recordRedactedExportAction(input: {
+  caseId: string;
+  caseNumber: string;
+  objectKey: string;
+  sha256: string;
+  name: string;
+  type: string;
+  sizeBytes: number;
+}): Promise<ActionResult<{ finalExportDone: boolean; fileId: string }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await recordExport(actor, input.caseId, {
+      name: input.name,
+      type: input.type,
+      sizeBytes: input.sizeBytes,
+      storageKey: input.objectKey,
+      sha256: input.sha256,
+    });
     revalidatePath(`/app/cases/${input.caseNumber}`);
     return { ok: true, data: result };
   } catch (error) {

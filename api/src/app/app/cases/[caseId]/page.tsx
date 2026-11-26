@@ -33,7 +33,7 @@ import { ApprovalTab } from "../../_components/approval-tab";
 import { ErasureTab } from "../../_components/erasure-tab";
 import { CollectionTab } from "../../_components/collection-tab";
 import { EvidenceTab } from "../../_components/evidence-tab";
-import { setSystemStatus, recordIdentityDecision, selectTemplate, sendForApproval, approveAndClose, requestChanges, rejectCase, recordErasureOutcome, recordRedaction, requestRedactionReview, completeRedactionReview, markFinalExportDone, generateEvidencePack } from "../actions";
+import { setSystemStatus, recordIdentityDecision, selectTemplate, sendForApproval, approveAndClose, requestChanges, rejectCase, recordErasureOutcome, recordRedaction, requestRedactionReview, completeRedactionReview, issueRedactedExportUpload, recordRedactedExportAction, generateEvidencePack } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -103,7 +103,8 @@ export default async function CaseCockpitPage(props: {
               recordRedaction,
               requestReview: requestRedactionReview,
               completeReview: completeRedactionReview,
-              markExport: markFinalExportDone,
+              issueUpload: issueRedactedExportUpload,
+              recordExport: recordRedactedExportAction,
             }}
           />
         )

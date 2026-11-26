@@ -288,43 +288,6 @@ export async function completeRedactionReview(
   );
 }
 
-export async function markFinalExportDone(actor: Actor, caseId: string): Promise<{ finalExportDone: boolean }> {
-  return withTenant(
-    { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
-    async (tx) => {
-      requirePermission(actor, "export_evidence_packs", "Your role does not permit generating the final export.");
-
-      const [row] = await tx
-        .select({ id: cases.id, review: cases.redactionReview, requestType: cases.requestType })
-        .from(cases)
-        .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))
-        .limit(1);
-      if (!row) throw new ValidationError("unknown case");
-      assertCollectionCase(row.requestType);
-      if (row.review !== "done") {
-        throw new ValidationError("the redaction review must be completed before the export");
-      }
-
-      await tx.update(cases).set({ finalExportDone: true }).where(eq(cases.id, caseId));
-
-      await writeAuditEvent(tx, {
-        orgId: actor.orgId,
-        workspaceId: actor.workspaceId,
-        actorId: actor.userId,
-        actorLabel: actor.label,
-        action: "redaction.export.generated",
-        category: "Redaction",
-        reason: "Final redacted export generated",
-        objectType: "case",
-        objectId: caseId,
-        meta: { caseId },
-      });
-
-      return { finalExportDone: true };
-    },
-  );
-}
-
 export interface RecordRedactedExportInput {
   name: string;
   type: string;
@@ -337,7 +300,7 @@ export interface RecordRedactedExportInput {
  * Record the human-produced redacted export (docs/04 CaseFile.is_redacted_export): a NEW
  * case_files row (version 2, never an overwrite of the original) that references the object
  * already stored under `storageKey`, plus the finalExportDone flag — in one transaction with
- * the audit event. RBAC + review-done gate match markFinalExportDone.
+ * the audit event. RBAC + review-done gate mirror the old flag-only path this replaced.
  */
 export async function recordRedactedExport(
   actor: Actor,

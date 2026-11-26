@@ -12,7 +12,6 @@ import { hashEmail } from "@/server/auth/crypto";
 import {
   completeRedactionReview,
   getCollection,
-  markFinalExportDone,
   recordRedaction,
   requestRedactionReview,
 } from "@/server/cases/collection";
@@ -128,17 +127,6 @@ describe("completeRedactionReview", () => {
     // a redaction resets the review, so request again before completing
     await requestRedactionReview(handler, b.caseId);
     await expect(completeRedactionReview(approver, b.caseId, { reason: "reviewed and approved" })).resolves.toEqual({ review: "done" });
-  });
-});
-
-describe("markFinalExportDone", () => {
-  it("rejects the export until review is done, then generates it", async () => {
-    const { caseId, tokenId } = await mkCase({ flagged: true, redacted: true });
-    await expect(markFinalExportDone(handler, caseId)).rejects.toThrow("review must be completed");
-
-    await requestRedactionReview(handler, caseId);
-    await completeRedactionReview(approver, caseId, { reason: "reviewed and approved" });
-    await expect(markFinalExportDone(handler, caseId)).resolves.toEqual({ finalExportDone: true });
   });
 });
 

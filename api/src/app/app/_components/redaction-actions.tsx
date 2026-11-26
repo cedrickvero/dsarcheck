@@ -5,6 +5,7 @@
  * then the final redacted export is generated. Export is not offered until review is done.
  */
 import { useState } from "react";
+import { RedactedExportUpload, type RecordRedactedExportAction, type UploadRedactedExportAction } from "./redacted-export-upload";
 
 export type NoInputAction = (input: { caseId: string; caseNumber: string }) => Promise<{ ok: boolean; message?: string }>;
 export type ReasonAction = (input: { caseId: string; caseNumber: string; reason: string }) => Promise<{ ok: boolean; message?: string }>;
@@ -17,7 +18,8 @@ export function RedactionActions(props: {
   canCompleteReview: boolean;
   requestReview: NoInputAction;
   completeReview: ReasonAction;
-  markExport: NoInputAction;
+  issueUpload: UploadRedactedExportAction;
+  recordExport: RecordRedactedExportAction;
 }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -59,13 +61,7 @@ export function RedactionActions(props: {
         </form>
       ) : null}
       {props.review === "done" && !props.finalExportDone ? (
-        <button
-          type="button"
-          className="button button--primary"
-          onClick={() => run(() => props.markExport({ caseId: props.caseId, caseNumber: props.caseNumber }))}
-        >
-          Generate final redacted export
-        </button>
+        <RedactedExportUpload caseId={props.caseId} caseNumber={props.caseNumber} issueUpload={props.issueUpload} recordExport={props.recordExport} />
       ) : null}
       {props.finalExportDone ? (
         <span className="status" data-status="Completed">

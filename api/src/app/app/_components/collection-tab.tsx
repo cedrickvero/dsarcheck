@@ -7,6 +7,7 @@
 import type { CollectionView } from "@/server/cases/collection";
 import { TokenRedactForm, type RedactionAction } from "./token-redact-form";
 import { RedactionActions, type NoInputAction, type ReasonAction } from "./redaction-actions";
+import type { RecordRedactedExportAction, UploadRedactedExportAction } from "./redacted-export-upload";
 
 export function CollectionTab(props: {
   caseId: string;
@@ -17,7 +18,8 @@ export function CollectionTab(props: {
     recordRedaction: RedactionAction;
     requestReview: NoInputAction;
     completeReview: ReasonAction;
-    markExport: NoInputAction;
+    issueUpload: UploadRedactedExportAction;
+    recordExport: RecordRedactedExportAction;
   };
 }) {
   const v = props.view;
@@ -109,7 +111,8 @@ export function CollectionTab(props: {
         canCompleteReview={props.canCompleteReview}
         requestReview={props.actions.requestReview}
         completeReview={props.actions.completeReview}
-        markExport={props.actions.markExport}
+        issueUpload={props.actions.issueUpload}
+        recordExport={props.actions.recordExport}
       />
     </section>
   );

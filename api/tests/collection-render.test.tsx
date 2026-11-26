@@ -35,7 +35,7 @@ describe("CollectionTab", () => {
         caseNumber="DSAR-2026-00418"
         view={view()}
         canCompleteReview={false}
-        actions={{ recordRedaction: noop, requestReview: noop, completeReview: noop, markExport: noop }}
+        actions={{ recordRedaction: noop, requestReview: noop, completeReview: noop, issueUpload: noop, recordExport: noop }}
       />,
     );
     expect(html).toContain("support-ticket.pdf");
@@ -65,7 +65,7 @@ describe("TokenRedactForm", () => {
 });
 
 describe("RedactionActions", () => {
-  const base = { caseId: "c1", caseNumber: "X", requestReview: noop, completeReview: noop, markExport: noop };
+  const base = { caseId: "c1", caseNumber: "X", requestReview: noop, completeReview: noop, issueUpload: noop, recordExport: noop };
 
   it("offers Request review when review is none", () => {
     const html = renderToStaticMarkup(<RedactionActions {...base} review="none" finalExportDone={false} canCompleteReview={true} />);
