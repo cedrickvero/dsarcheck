@@ -74,6 +74,7 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
           <nav aria-label="Workspace">
             <a href="/app">Dashboard</a>
             <a href="/app/cases">Cases</a>
+            {actor.roles.includes("system_owner") ? <a href="/app/tasks">Tasks</a> : null}
           </nav>
           <NotificationBell
             notifications={feed.notifications}
