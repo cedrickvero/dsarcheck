@@ -23,8 +23,10 @@ after a mutation-coverage recheck). Redacted-export storage + signed-link sharin
 artifact type) is also implemented AND gate-approved (guardrail APPROVE 0/0/6, LOWs fixed or
 recorded; QA PASS after a recheck). The redacted-export upload UI (file-picker → presigned
 PUT → record) is implemented AND gate-approved (guardrail APPROVE 0/0/2, LOWs fixed; QA PASS
-after a recheck). Remaining after that: in-app preview and the active-workspace switcher
-(follow-on slices).**
+after a recheck). In-app file preview with "Open original · logged" is implemented AND
+gate-approved (guardrail APPROVE 0/0/1 after the blur HIGH was fixed; QA PASS). The
+active-workspace switcher (multi-workspace auth path) is implemented AND gate-approved
+(guardrail APPROVE 0/0/3, LOWs fixed; QA PASS + lean recheck PASS).**
 
 | Prerequisite | Verdict | Commit |
 |---|---|---|
@@ -51,6 +53,8 @@ after a recheck). Remaining after that: in-app preview and the active-workspace 
 | Evidence-pack PDF renderer + signed expiring links (Option 3 storage slice) | **guardrail APPROVE (0/0/5, LOWs recorded) + QA PASS** (909/909; mutation coverage rechecked after first FAIL) | `f86cce4` `1a55238` `11f2ddf` |
 | Redacted-export storage + signed-link sharing (second artifact type) | **guardrail APPROVE (0/0/6, LOWs fixed/recorded) + QA PASS** (915/915; flaky case-number + sha256 coverage fixed, rechecked) | `c2a8ebd` `875e7d3` |
 | Redacted-export upload UI (file-picker → presigned PUT → record) | **guardrail APPROVE (0/0/2, LOWs fixed) + QA PASS** (919/919; forward-list + permission-source + SSE echo coverage, rechecked) | `a9b1cdf` `fddb0e4` `d8ebc5f` |
+| In-app file preview ("Open original · logged") | **guardrail APPROVE (0/0/1, HIGH fixed then rechecked) + QA PASS** (932/932; content endpoint refuses originals, signed-URL gate, cross-workspace fixture) | `3dcef8f` `8a41a66` `df00df4` |
+| Active-workspace switcher (multi-workspace auth path + agency sidebar) | **guardrail APPROVE (0/0/3, LOWs fixed) + QA PASS** (943/943; per-workspace role + fail-closed fallback + session rotation, lean recheck PASS) | `ea3d765` `5dd1670` |
 
 Every prerequisite was accepted only on guardrail APPROVE **and** QA PASS together,
 with no HIGH or CRITICAL finding open.
