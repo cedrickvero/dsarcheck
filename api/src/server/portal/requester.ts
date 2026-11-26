@@ -286,6 +286,8 @@ export function requesterTitle(requestType: string): string {
       return "Your data in a portable format";
     case "Objection":
       return "Stop using your data";
+    case "Restriction":
+      return "Restrict how your data is used";
     default:
       return requestType;
   }
@@ -307,9 +309,11 @@ export function requesterStatusView(status: string, infoRequested: boolean): Req
 /** The one-sentence status summary (docs/03 § H2). */
 export function requesterSummary(status: string, infoRequested: boolean): string {
   const s = status.toLowerCase();
-  if (infoRequested) return "We need one more document from you before we can start collecting your data.";
+  // Terminal statuses win over a stale infoRequested flag, so a Completed/Rejected case
+  // can never read as still needing a document.
   if (s === "completed") return "Your request is complete.";
-  if (s === "rejected") return "We've closed this request.";
+  if (s === "rejected") return "We've closed this request. You have the right to complain to your data-protection authority.";
+  if (infoRequested) return "We need one more document from you before we can start collecting your data.";
   if (s === "extended") return "Your identity is confirmed and we're still collecting your data. We've extended the deadline.";
   if (s === "awaiting approval") return "We're completing a final review before we respond.";
   if (s === "in progress") return "Your identity is confirmed. We're now checking every place your data may be held.";

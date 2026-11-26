@@ -128,7 +128,7 @@ export default async function RequestDetailPage(props: { params: Promise<{ caseN
             <h2>Request details</h2>
             <dl className="requester-facts">
               <div><dt>Reference</dt><dd className="intake-ref">{detail.caseNumber}</dd></div>
-              <div><dt>Type</dt><dd>{detail.requestType}</dd></div>
+              <div><dt>Type</dt><dd>{requesterTitle(detail.requestType)}</dd></div>
               <div><dt>Received</dt><dd>{formatDate(detail.receivedAt)}</dd></div>
               <div><dt>{completed ? "Completed" : "Response due by"}</dt><dd>{formatDate(completed && detail.closedAt ? detail.closedAt : (detail.statutoryDueAt ?? new Date()))}</dd></div>
             </dl>

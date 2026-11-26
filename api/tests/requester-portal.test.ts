@@ -19,6 +19,7 @@ import {
   redeemSignInLink,
   requestSignInCredential,
   requesterStatusView,
+  requesterSummary,
   requesterTitle,
   resolveRequesterSession,
 } from "@/server/portal/requester";
@@ -176,6 +177,10 @@ describe("requester sign-in", () => {
     expect(requesterStatusView("New", true).label).toBe("Confirming your identity");
     expect(requesterTitle("Access")).toBe("Copy of your personal data");
     expect(requesterTitle("Erasure")).toBe("Delete your personal data");
+    expect(requesterTitle("Restriction")).toBe("Restrict how your data is used");
+    // Terminal status wins over a stale infoRequested flag.
+    expect(requesterSummary("Completed", true)).toBe("Your request is complete.");
+    expect(requesterSummary("Rejected", true)).toContain("complain");
   });
 });
 
