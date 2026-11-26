@@ -35,7 +35,7 @@ describe("CollectionTab", () => {
         caseNumber="DSAR-2026-00418"
         view={view()}
         canCompleteReview={false}
-        actions={{ recordRedaction: noop, requestReview: noop, completeReview: noop, issueUpload: noop, recordExport: noop }}
+        actions={{ recordRedaction: noop, requestReview: noop, completeReview: noop, issueUpload: noop, recordExport: noop, openOriginal: noop }}
       />,
     );
     expect(html).toContain("support-ticket.pdf");

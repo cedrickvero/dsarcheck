@@ -28,6 +28,7 @@ import {
   requestRedactionReview as requestReview,
   completeRedactionReview as completeReview,
   recordRedactedExport as recordExport,
+  openOriginalFile as openOriginal,
 } from "@/server/cases/collection";
 import { generateEvidencePack as generatePack } from "@/server/cases/evidence";
 import { issueUploadUrl } from "@/server/storage/signedUrl";
@@ -318,6 +319,23 @@ export async function recordRedactedExportAction(input: {
     });
     revalidatePath(`/app/cases/${input.caseNumber}`);
     return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+/** "Open original · logged": reason-required, per-viewer audited un-blur of an original file. */
+export async function openOriginalFileAction(input: {
+  caseId: string;
+  caseNumber: string;
+  fileId: string;
+  reason: string;
+}): Promise<ActionResult<Record<string, never>>> {
+  try {
+    const actor = await requireAuth();
+    await openOriginal(actor, input.caseId, input.fileId, input.reason);
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: {} };
   } catch (error) {
     return failure(error);
   }

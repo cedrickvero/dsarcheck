@@ -8,6 +8,7 @@ import type { CollectionView } from "@/server/cases/collection";
 import { TokenRedactForm, type RedactionAction } from "./token-redact-form";
 import { RedactionActions, type NoInputAction, type ReasonAction } from "./redaction-actions";
 import type { RecordRedactedExportAction, UploadRedactedExportAction } from "./redacted-export-upload";
+import { CollectionFiles, type OpenOriginalAction } from "./file-preview";
 
 export function CollectionTab(props: {
   caseId: string;
@@ -20,6 +21,7 @@ export function CollectionTab(props: {
     completeReview: ReasonAction;
     issueUpload: UploadRedactedExportAction;
     recordExport: RecordRedactedExportAction;
+    openOriginal: OpenOriginalAction;
   };
 }) {
   const v = props.view;
@@ -41,28 +43,7 @@ export function CollectionTab(props: {
       {v.files.length === 0 ? (
         <p className="muted">No files recorded for this case.</p>
       ) : (
-        <ul className="file-list">
-          {v.files.map((f) => (
-            <li key={f.id}>
-              <span className="system-name">{f.name}</span>
-              <span className="system-sub">
-                {f.sourceKey ? `${f.sourceKey} · ` : ""}
-                {f.type}
-                {f.sizeBytes ? ` · ${f.sizeBytes} B` : ""}
-              </span>
-              {f.needsRedaction ? (
-                <span className="status" data-status="Action required">
-                  Needs redaction
-                </span>
-              ) : null}
-              {f.isRedactedExport ? (
-                <span className="status" data-status="Completed">
-                  Redacted export
-                </span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
+        <CollectionFiles caseId={props.caseId} caseNumber={props.caseNumber} files={v.files} openOriginal={props.actions.openOriginal} />
       )}
 
       {flagged.length > 0 ? (

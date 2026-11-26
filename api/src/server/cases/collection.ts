@@ -382,3 +382,42 @@ export async function recordRedactedExport(
     },
   );
 }
+
+/**
+ * "Open original · logged" (docs/05 § Redaction rules): viewing the unredacted original is a
+ * reason-required, per-viewer audited action. The bytes themselves are served by the
+ * authenticated content endpoint; this action is the reason + audit that authorizes the
+ * un-blur. No case state changes — only the immutable audit event.
+ */
+export async function openOriginalFile(actor: Actor, caseId: string, fileId: string, reason: string): Promise<void> {
+  const trimmed = reason.trim();
+  if (trimmed.length < MIN_REASON) {
+    throw new ValidationError("a reason of at least 3 characters is required");
+  }
+  return withTenant(
+    { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
+    async (tx) => {
+      requirePermission(actor, "export_evidence_packs", "Your role does not permit opening original files.");
+
+      const [file] = await tx
+        .select({ name: caseFiles.name })
+        .from(caseFiles)
+        .where(and(eq(caseFiles.id, fileId), eq(caseFiles.workspaceId, actor.workspaceId), eq(caseFiles.caseId, caseId)))
+        .limit(1);
+      if (!file) throw new ValidationError("unknown file");
+
+      await writeAuditEvent(tx, {
+        orgId: actor.orgId,
+        workspaceId: actor.workspaceId,
+        actorId: actor.userId,
+        actorLabel: actor.label,
+        action: "Original file opened",
+        category: "Redaction",
+        reason: trimmed,
+        objectType: "case_file",
+        objectId: fileId,
+        meta: { caseId, fileName: file.name },
+      });
+    },
+  );
+}
