@@ -152,3 +152,43 @@ Decisions that follow, all recorded in code under `api/src/domain/platform.ts` a
   There is no rename feature today, so no sync path exists; when workspace rename lands it MUST
   update `memberships.workspace_name` for every row of that workspace in the same transaction,
   or the agency dashboard will show stale client names.
+
+- **The evidence-pack storage slice (PDF renderer + signed links) has LANDED**, superseding the
+  deferral above. The nine-section pack renders to a deterministic PDF (`server/cases/evidence-pdf.ts`),
+  is served through an authenticated endpoint, and a 24h single-use signed link can be issued and
+  downloaded through the token-gated route. In-app preview and redacted-export sharing remain
+  deferred (see the preview/deferral bullets in this file); `artifact_type` is left
+  `evidence_pack | redacted_export` so the token model extends to exports without re-plumbing.
+
+- **Signed-link expiry is hardcoded to 24 hours, not the selectable 24h/7d/30d (default 7d) in
+  docs/05.** The owner's storage-slice spec pins 24 hours ("Links expire after 24 hours"), and 24h
+  is strictly more restrictive than the 7d default. Selectable TTLs, if ever wanted, are an additive
+  change to `LINK_TTL_HOURS`; the server-side expiry mechanism (the `expires_at` column checked in the
+  atomic consume UPDATE) is already TTL-agnostic.
+
+- **The signed-link URL is `/api/evidence/access?token=…`, not the designed
+  `https://{portalHost}/e/{id5}-{token}`.** The portal-host format belongs to the multi-tenant
+  portal surface, which is a separate slice; the token-in-path/query-string tradeoff is the same
+  either way (single-use + 24h server-side expiry bound the exposure). Consistent with the existing
+  magic-link `?token=` pattern.
+
+- **`recipient_type` (and `artifact_type`) are free text with no DB CHECK.** `artifact_type` is
+  written only by `issueSignedLink` with the literal `"evidence_pack"` and `recipient_type` only
+  through the RBAC-gated issuance route (the UI offers a fixed set). They are metadata with no
+  access-control effect; a vocabulary CHECK is a cheap follow-on if a second artifact type or a
+  recipient-type list is codified.
+
+- **The signed-link token travels in the URL query string**, so it can appear in browser history,
+  access logs and Referer headers. This is inherent to a shareable link and matches the magic-link
+  pattern; single-use + 24h server-side expiry bound the exposure. No action beyond the existing
+  controls.
+
+- **The denial path is measurably slower than the unknown-token path** (a denied token writes an
+  audit row before returning the identical 404; an unknown token does not). Status and body are
+  indistinguishable (the enumeration-oracle criterion is met); exploiting the timing difference
+  requires already holding a valid-but-denied 256-bit token, which is not a practical oracle.
+
+- **There is no "revoke a link" action — `revoked_at` is forward-looking.** The storage-slice spec
+  enumerates `revoked` as a failure state the download endpoint must reject, which the atomic consume
+  predicate does (`revoked_at IS NULL`), but no slice has a revoke-now action to set it. A leaked link
+  is currently neutralised by single-use and 24h expiry; an explicit revoke is a follow-on if wanted.
