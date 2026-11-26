@@ -18,8 +18,9 @@ Identity, Approval & response, Erasure outcomes, Collection & redaction, Evidenc
 Agency dashboard (Client workspaces table)) are all
 implemented AND gate-approved (guardrail APPROVE + QA PASS; evidence under /opt/data/qa-tmp/).
 The evidence-pack PDF renderer + signed expiring links (Option 3 storage slice) are
-implemented and verified but not yet gate-reviewed. Remaining after that: in-app preview,
-redacted-export sharing, and the active-workspace switcher (follow-on slices).**
+implemented AND gate-approved (guardrail APPROVE 0/0/5, LOWs recorded as decisions; QA PASS
+after a mutation-coverage recheck). Remaining after that: in-app preview, redacted-export
+sharing, and the active-workspace switcher (follow-on slices).**
 
 | Prerequisite | Verdict | Commit |
 |---|---|---|
@@ -43,7 +44,7 @@ redacted-export sharing, and the active-workspace switcher (follow-on slices).**
 | Case cockpit — Collection & redaction (Access) | **guardrail APPROVE + QA PASS** (3 LOWs closed, rechecked APPROVE 0/0/0) | `a26686a` `56f0ed2` `5505221` |
 | Case cockpit — Evidence pack | **guardrail APPROVE + QA PASS** (2 LOWs closed, rechecked APPROVE 0/0/0; PDF/signed-links deferred) | `95ac675` `35ca6fd` `11007a4` |
 | Agency dashboard (Client workspaces table, memberships model) | **guardrail APPROVE + QA PASS** (HIGH seed name-collision closed; composite-FK migration 0026 applied; rechecked APPROVE 0/0/1 + PASS 895/895) | `bb33a60` `06b549c` `4c4ba2f` |
-| Evidence-pack PDF renderer + signed expiring links (Option 3 storage slice) | implemented, verified (905/905), **ungated** — two-gate review pending | (this slice) |
+| Evidence-pack PDF renderer + signed expiring links (Option 3 storage slice) | **guardrail APPROVE (0/0/5, LOWs recorded) + QA PASS** (909/909; mutation coverage rechecked after first FAIL) | `f86cce4` `1a55238` `11f2ddf` |
 
 Every prerequisite was accepted only on guardrail APPROVE **and** QA PASS together,
 with no HIGH or CRITICAL finding open.
@@ -69,9 +70,9 @@ check that has been proven able to fail.
 Measured at `HEAD` after the evidence-pack PDF + signed-links slice:
 
 ```
-905 tests / 75 files    905 passed · 0 failed · 0 skipped
+909 tests / 75 files    909 passed · 0 failed · 0 skipped
 typecheck               0 errors
-boundary                135 files, 0 client -> server imports, 0 privileged handles
+boundary                136 files, 0 client -> server imports, 0 privileged handles
 db:verify               66/66 invariants
 migrations              28 applied (journal 0000-0027)
 11 domain routes        still stubbed (notImplemented -> 501)
