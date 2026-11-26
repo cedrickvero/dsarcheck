@@ -31,6 +31,7 @@ import {
 } from "@/server/cases/collection";
 import { generateEvidencePack as generatePack } from "@/server/cases/evidence";
 import { issueUploadUrl } from "@/server/storage/signedUrl";
+import { serverSideEncryption } from "@/server/storage/s3Client";
 import { workspacePermissionSource } from "@/server/auth/permission-source";
 import { AppError } from "@/server/http/errors";
 
@@ -269,10 +270,8 @@ export async function completeRedactionReview(input: {
 
 /** Mint the presigned PUT URL the client uploads the _redacted_v2 file to (R2 contract). */
 export async function issueRedactedExportUpload(input: {
-  caseId: string;
-  caseNumber: string;
   contentType: string;
-}): Promise<ActionResult<{ uploadUrl: string; objectKey: string }>> {
+}): Promise<ActionResult<{ uploadUrl: string; objectKey: string; sseHeaders: Record<string, string> }>> {
   try {
     const actor = await requireAuth();
     const issued = await issueUploadUrl({
@@ -283,7 +282,16 @@ export async function issueRedactedExportUpload(input: {
       purpose: "redacted_export",
       contentType: input.contentType,
     });
-    return { ok: true, data: { uploadUrl: issued.url, objectKey: issued.objectKey } };
+    // The SSE algorithm is part of the presigned signature; return the exact headers the
+    // client must echo so the PUT succeeds under either AES256 or KMS configuration.
+    const sse = serverSideEncryption();
+    let sseHeaders: Record<string, string>;
+    if (sse.ServerSideEncryption === "aws:kms") {
+      sseHeaders = { "x-amz-server-side-encryption": "aws:kms", "x-amz-server-side-encryption-aws-kms-key-id": sse.SSEKMSKeyId };
+    } else {
+      sseHeaders = { "x-amz-server-side-encryption": "AES256" };
+    }
+    return { ok: true, data: { uploadUrl: issued.url, objectKey: issued.objectKey, sseHeaders } };
   } catch (error) {
     return failure(error);
   }
