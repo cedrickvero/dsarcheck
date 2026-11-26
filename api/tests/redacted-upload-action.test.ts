@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const src = readFileSync(new URL("../src/app/app/cases/actions.ts", import.meta.url), "utf8");
+const uploadSrc = readFileSync(new URL("../src/app/app/_components/redacted-export-upload.tsx", import.meta.url), "utf8");
 
 describe("redacted-export upload actions (mechanical wiring)", () => {
   it("recordRedactedExportAction forwards every file field to the server fn", () => {
@@ -23,5 +24,10 @@ describe("redacted-export upload actions (mechanical wiring)", () => {
     expect(src).toContain("permissions: workspacePermissionSource");
     expect(src).not.toContain("can: () => true");
     expect(src).not.toContain("can: () => false");
+  });
+
+  it("the client echoes the minted SSE headers instead of hardcoding AES256", () => {
+    expect(uploadSrc).toContain("...mint.data.sseHeaders");
+    expect(uploadSrc).not.toContain('"x-amz-server-side-encryption": "AES256"');
   });
 });

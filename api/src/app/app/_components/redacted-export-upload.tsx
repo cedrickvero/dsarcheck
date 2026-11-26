@@ -9,10 +9,10 @@
  */
 import { useRef, useState } from "react";
 
-export type UploadRedactedExportAction = (input: { caseId: string; caseNumber: string; contentType: string }) => Promise<{
+export type UploadRedactedExportAction = (input: { contentType: string }) => Promise<{
   ok: boolean;
   message?: string;
-  data?: { uploadUrl: string; objectKey: string };
+  data?: { uploadUrl: string; objectKey: string; sseHeaders: Record<string, string> };
 }>;
 
 export type RecordRedactedExportAction = (input: {
@@ -41,14 +41,14 @@ export function RedactedExportUpload(props: {
     setError(null);
     try {
       const type = file.type || "application/octet-stream";
-      const mint = await props.issueUpload({ caseId: props.caseId, caseNumber: props.caseNumber, contentType: type });
+      const mint = await props.issueUpload({ contentType: type });
       if (!mint.ok || !mint.data) {
         setError(mint.message ?? "Could not prepare the upload.");
         return;
       }
       const put = await fetch(mint.data.uploadUrl, {
         method: "PUT",
-        headers: { "Content-Type": type, "x-amz-server-side-encryption": "AES256" },
+        headers: { "Content-Type": type, ...mint.data.sseHeaders },
         body: file,
       });
       if (!put.ok) {
