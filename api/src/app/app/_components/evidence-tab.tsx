@@ -7,6 +7,7 @@ import type { EvidenceView } from "@/server/cases/evidence";
 import type { EvidencePackData } from "@/domain/evidence";
 import { formatDateTime } from "@/server/cases/format";
 import { GeneratePackButton, type GeneratePackAction } from "./generate-pack-button";
+import { ShareLinkButton } from "./share-link-button";
 
 export function EvidenceTab(props: {
   caseId: string;
@@ -41,12 +42,18 @@ export function EvidenceTab(props: {
           <h3>Versions</h3>
           <ul className="version-list">
             {v.versions.map((ver) => (
-              <li key={ver.version}>
+              <li key={ver.id}>
                 <span className="system-name">v{ver.version}</span>
                 <span className="status" data-status={ver.draft ? "In progress" : "Completed"}>
                   {ver.draft ? "Draft" : "Final"}
                 </span>
                 <span className="system-sub">{formatDateTime(ver.generatedAt)}</span>
+                <span className="version-actions">
+                  <a className="button" href={`/api/evidence/pack/${ver.id}/pdf`}>
+                    Download PDF
+                  </a>
+                  <ShareLinkButton artifactId={ver.id} />
+                </span>
               </li>
             ))}
           </ul>

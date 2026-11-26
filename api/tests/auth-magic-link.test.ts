@@ -5,8 +5,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { systemDb, systemPool } from "@/db/client";
-import { magicLinks, orgs, sessions, users, workspaces } from "@/db/schema";
+import { magicLinks, orgs, rateLimitHits, sessions, users, workspaces } from "@/db/schema";
 import { hashEmail, hashToken, newToken } from "@/server/auth/crypto";
+import { bucketKey } from "@/server/auth/rate-limit";
 import { POST as requestLink } from "@/app/api/auth/magic-link/route";
 import { GET as callback } from "@/app/api/auth/callback/route";
 
@@ -103,6 +104,20 @@ describe("T-08 magic links", () => {
     expect(a.status).toBe(200);
     expect(b.status).toBe(200);
     expect(await a.json()).toEqual(await b.json());
+  });
+
+  it("a rate-limited request returns the same generic 200, not a 429 (no enumeration oracle)", async () => {
+    // Exhaust the magic-link bucket for the known address with durable hits.
+    const key = bucketKey([hashEmail(knownEmail)]);
+    for (let i = 0; i < 5; i += 1) {
+      await systemDb.insert(rateLimitHits).values({
+        bucketKey: key, scope: "magic_link_request", workspaceId: null, expiresAt: new Date(Date.now() + 3600_000),
+      });
+    }
+    const throttled = await post(knownEmail);
+    const unknown = await post(unknownEmail);
+    expect(throttled.status).toBe(200);
+    expect(await throttled.json()).toEqual(await unknown.json());
   });
 
   it("creates NO row for an address with no user (no enumeration oracle)", async () => {

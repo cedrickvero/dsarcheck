@@ -664,3 +664,41 @@ export const memberships = pgTable(
     }),
   ],
 );
+
+/**
+ * A 24-hour, single-use signed link to one evidence-pack version (docs/05 signed links).
+ * The token is stored ONLY as a SHA-256 hash; the artifact, workspace, issuer, recipient
+ * type, expiry and a content hash are bound to the row so a consumed/expired/revoked/
+ * replayed token fails closed. RLS is workspace-scoped (staff issuance) plus a token-hash
+ * policy for the unauthenticated download lookup (mirrors magic_links).
+ */
+export const signedLinks = pgTable(
+  "signed_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    artifactType: text("artifact_type").notNull(),
+    artifactId: uuid("artifact_id")
+      .notNull()
+      .references(() => evidencePacks.id),
+    tokenHash: text("token_hash").notNull(),
+    issuedBy: uuid("issued_by")
+      .notNull()
+      .references(() => users.id),
+    recipientType: text("recipient_type").notNull(),
+    contentHash: text("content_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("signed_links_token_hash_idx").on(table.tokenHash),
+    index("signed_links_workspace_idx").on(table.workspaceId),
+  ],
+);

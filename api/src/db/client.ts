@@ -83,6 +83,8 @@ export interface LookupContext {
   sessionTokenHash?: string;
   /** sha256 of a normalised email address, for the "whose address is this?" lookup. */
   emailHash?: string;
+  /** sha256 of a presented signed-link token (evidence-pack download). */
+  signedLinkTokenHash?: string;
 }
 
 export async function withLookup<T>(
@@ -98,6 +100,9 @@ export async function withLookup<T>(
     }
     if (ctx.emailHash) {
       await tx.execute(sql`select set_config('app.lookup_email_hash', ${ctx.emailHash}, true)`);
+    }
+    if (ctx.signedLinkTokenHash) {
+      await tx.execute(sql`select set_config('app.signed_link_token_hash', ${ctx.signedLinkTokenHash}, true)`);
     }
     await tx.execute(sql`set local role app_tenant`);
     return fn(tx);

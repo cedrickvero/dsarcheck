@@ -214,7 +214,7 @@ try {
   check(mem.length === 1, "app_runtime is a member of app_tenant");
 
   // 2 · RLS must be enabled AND forced on every multi-tenant table
-  const tables = ["audit_events", "cases", "case_systems", "case_files", "redaction_tokens", "evidence_packs", "memberships", "orgs", "workspaces"];
+  const tables = ["audit_events", "cases", "case_systems", "case_files", "redaction_tokens", "evidence_packs", "memberships", "signed_links", "orgs", "workspaces"];
 // `objects` is verified by checkObjectsTable below, which also asserts the R2
 // constraints - keeping it out of this list avoids printing each check twice.
   const rls = await q(

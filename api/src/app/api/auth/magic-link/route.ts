@@ -15,14 +15,15 @@ import { writeAuditEvent } from "@/server/db/audit";
 import { env } from "@/env";
 import { rateLimitHits } from "@/db/schema";
 import { route } from "@/server/http/handler";
-import { ValidationError } from "@/server/http/errors";
+import { RateLimitError, ValidationError } from "@/server/http/errors";
+import { logError } from "@/server/log";
 import { hashEmail, hashToken, normaliseEmail } from "@/server/auth/crypto";
 import { issueLink } from "@/server/auth/magic-link";
 import { enforceRateLimit, bucketKey } from "@/server/auth/rate-limit";
 
 const GENERIC = { ok: true, message: "If that address has an account, a sign-in link is on its way." };
 
-export const POST = route(async (req) => {
+export const POST = route(async (req, ctx) => {
   // The origin must be the address the requester actually reached us on, not the server's
   // listen host: Next reconstructs req.url from `next dev -H 0.0.0.0`, which yields
   // http://0.0.0.0:3000 - a bind address that is not dialable from the requester's browser.
@@ -43,38 +44,48 @@ export const POST = route(async (req) => {
   }
   const email = normaliseEmail(body.email);
 
-  const issued = await withLookup({ emailHash: hashEmail(email) }, async (tx) => {
-    await enforceRateLimit(tx, {
-      bucketKey: bucketKey([hashEmail(email)]),
-      scope: "magic_link_request",
-      limit: env.RATE_LIMIT_MAGIC_LINK_PER_HOUR,
-      windowSeconds: 3600,
-      workspaceId: null,
-    });
-
-    const result = await issueLink(tx, email, origin);
-    if (result.userId && result.orgId && result.workspaceId) {
-      await writeAuditEvent(tx, {
-        orgId: result.orgId,
-        workspaceId: result.workspaceId,
-        actorId: result.userId,
-        actorLabel: email,
-        action: "auth.magic_link.requested",
-        category: "authentication",
-        reason: "Sign-in link requested",
-        objectType: "magic_link",
-        objectId: null,
-        // Deliberately no token, no token hash and no URL: the audit trail must never
-        // become a way to obtain a credential.
-        meta: { deliveryRequested: true },
+  let issued: Awaited<ReturnType<typeof issueLink>> | null = null;
+  try {
+    issued = await withLookup({ emailHash: hashEmail(email) }, async (tx) => {
+      await enforceRateLimit(tx, {
+        bucketKey: bucketKey([hashEmail(email)]),
+        scope: "magic_link_request",
+        limit: env.RATE_LIMIT_MAGIC_LINK_PER_HOUR,
+        windowSeconds: 3600,
+        workspaceId: null,
       });
-    }
-    return result;
-  });
+
+      const result = await issueLink(tx, email, origin);
+      if (result.userId && result.orgId && result.workspaceId) {
+        await writeAuditEvent(tx, {
+          orgId: result.orgId,
+          workspaceId: result.workspaceId,
+          actorId: result.userId,
+          actorLabel: email,
+          action: "auth.magic_link.requested",
+          category: "authentication",
+          reason: "Sign-in link requested",
+          objectType: "magic_link",
+          objectId: null,
+          // Deliberately no token, no token hash and no URL: the audit trail must never
+          // become a way to obtain a credential.
+          meta: { deliveryRequested: true },
+        });
+      }
+      return result;
+    });
+  } catch (err) {
+    // Throttling must not become an account-enumeration oracle: a rate-limited request
+    // returns the SAME generic 200 as an unknown email. Throttling stays applied
+    // server-side; the hit is security-logged with the hashed bucket only, never the raw
+    // address or any clue to whether the account exists.
+    if (!(err instanceof RateLimitError)) throw err;
+    logError("magic-link.throttled", err, { requestId: ctx.requestId, emailHash: hashEmail(email) });
+  }
 
   // The link is "sent" by returning it to the mailer. In development it is logged to
   // MailHog; the raw token is never returned to the HTTP caller.
-  if (issued.url) {
+  if (issued?.url) {
     const { sendSignInLink } = await import("@/server/auth/mailer");
     await sendSignInLink(email, issued.url).catch(() => undefined);
   }

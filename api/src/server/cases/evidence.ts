@@ -15,6 +15,7 @@ import { buildEvidencePack, type EvidencePackData } from "@/domain/evidence";
 import type { Actor } from "@/server/auth/require-auth";
 
 export interface EvidenceVersionRow {
+  id: string;
   version: number;
   draft: boolean;
   generatedBy: string | null;
@@ -215,6 +216,7 @@ export async function getEvidencePack(actor: Actor, caseId: string): Promise<Evi
 
       const versions = await tx
         .select({
+          id: evidencePacks.id,
           version: evidencePacks.version,
           draft: evidencePacks.draft,
           generatedBy: evidencePacks.generatedBy,

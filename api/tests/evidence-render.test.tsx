@@ -14,8 +14,8 @@ const view = (): EvidenceView => ({
   caseId: "c1",
   requestType: "Access",
   versions: [
-    { version: 1, draft: true, generatedBy: null, generatedAt: new Date("2026-10-06T15:00:00Z") },
-    { version: 2, draft: false, generatedBy: null, generatedAt: new Date("2026-10-06T16:00:00Z") },
+    { id: "pack-1", version: 1, draft: true, generatedBy: null, generatedAt: new Date("2026-10-06T15:00:00Z") },
+    { id: "pack-2", version: 2, draft: false, generatedBy: null, generatedAt: new Date("2026-10-06T16:00:00Z") },
   ],
   latest: {
     caseNumber: "DSAR-2026-00418",
