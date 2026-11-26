@@ -27,8 +27,9 @@ export const GET = route(async (req) => {
   if (result.status !== "ok") return NOT_FOUND();
 
   // Re-render the deterministic PDF from the immutable snapshot and verify the content
-  // hash the token was bound to. The link is already consumed (single-use), so a mismatch
-  // is a defensive failure, not a retryable one.
+  // hash the token was bound to. The link is already consumed (single-use); a mismatch is a
+  // defensive integrity failure, so it fails closed with the same generic 404 — the caller
+  // must not learn whether the token or the artifact was the problem.
   const bytes = await withTenant(
     { orgId: result.orgId, workspaceId: result.workspaceId, actorId: "signed-link-recipient" },
     async (tx) => {
@@ -37,14 +38,13 @@ export const GET = route(async (req) => {
         .from(evidencePacks)
         .where(eq(evidencePacks.id, result.artifactId))
         .limit(1);
-      if (!pack) throw new Error("evidence pack missing");
+      if (!pack) return null;
       const pdf = renderEvidencePackPdf(pack.content as EvidencePackData);
-      if (createHash("sha256").update(pdf).digest("hex") !== result.contentHash) {
-        throw new Error("evidence pack content hash mismatch");
-      }
+      if (createHash("sha256").update(pdf).digest("hex") !== result.contentHash) return null;
       return pdf;
     },
   );
+  if (!bytes) return NOT_FOUND();
 
   return new NextResponse(bytes, {
     headers: {

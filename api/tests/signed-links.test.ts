@@ -14,6 +14,7 @@ import { hashEmail, hashToken } from "@/server/auth/crypto";
 import { issueSignedLink, consumeSignedLink } from "@/server/cases/signed-links";
 import { renderEvidencePackPdf } from "@/server/cases/evidence-pdf";
 import { buildEvidencePack } from "@/domain/evidence";
+import { GET as getAccessRoute } from "@/app/api/evidence/access/route";
 import type { Actor } from "@/server/auth/require-auth";
 
 const RUN = `${Date.now()}`;
@@ -115,5 +116,60 @@ describe("signed links (evidence pack)", () => {
     const res = await consumeSignedLink(issued.token);
     expect(res.status).toBe("denied");
     if (res.status === "denied") expect(res.reason).toBe("expired");
+  });
+
+  it("stores only the token hash at rest, never the raw token", async () => {
+    const issued = await issueSignedLink(actor, { artifactId: packId, recipientType: "requester", reason: "At-rest hashing check" });
+    const [row] = await systemDb
+      .select({ tokenHash: signedLinks.tokenHash })
+      .from(signedLinks)
+      .where(eq(signedLinks.tokenHash, hashToken(issued.token)))
+      .limit(1);
+    expect(row).toBeTruthy();
+    expect(row!.tokenHash).toBe(hashToken(issued.token));
+    expect(row!.tokenHash).not.toBe(issued.token);
+  });
+});
+
+describe("evidence access route (GET /api/evidence/access)", () => {
+  const hit = (token: string) =>
+    getAccessRoute(
+      new Request(`http://localhost/api/evidence/access${token ? `?token=${encodeURIComponent(token)}` : ""}`) as never,
+      {} as never,
+    );
+
+  it("streams the PDF once, then returns the generic 404 on replay", async () => {
+    const issued = await issueSignedLink(actor, { artifactId: packId, recipientType: "requester", reason: "Route stream test" });
+    const first = await hit(issued.token);
+    expect(first.status).toBe(200);
+    expect(first.headers.get("content-type")).toBe("application/pdf");
+    expect(first.headers.get("content-disposition")).toContain("attachment");
+    expect(first.headers.get("cache-control")).toContain("no-store");
+    expect(createHash("sha256").update(Buffer.from(await first.arrayBuffer())).digest("hex")).toBe(issued.contentHash);
+
+    const replay = await hit(issued.token);
+    expect(replay.status).toBe(404);
+  });
+
+  it("returns the same generic 404 body for unknown, malformed and replayed tokens", async () => {
+    const unknown = await hit("not-a-real-token");
+    const malformed = await hit("");
+    expect(unknown.status).toBe(404);
+    expect(malformed.status).toBe(404);
+    const unknownBody = await unknown.text();
+    expect(await malformed.text()).toBe(unknownBody);
+
+    const issued = await issueSignedLink(actor, { artifactId: packId, recipientType: "requester", reason: "Disclosure parity test" });
+    await consumeSignedLink(issued.token);
+    const replayed = await hit(issued.token);
+    expect(replayed.status).toBe(404);
+    expect(await replayed.text()).toBe(unknownBody);
+  });
+
+  it("fails closed when the bound content hash does not match the artifact", async () => {
+    const issued = await issueSignedLink(actor, { artifactId: packId, recipientType: "requester", reason: "Integrity binding test" });
+    await systemDb.update(signedLinks).set({ contentHash: "deadbeef" }).where(eq(signedLinks.tokenHash, hashToken(issued.token)));
+    const res = await hit(issued.token);
+    expect(res.status).toBe(404);
   });
 });
