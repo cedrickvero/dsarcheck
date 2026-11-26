@@ -60,6 +60,9 @@ beforeAll(async () => {
   // Another owner's task (must not appear) + a task on a closed case (must not appear).
   await mkSystem(earlyCaseId, "zendesk", "Zendesk", otherOwnerId, "Not started", null);
   await mkSystem(closedCaseId, "pg", "Production database", sysOwnerId, "Completed", null);
+  // A task assigned to the handler, so the non-system-owner role gate is load-bearing:
+  // without the gate the handler's own row WOULD appear, so the empty-list test can fail.
+  await mkSystem(earlyCaseId, "hubspot", "HubSpot", handlerId, "Not started", null);
 
   sysOwner = { userId: sysOwnerId, orgId, workspaceId: wsId, roles: ["system_owner"], label: `${tag}-sys`, mfaSatisfied: true };
   handler = { userId: handlerId, orgId, workspaceId: wsId, roles: ["request_handler"], label: `${tag}-handler`, mfaSatisfied: true };

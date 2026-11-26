@@ -18,7 +18,6 @@ export default async function MyTasksPage() {
     <div>
       <header>
         <h1>My tasks</h1>
-        <p className="subtitle">Systems assigned to you across open cases</p>
       </header>
 
       {tasks.length === 0 ? (
