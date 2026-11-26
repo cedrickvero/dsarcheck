@@ -21,9 +21,10 @@ The evidence-pack PDF renderer + signed expiring links (Option 3 storage slice) 
 implemented AND gate-approved (guardrail APPROVE 0/0/5, LOWs recorded as decisions; QA PASS
 after a mutation-coverage recheck). Redacted-export storage + signed-link sharing (the second
 artifact type) is also implemented AND gate-approved (guardrail APPROVE 0/0/6, LOWs fixed or
-recorded; QA PASS after a recheck). Remaining after that: in-app preview, the redacted-export
-upload UI (recordRedactedExport is server-ready but not wired to a button), and the
-active-workspace switcher (follow-on slices).**
+recorded; QA PASS after a recheck). The redacted-export upload UI (file-picker → presigned
+PUT → record) is implemented AND gate-approved (guardrail APPROVE 0/0/2, LOWs fixed; QA PASS
+after a recheck). Remaining after that: in-app preview and the active-workspace switcher
+(follow-on slices).**
 
 | Prerequisite | Verdict | Commit |
 |---|---|---|
@@ -49,6 +50,7 @@ active-workspace switcher (follow-on slices).**
 | Agency dashboard (Client workspaces table, memberships model) | **guardrail APPROVE + QA PASS** (HIGH seed name-collision closed; composite-FK migration 0026 applied; rechecked APPROVE 0/0/1 + PASS 895/895) | `bb33a60` `06b549c` `4c4ba2f` |
 | Evidence-pack PDF renderer + signed expiring links (Option 3 storage slice) | **guardrail APPROVE (0/0/5, LOWs recorded) + QA PASS** (909/909; mutation coverage rechecked after first FAIL) | `f86cce4` `1a55238` `11f2ddf` |
 | Redacted-export storage + signed-link sharing (second artifact type) | **guardrail APPROVE (0/0/6, LOWs fixed/recorded) + QA PASS** (915/915; flaky case-number + sha256 coverage fixed, rechecked) | `c2a8ebd` `875e7d3` |
+| Redacted-export upload UI (file-picker → presigned PUT → record) | **guardrail APPROVE (0/0/2, LOWs fixed) + QA PASS** (919/919; forward-list + permission-source + SSE echo coverage, rechecked) | `a9b1cdf` `fddb0e4` `d8ebc5f` |
 
 Every prerequisite was accepted only on guardrail APPROVE **and** QA PASS together,
 with no HIGH or CRITICAL finding open.
@@ -74,9 +76,9 @@ check that has been proven able to fail.
 Measured at `HEAD` after the evidence-pack PDF + signed-links slice:
 
 ```
-915 tests / 76 files    915 passed · 0 failed · 0 skipped
+919 tests / 78 files    919 passed · 0 failed · 0 skipped
 typecheck               0 errors
-boundary                137 files, 0 client -> server imports, 0 privileged handles
+boundary                139 files, 0 client -> server imports, 0 privileged handles
 db:verify               66/66 invariants
 migrations              29 applied (journal 0000-0028)
 11 domain routes        still stubbed (notImplemented -> 501)
