@@ -57,14 +57,23 @@ export async function loadCaseFileBytes(
   );
   if (!file || !file.storageKey) return null;
 
+  // Originals are NOT served here: the blurred preview must never pull the unredacted bytes.
+  // They reach the browser only after "Open original" writes the reason + audit and mints a
+  // short-lived signed URL. This endpoint serves the already-redacted export only.
+  if (!file.isRedactedExport) return null;
+
   const raw = await readObject(file.storageKey);
   if (!raw) return null;
   const bytes = new Uint8Array(raw.length);
   bytes.set(raw);
 
+  // Defence-in-depth: a non-image/non-PDF stored type is forced to octet-stream so a file
+  // recorded as text/html cannot execute script in the app origin on direct navigation.
+  const contentType = /^(image\/|application\/pdf$)/.test(file.type) ? file.type : "application/octet-stream";
+
   return {
     bytes,
-    contentType: file.type || "application/octet-stream",
+    contentType,
     filename: file.name,
     isRedactedExport: file.isRedactedExport,
   };

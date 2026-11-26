@@ -9,13 +9,16 @@
  * redaction after review resets review to "none"; complete review is approver-gated; the
  * export is rejected until review is "done".
  */
+import { randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import { cases, caseFiles, redactionTokens } from "@/db/schema";
 import { withTenant } from "@/db/client";
 import { can } from "@/server/authz";
 import { writeAuditEvent } from "@/server/db/audit";
 import { ForbiddenError, ValidationError } from "@/server/http/errors";
-import { assertKeyInWorkspace } from "@/server/storage/objectKey";
+import { assertKeyInWorkspace, parseObjectKey } from "@/server/storage/objectKey";
+import { issueDownloadUrl } from "@/server/storage/signedUrl";
+import { workspacePermissionSource } from "@/server/auth/permission-source";
 import type { Actor } from "@/server/auth/require-auth";
 
 const MIN_REASON = 3;
@@ -385,22 +388,24 @@ export async function recordRedactedExport(
 
 /**
  * "Open original · logged" (docs/05 § Redaction rules): viewing the unredacted original is a
- * reason-required, per-viewer audited action. The bytes themselves are served by the
- * authenticated content endpoint; this action is the reason + audit that authorizes the
- * un-blur. No case state changes — only the immutable audit event.
+ * reason-required, per-viewer audited action. It writes the immutable audit event AND mints a
+ * short-lived signed download URL (R2 contract) — the original bytes never reach the browser
+ * without this reason + audit first. The key's own purpose segment is the authorized purpose,
+ * so the mint can never authorize the wrong object.
  */
-export async function openOriginalFile(actor: Actor, caseId: string, fileId: string, reason: string): Promise<void> {
+export async function openOriginalFile(actor: Actor, caseId: string, fileId: string, reason: string): Promise<{ url: string }> {
   const trimmed = reason.trim();
   if (trimmed.length < MIN_REASON) {
     throw new ValidationError("a reason of at least 3 characters is required");
   }
-  return withTenant(
+
+  const storageKey = await withTenant(
     { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
     async (tx) => {
       requirePermission(actor, "export_evidence_packs", "Your role does not permit opening original files.");
 
       const [file] = await tx
-        .select({ name: caseFiles.name })
+        .select({ name: caseFiles.name, storageKey: caseFiles.storageKey })
         .from(caseFiles)
         .where(and(eq(caseFiles.id, fileId), eq(caseFiles.workspaceId, actor.workspaceId), eq(caseFiles.caseId, caseId)))
         .limit(1);
@@ -418,6 +423,18 @@ export async function openOriginalFile(actor: Actor, caseId: string, fileId: str
         objectId: fileId,
         meta: { caseId, fileName: file.name },
       });
+
+      return file.storageKey;
     },
   );
+
+  const issued = await issueDownloadUrl({
+    actor,
+    reason: trimmed,
+    requestId: randomUUID(),
+    permissions: workspacePermissionSource,
+    purpose: parseObjectKey(storageKey).purpose,
+    objectKey: storageKey,
+  });
+  return { url: issued.url };
 }

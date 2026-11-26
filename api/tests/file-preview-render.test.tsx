@@ -9,18 +9,18 @@ const original: CollectionFile = { id: "f1", sourceKey: "Zendesk", name: "origin
 const redacted: CollectionFile = { id: "f2", sourceKey: null, name: "_redacted_v2.pdf", type: "application/pdf", sizeBytes: 8, version: 2, needsRedaction: false, isRedactedExport: true };
 
 describe("FilePreview", () => {
-  it("blurs an original and offers Open original · logged", () => {
+  it("hides an original behind the open-original gate (no bytes fetched)", () => {
     const html = renderToStaticMarkup(<FilePreview caseId="c1" caseNumber="X" file={original} openOriginal={noop} />);
     expect(html).toContain("Original v1 · access-controlled");
     expect(html).toContain("Preview hidden. The original contains unredacted personal data.");
     expect(html).toContain("Open original · logged");
-    expect(html).toContain("blur(6px)");
+    expect(html).not.toContain("/api/cases/c1/files/f1/content");
   });
 
-  it("shows a redacted export unblurred with no open-original gate", () => {
+  it("shows a redacted export via the content endpoint with no gate", () => {
     const html = renderToStaticMarkup(<FilePreview caseId="c1" caseNumber="X" file={redacted} openOriginal={noop} />);
     expect(html).toContain("Redacted export");
     expect(html).not.toContain("Open original · logged");
-    expect(html).not.toContain("blur(6px)");
+    expect(html).toContain("/api/cases/c1/files/f2/content");
   });
 });

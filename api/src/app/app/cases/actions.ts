@@ -324,18 +324,18 @@ export async function recordRedactedExportAction(input: {
   }
 }
 
-/** "Open original · logged": reason-required, per-viewer audited un-blur of an original file. */
+/** "Open original · logged": reason-required, per-viewer audited; returns a signed URL to the bytes. */
 export async function openOriginalFileAction(input: {
   caseId: string;
   caseNumber: string;
   fileId: string;
   reason: string;
-}): Promise<ActionResult<Record<string, never>>> {
+}): Promise<ActionResult<{ url: string }>> {
   try {
     const actor = await requireAuth();
-    await openOriginal(actor, input.caseId, input.fileId, input.reason);
+    const result = await openOriginal(actor, input.caseId, input.fileId, input.reason);
     revalidatePath(`/app/cases/${input.caseNumber}`);
-    return { ok: true, data: {} };
+    return { ok: true, data: result };
   } catch (error) {
     return failure(error);
   }
