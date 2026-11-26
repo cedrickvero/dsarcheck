@@ -243,6 +243,7 @@ export interface RequesterRequestCard {
   caseNumber: string;
   requestType: string;
   status: string;
+  infoRequested: boolean;
   createdAt: Date;
   statutoryDueAt: Date | null;
   closedAt: Date | null;
@@ -255,6 +256,7 @@ export async function listRequesterRequests(tx: Transaction, email: string): Pro
       caseNumber: cases.caseNumber,
       requestType: cases.requestType,
       status: cases.status,
+      infoRequested: cases.infoRequested,
       createdAt: cases.createdAt,
       statutoryDueAt: cases.statutoryDueAt,
       closedAt: cases.closedAt,
@@ -262,6 +264,92 @@ export async function listRequesterRequests(tx: Transaction, email: string): Pro
     .from(cases)
     .where(requesterEmailMatches(email))
     .orderBy(sql`${cases.createdAt} desc`);
+}
+
+/** Requester-facing status pill (docs/03 § H2). Internal statuses map to plain labels. */
+export interface RequesterStatusView {
+  label: string;
+  bg: string;
+  fg: string;
+}
+
+/** Plain title per request type (docs/03 § H2). */
+export function requesterTitle(requestType: string): string {
+  switch (requestType) {
+    case "Access":
+      return "Copy of your personal data";
+    case "Rectification":
+      return "Correct your personal data";
+    case "Erasure":
+      return "Delete your personal data";
+    case "Portability":
+      return "Your data in a portable format";
+    case "Objection":
+      return "Stop using your data";
+    default:
+      return requestType;
+  }
+}
+
+export function requesterStatusView(status: string, infoRequested: boolean): RequesterStatusView {
+  const s = status.toLowerCase();
+  if (s === "completed") return { label: "Completed", bg: "#D9F2E7", fg: "#0E6B4D" };
+  if (s === "rejected") return { label: "Closed", bg: "#F2F4F7", fg: "#475467" };
+  if (s === "extended") return { label: "Extended", bg: "#D9E8FF", fg: "#175CD3" };
+  if (s === "awaiting approval") return { label: "Final review", bg: "#D9E8FF", fg: "#175CD3" };
+  if (s === "in progress") return { label: "Collecting your data", bg: "#D7F0EF", fg: "#0A6463" };
+  // New / Verifying: amber when information has been requested, otherwise neutral.
+  return infoRequested
+    ? { label: "Confirming your identity", bg: "#FDF0DC", fg: "#B54708" }
+    : { label: "Confirming your identity", bg: "#D7F0EF", fg: "#0A6463" };
+}
+
+/** The one-sentence status summary (docs/03 § H2). */
+export function requesterSummary(status: string, infoRequested: boolean): string {
+  const s = status.toLowerCase();
+  if (infoRequested) return "We need one more document from you before we can start collecting your data.";
+  if (s === "completed") return "Your request is complete.";
+  if (s === "rejected") return "We've closed this request.";
+  if (s === "extended") return "Your identity is confirmed and we're still collecting your data. We've extended the deadline.";
+  if (s === "awaiting approval") return "We're completing a final review before we respond.";
+  if (s === "in progress") return "Your identity is confirmed. We're now checking every place your data may be held.";
+  return "We've received your request and we're confirming your identity.";
+}
+
+export interface RequesterCaseDetail {
+  caseNumber: string;
+  requestType: string;
+  status: string;
+  infoRequested: boolean;
+  receivedAt: Date;
+  statutoryDueAt: Date | null;
+  closedAt: Date | null;
+  extensionMonths: number;
+  details: string;
+}
+
+/** Fetch one of the requester's own cases by number (email- AND tenant-scoped). */
+export async function getRequesterCaseDetail(
+  tx: Transaction,
+  caseNumber: string,
+  email: string,
+): Promise<RequesterCaseDetail | null> {
+  const [row] = await tx
+    .select({
+      caseNumber: cases.caseNumber,
+      requestType: cases.requestType,
+      status: cases.status,
+      infoRequested: cases.infoRequested,
+      receivedAt: cases.receivedAt,
+      statutoryDueAt: cases.statutoryDueAt,
+      closedAt: cases.closedAt,
+      extensionMonths: cases.extensionMonths,
+      details: cases.details,
+    })
+    .from(cases)
+    .where(and(eq(cases.caseNumber, caseNumber), requesterEmailMatches(email)))
+    .limit(1);
+  return row ?? null;
 }
 
 /**

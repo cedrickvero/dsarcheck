@@ -8,18 +8,16 @@ import { notFound, redirect } from "next/navigation";
 import { withLookup, withTenant } from "@/db/client";
 import { hashToken } from "@/server/auth/crypto";
 import { resolvePortalByHost } from "@/server/portal/resolve";
-import { listRequesterRequests, requesterCookieName, resolveRequesterSession } from "@/server/portal/requester";
+import {
+  listRequesterRequests,
+  requesterCookieName,
+  requesterStatusView,
+  requesterTitle,
+  resolveRequesterSession,
+} from "@/server/portal/requester";
 import { formatDate } from "@/server/cases/format";
 
 export const dynamic = "force-dynamic";
-
-const REQUEST_TITLES: Record<string, string> = {
-  Access: "Copy of your personal data",
-  Rectification: "Correct your personal data",
-  Erasure: "Delete your personal data",
-  Portability: "Your data in a portable format",
-  Objection: "Stop using your data",
-};
 
 export default async function RequestsPage() {
   const hostHeader = (await headers()).get("host");
@@ -53,17 +51,26 @@ export default async function RequestsPage() {
           <p className="intake-note">No requests yet.</p>
         ) : (
           <ul className="requester-list">
-            {cards.map((c) => (
-              <li key={c.caseNumber} className="requester-card">
-                <span className="intake-ref">{c.caseNumber}</span>
-                <span className="requester-title">{REQUEST_TITLES[c.requestType] ?? c.requestType}</span>
-                <span className="requester-status">{c.status}</span>
-                <span className="requester-dates">
-                  Received {formatDate(c.createdAt)}
-                  {c.closedAt ? ` · Completed ${formatDate(c.closedAt)}` : ` · Response due by ${formatDate(c.statutoryDueAt ?? new Date())}`}
-                </span>
-              </li>
-            ))}
+            {cards.map((c) => {
+              const st = requesterStatusView(c.status, c.infoRequested);
+              return (
+                <li key={c.caseNumber}>
+                  <a className="requester-card" href={`/track/requests/${encodeURIComponent(c.caseNumber)}`}>
+                    <span className="intake-ref">{c.caseNumber}</span>
+                    <span className="requester-title">{requesterTitle(c.requestType)}</span>
+                    <span className="requester-status" style={{ background: st.bg, color: st.fg }}>{st.label}</span>
+                    {c.infoRequested ? (
+                      <span className="requester-action" role="status">We need something from you</span>
+                    ) : null}
+                    <span className="requester-dates">
+                      Received {formatDate(c.createdAt)}
+                      {c.closedAt ? ` · Completed ${formatDate(c.closedAt)}` : ` · Response due by ${formatDate(c.statutoryDueAt ?? new Date())}`}
+                    </span>
+                    <span className="requester-view">View request →</span>
+                  </a>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

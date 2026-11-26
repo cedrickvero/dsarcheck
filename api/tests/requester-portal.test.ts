@@ -11,12 +11,15 @@ import { createCase } from "@/server/cases/create";
 import {
   confirmRequesterEmail,
   createRequesterSession,
+  getRequesterCaseDetail,
   hasRequesterCases,
   issueSignInCredential,
   listRequesterRequests,
   redeemSignInCode,
   redeemSignInLink,
   requestSignInCredential,
+  requesterStatusView,
+  requesterTitle,
   resolveRequesterSession,
 } from "@/server/portal/requester";
 import { submitIntake } from "@/server/portal/intake";
@@ -146,6 +149,33 @@ describe("requester sign-in", () => {
       listRequesterRequests(tx, `someone-else-${RUN}@example.com`),
     );
     expect(other).toHaveLength(0);
+  });
+
+  it("getRequesterCaseDetail is email-scoped (cannot fetch another email's case)", async () => {
+    const [mine] = await systemDb
+      .select({ cn: cases.caseNumber })
+      .from(cases)
+      .where(and(eq(cases.workspaceId, wsId), eq(cases.requesterEmail, EMAIL)))
+      .limit(1);
+    const detail = await withTenant({ orgId, workspaceId: wsId, actorId: "requester" }, (tx) =>
+      getRequesterCaseDetail(tx, mine!.cn, EMAIL),
+    );
+    expect(detail).not.toBeNull();
+    expect(detail!.caseNumber).toBe(mine!.cn);
+
+    const other = await withTenant({ orgId, workspaceId: wsId, actorId: "requester" }, (tx) =>
+      getRequesterCaseDetail(tx, mine!.cn, `someone-else-${RUN}@example.com`),
+    );
+    expect(other).toBeNull();
+  });
+
+  it("maps internal status to requester-facing labels", () => {
+    expect(requesterStatusView("Completed", false).label).toBe("Completed");
+    expect(requesterStatusView("Rejected", false).label).toBe("Closed");
+    expect(requesterStatusView("In progress", false).label).toBe("Collecting your data");
+    expect(requesterStatusView("New", true).label).toBe("Confirming your identity");
+    expect(requesterTitle("Access")).toBe("Copy of your personal data");
+    expect(requesterTitle("Erasure")).toBe("Delete your personal data");
   });
 });
 
