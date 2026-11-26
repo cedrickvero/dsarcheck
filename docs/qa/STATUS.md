@@ -55,6 +55,7 @@ active-workspace switcher (multi-workspace auth path) is implemented AND gate-ap
 | Redacted-export upload UI (file-picker → presigned PUT → record) | **guardrail APPROVE (0/0/2, LOWs fixed) + QA PASS** (919/919; forward-list + permission-source + SSE echo coverage, rechecked) | `a9b1cdf` `fddb0e4` `d8ebc5f` |
 | In-app file preview ("Open original · logged") | **guardrail APPROVE (0/0/1, HIGH fixed then rechecked) + QA PASS** (932/932; content endpoint refuses originals, signed-URL gate, cross-workspace fixture) | `3dcef8f` `8a41a66` `df00df4` |
 | Active-workspace switcher (multi-workspace auth path + agency sidebar) | **guardrail APPROVE (0/0/3, LOWs fixed) + QA PASS** (943/943; per-workspace role + fail-closed fallback + session rotation, lean recheck PASS) | `ea3d765` `5dd1670` |
+| "My tasks" view for system owners (gap G8) | **guardrail APPROVE (0/0/2, LOWs fixed) + QA PASS** (947/947; owner/open-case/role-gate filters, role-gate test hardened, lean recheck PASS) | `3027915` `7814d64` |
 
 Every prerequisite was accepted only on guardrail APPROVE **and** QA PASS together,
 with no HIGH or CRITICAL finding open.
