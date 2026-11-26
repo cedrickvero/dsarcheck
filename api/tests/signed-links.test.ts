@@ -80,7 +80,7 @@ beforeAll(async () => {
 
 describe("signed links (evidence pack)", () => {
   it("issues a link and consumes it exactly once", async () => {
-    const issued = await issueSignedLink(actor, { artifactId: packId, recipientType: "requester", reason: "Shared with the requester for download" });
+    const issued = await issueSignedLink(actor, { artifactType: "evidence_pack", artifactId: packId, recipientType: "requester", reason: "Shared with the requester for download" });
     expect(issued.token.length).toBeGreaterThan(32);
     expect(issued.expiresAt.getTime()).toBeGreaterThan(Date.now());
     // The bound content hash is the sha256 of a fresh render of the same snapshot.
@@ -110,7 +110,7 @@ describe("signed links (evidence pack)", () => {
   });
 
   it("rejects an expired link server-side", async () => {
-    const issued = await issueSignedLink(actor, { artifactId: packId, recipientType: "requester", reason: "Expiry test link" });
+    const issued = await issueSignedLink(actor, { artifactType: "evidence_pack", artifactId: packId, recipientType: "requester", reason: "Expiry test link" });
     // Backdate the server-side expiry (the URL is unchanged; expiry is enforced in the row).
     await systemDb.update(signedLinks).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(signedLinks.tokenHash, hashToken(issued.token)));
     const res = await consumeSignedLink(issued.token);
@@ -119,7 +119,7 @@ describe("signed links (evidence pack)", () => {
   });
 
   it("stores only the token hash at rest, never the raw token", async () => {
-    const issued = await issueSignedLink(actor, { artifactId: packId, recipientType: "requester", reason: "At-rest hashing check" });
+    const issued = await issueSignedLink(actor, { artifactType: "evidence_pack", artifactId: packId, recipientType: "requester", reason: "At-rest hashing check" });
     const [row] = await systemDb
       .select({ tokenHash: signedLinks.tokenHash })
       .from(signedLinks)
@@ -139,7 +139,7 @@ describe("evidence access route (GET /api/evidence/access)", () => {
     );
 
   it("streams the PDF once, then returns the generic 404 on replay", async () => {
-    const issued = await issueSignedLink(actor, { artifactId: packId, recipientType: "requester", reason: "Route stream test" });
+    const issued = await issueSignedLink(actor, { artifactType: "evidence_pack", artifactId: packId, recipientType: "requester", reason: "Route stream test" });
     const first = await hit(issued.token);
     expect(first.status).toBe(200);
     expect(first.headers.get("content-type")).toBe("application/pdf");
@@ -159,7 +159,7 @@ describe("evidence access route (GET /api/evidence/access)", () => {
     const unknownBody = await unknown.text();
     expect(await malformed.text()).toBe(unknownBody);
 
-    const issued = await issueSignedLink(actor, { artifactId: packId, recipientType: "requester", reason: "Disclosure parity test" });
+    const issued = await issueSignedLink(actor, { artifactType: "evidence_pack", artifactId: packId, recipientType: "requester", reason: "Disclosure parity test" });
     await consumeSignedLink(issued.token);
     const replayed = await hit(issued.token);
     expect(replayed.status).toBe(404);
@@ -167,7 +167,7 @@ describe("evidence access route (GET /api/evidence/access)", () => {
   });
 
   it("fails closed when the bound content hash does not match the artifact", async () => {
-    const issued = await issueSignedLink(actor, { artifactId: packId, recipientType: "requester", reason: "Integrity binding test" });
+    const issued = await issueSignedLink(actor, { artifactType: "evidence_pack", artifactId: packId, recipientType: "requester", reason: "Integrity binding test" });
     await systemDb.update(signedLinks).set({ contentHash: "deadbeef" }).where(eq(signedLinks.tokenHash, hashToken(issued.token)));
     const res = await hit(issued.token);
     expect(res.status).toBe(404);

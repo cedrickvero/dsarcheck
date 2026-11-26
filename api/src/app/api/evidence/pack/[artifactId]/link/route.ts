@@ -1,19 +1,32 @@
 /**
  * POST /api/evidence/pack/[artifactId]/link - issue a 24h, single-use signed link to one
- * evidence-pack version. RBAC (`export_evidence_packs`) + audit happen inside the issuance
- * transaction; the raw token is returned ONCE and stored only as a hash.
+ * artifact (evidence-pack version, or a redacted-export file via artifactType). RBAC
+ * (`export_evidence_packs`) + audit happen inside the issuance transaction; the raw token is
+ * returned ONCE and stored only as a hash.
  */
 import { NextResponse } from "next/server";
 import { route } from "@/server/http/handler";
 import { requireAuthFromRequest } from "@/server/auth/require-auth";
 import { ValidationError } from "@/server/http/errors";
-import { issueSignedLink } from "@/server/cases/signed-links";
+import { issueSignedLink, type SignedLinkArtifactType } from "@/server/cases/signed-links";
 
 export const POST = route(async (req, ctx) => {
   const actor = await requireAuthFromRequest(req);
   const artifactId = String((await ctx.params).artifactId);
 
-  const body = (await req.json().catch(() => ({}))) as { recipientType?: unknown; reason?: unknown };
+  const body = (await req.json().catch(() => ({}))) as {
+    artifactType?: unknown;
+    recipientType?: unknown;
+    reason?: unknown;
+  };
+  const artifactType: SignedLinkArtifactType =
+    body.artifactType === undefined || body.artifactType === "evidence_pack"
+      ? "evidence_pack"
+      : body.artifactType === "redacted_export"
+        ? "redacted_export"
+        : (() => {
+            throw new ValidationError("artifactType must be evidence_pack or redacted_export");
+          })();
   if (typeof body.recipientType !== "string" || body.recipientType.trim() === "") {
     throw new ValidationError("a recipient type is required");
   }
@@ -22,6 +35,7 @@ export const POST = route(async (req, ctx) => {
   }
 
   const { token, expiresAt } = await issueSignedLink(actor, {
+    artifactType,
     artifactId,
     recipientType: body.recipientType,
     reason: body.reason,

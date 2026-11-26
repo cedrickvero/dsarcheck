@@ -666,11 +666,13 @@ export const memberships = pgTable(
 );
 
 /**
- * A 24-hour, single-use signed link to one evidence-pack version (docs/05 signed links).
- * The token is stored ONLY as a SHA-256 hash; the artifact, workspace, issuer, recipient
- * type, expiry and a content hash are bound to the row so a consumed/expired/revoked/
- * replayed token fails closed. RLS is workspace-scoped (staff issuance) plus a token-hash
- * policy for the unauthenticated download lookup (mirrors magic_links).
+ * A 24-hour, single-use signed link to one artifact version (docs/05 signed links). The token
+ * is stored ONLY as a SHA-256 hash; the artifact, workspace, issuer, recipient type, expiry and
+ * a content hash are bound to the row so a consumed/expired/revoked/replayed token fails closed.
+ * `artifact_type` is `evidence_pack | redacted_export`; `artifact_id` is polymorphic
+ * (evidence_packs.id or case_files.id) with no FK, discriminated by artifact_type. RLS is
+ * workspace-scoped (staff issuance) plus a token-hash policy for the unauthenticated download
+ * lookup (mirrors magic_links).
  */
 export const signedLinks = pgTable(
   "signed_links",
@@ -683,9 +685,7 @@ export const signedLinks = pgTable(
       .notNull()
       .references(() => workspaces.id),
     artifactType: text("artifact_type").notNull(),
-    artifactId: uuid("artifact_id")
-      .notNull()
-      .references(() => evidencePacks.id),
+    artifactId: uuid("artifact_id").notNull(),
     tokenHash: text("token_hash").notNull(),
     issuedBy: uuid("issued_by")
       .notNull()

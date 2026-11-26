@@ -14,8 +14,8 @@
  */
 import { createHash } from "node:crypto";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
-import { signedLinks, evidencePacks } from "@/db/schema";
-import { withLookup, withTenant } from "@/db/client";
+import { signedLinks, evidencePacks, caseFiles } from "@/db/schema";
+import { withLookup, withTenant, type Transaction } from "@/db/client";
 import { can } from "@/server/authz";
 import { writeAuditEvent } from "@/server/db/audit";
 import { ForbiddenError, ValidationError } from "@/server/http/errors";
@@ -37,33 +37,32 @@ export interface IssueLinkResult {
   contentHash: string;
 }
 
-/** Issue a signed link for one evidence-pack version. RBAC + RLS + audit in one transaction. */
+/** The two artifact types a signed link may authorize. Kept explicit per type (docs/05). */
+export type SignedLinkArtifactType = "evidence_pack" | "redacted_export";
+
+/** Issue a signed link for one artifact version. RBAC + RLS + audit in one transaction. */
 export async function issueSignedLink(
   actor: Actor,
-  args: { artifactId: string; recipientType: string; reason: string },
+  args: { artifactType: SignedLinkArtifactType; artifactId: string; recipientType: string; reason: string },
 ): Promise<IssueLinkResult> {
   return withTenant(
     { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
     async (tx) => {
       if (!actor.roles.some((r) => can(r, "export_evidence_packs"))) {
-        throw new ForbiddenError("Your role does not permit issuing evidence-pack links.");
+        throw new ForbiddenError("Your role does not permit issuing signed links.");
       }
-      const [pack] = await tx
-        .select({ content: evidencePacks.content })
-        .from(evidencePacks)
-        .where(and(eq(evidencePacks.id, args.artifactId), eq(evidencePacks.workspaceId, actor.workspaceId)))
-        .limit(1);
-      if (!pack) throw new ValidationError("unknown evidence pack");
+      const contentHash =
+        args.artifactType === "evidence_pack"
+          ? await evidencePackContentHash(tx, actor.workspaceId, args.artifactId)
+          : await redactedExportContentHash(tx, actor.workspaceId, args.artifactId);
 
-      const pdf = renderEvidencePackPdf(pack.content as EvidencePackData);
-      const contentHash = contentHashOf(pdf);
       const token = newToken();
       const expiresAt = new Date(Date.now() + LINK_TTL_HOURS * 3600_000);
 
       await tx.insert(signedLinks).values({
         orgId: actor.orgId,
         workspaceId: actor.workspaceId,
-        artifactType: "evidence_pack",
+        artifactType: args.artifactType,
         artifactId: args.artifactId,
         tokenHash: hashToken(token),
         issuedBy: actor.userId,
@@ -77,12 +76,12 @@ export async function issueSignedLink(
         workspaceId: actor.workspaceId,
         actorId: actor.userId,
         actorLabel: actor.label,
-        action: "Evidence link issued",
+        action: "Signed link issued",
         category: "Evidence",
         reason: args.reason,
         objectType: "signed_link",
         objectId: args.artifactId,
-        meta: { artifactId: args.artifactId, recipientType: args.recipientType, expiresAt: expiresAt.toISOString(), contentHash },
+        meta: { artifactId: args.artifactId, artifactType: args.artifactType, recipientType: args.recipientType, expiresAt: expiresAt.toISOString(), contentHash },
       });
 
       return { token, expiresAt, contentHash };
@@ -90,10 +89,32 @@ export async function issueSignedLink(
   );
 }
 
+/** content hash for an evidence pack = sha256 of its deterministic PDF render. */
+async function evidencePackContentHash(tx: Transaction, workspaceId: string, artifactId: string): Promise<string> {
+  const [pack] = await tx
+    .select({ content: evidencePacks.content })
+    .from(evidencePacks)
+    .where(and(eq(evidencePacks.id, artifactId), eq(evidencePacks.workspaceId, workspaceId)))
+    .limit(1);
+  if (!pack) throw new ValidationError("unknown evidence pack");
+  return contentHashOf(renderEvidencePackPdf(pack.content as EvidencePackData));
+}
+
+/** content hash for a redacted export = the file's stored sha256. */
+async function redactedExportContentHash(tx: Transaction, workspaceId: string, artifactId: string): Promise<string> {
+  const [file] = await tx
+    .select({ sha256: caseFiles.sha256 })
+    .from(caseFiles)
+    .where(and(eq(caseFiles.id, artifactId), eq(caseFiles.workspaceId, workspaceId), eq(caseFiles.isRedactedExport, true)))
+    .limit(1);
+  if (!file || !file.sha256) throw new ValidationError("unknown redacted export");
+  return file.sha256;
+}
+
 export type ConsumeResult =
   | { status: "invalid" }
   | { status: "denied"; reason: "expired" | "revoked" | "replayed" }
-  | { status: "ok"; orgId: string; artifactId: string; workspaceId: string; contentHash: string };
+  | { status: "ok"; orgId: string; artifactId: string; workspaceId: string; artifactType: string; contentHash: string };
 
 /** Validate + atomically consume a presented token. Audits every tenant-known outcome. */
 export async function consumeSignedLink(token: string): Promise<ConsumeResult> {
@@ -120,6 +141,7 @@ export async function consumeSignedLink(token: string): Promise<ConsumeResult> {
         orgId: signedLinks.orgId,
         workspaceId: signedLinks.workspaceId,
         artifactId: signedLinks.artifactId,
+        artifactType: signedLinks.artifactType,
         contentHash: signedLinks.contentHash,
       });
 
@@ -138,7 +160,7 @@ export async function consumeSignedLink(token: string): Promise<ConsumeResult> {
         objectId: row.artifactId,
         meta: { artifactId: row.artifactId, contentHash: row.contentHash, outcome: "consumed" },
       });
-      return { status: "ok", orgId: row.orgId, artifactId: row.artifactId, workspaceId: row.workspaceId, contentHash: row.contentHash };
+      return { status: "ok", orgId: row.orgId, artifactId: row.artifactId, workspaceId: row.workspaceId, artifactType: row.artifactType, contentHash: row.contentHash };
     }
 
     // Claim lost — resolve WHY for the audit (invalid vs expired/revoked/replayed).

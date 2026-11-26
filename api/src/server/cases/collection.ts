@@ -323,3 +323,84 @@ export async function markFinalExportDone(actor: Actor, caseId: string): Promise
     },
   );
 }
+
+export interface RecordRedactedExportInput {
+  name: string;
+  type: string;
+  sizeBytes: number;
+  storageKey: string;
+  sha256: string;
+}
+
+/**
+ * Record the human-produced redacted export (docs/04 CaseFile.is_redacted_export): a NEW
+ * case_files row (version 2, never an overwrite of the original) that references the object
+ * already stored under `storageKey`, plus the finalExportDone flag — in one transaction with
+ * the audit event. RBAC + review-done gate match markFinalExportDone.
+ */
+export async function recordRedactedExport(
+  actor: Actor,
+  caseId: string,
+  input: RecordRedactedExportInput,
+): Promise<{ finalExportDone: boolean; fileId: string }> {
+  return withTenant(
+    { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
+    async (tx) => {
+      requirePermission(actor, "export_evidence_packs", "Your role does not permit generating the final export.");
+
+      const [row] = await tx
+        .select({ id: cases.id, review: cases.redactionReview, requestType: cases.requestType })
+        .from(cases)
+        .where(and(eq(cases.id, caseId), eq(cases.workspaceId, actor.workspaceId)))
+        .limit(1);
+      if (!row) throw new ValidationError("unknown case");
+      assertCollectionCase(row.requestType);
+      if (row.review !== "done") {
+        throw new ValidationError("the redaction review must be completed before the export");
+      }
+
+      const name = input.name.trim();
+      const storageKey = input.storageKey.trim();
+      const sha256 = input.sha256.trim().toLowerCase();
+      if (name === "") throw new ValidationError("a file name is required");
+      if (storageKey === "") throw new ValidationError("a storage key is required");
+      if (!/^[0-9a-f]{64}$/.test(sha256)) throw new ValidationError("a valid sha256 is required");
+
+      const [file] = await tx
+        .insert(caseFiles)
+        .values({
+          orgId: actor.orgId,
+          workspaceId: actor.workspaceId,
+          caseId,
+          name,
+          type: input.type,
+          sizeBytes: input.sizeBytes,
+          uploadedBy: actor.userId,
+          storageKey,
+          sha256,
+          version: 2,
+          needsRedaction: false,
+          isRedactedExport: true,
+          isEvidence: false,
+        })
+        .returning({ id: caseFiles.id });
+
+      await tx.update(cases).set({ finalExportDone: true }).where(eq(cases.id, caseId));
+
+      await writeAuditEvent(tx, {
+        orgId: actor.orgId,
+        workspaceId: actor.workspaceId,
+        actorId: actor.userId,
+        actorLabel: actor.label,
+        action: "redaction.export.generated",
+        category: "Redaction",
+        reason: "Final redacted export recorded",
+        objectType: "case",
+        objectId: caseId,
+        meta: { caseId, fileId: file!.id, storageKey, sha256 },
+      });
+
+      return { finalExportDone: true, fileId: file!.id };
+    },
+  );
+}

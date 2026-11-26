@@ -17,7 +17,7 @@ export const DOWNLOAD_TTL_CEILING_SECONDS = 600;
 
 export type Operation = "upload" | "download";
 export type HttpMethod = "GET" | "PUT";
-export type Purpose = "evidence" | "identity_document" | "generated_pack";
+export type Purpose = "evidence" | "identity_document" | "generated_pack" | "redacted_export";
 
 export interface PurposePolicy {
   uploadPermission: string;
@@ -37,6 +37,7 @@ export const PURPOSE_POLICY: Record<Purpose, PurposePolicy> = {
     downloadTtlCeilingSeconds: 180,
   },
   generated_pack: { uploadPermission: "files.upload", downloadPermission: "files.download" },
+  redacted_export: { uploadPermission: "files.upload", downloadPermission: "files.download" },
 };
 
 export class UnknownPurposeError extends Error {
