@@ -76,7 +76,7 @@ describe("T-07 case creation", () => {
 
     const audit = await systemDb.select().from(auditEvents).where(eq(auditEvents.objectId, created.id));
     expect(audit).toHaveLength(1);
-    expect(audit[0]!.action).toBe("case.created");
+    expect(audit[0]!.action).toBe("Request received via intake form");
     expect(audit[0]!.category).toBe("Intake");
   });
 

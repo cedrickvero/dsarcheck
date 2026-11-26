@@ -85,6 +85,8 @@ export interface LookupContext {
   emailHash?: string;
   /** sha256 of a presented signed-link token (evidence-pack download). */
   signedLinkTokenHash?: string;
+  /** A portal subdomain (slug) to resolve the owning workspace pre-tenant (public intake). */
+  portalSubdomain?: string;
 }
 
 export async function withLookup<T>(
@@ -103,6 +105,9 @@ export async function withLookup<T>(
     }
     if (ctx.signedLinkTokenHash) {
       await tx.execute(sql`select set_config('app.signed_link_token_hash', ${ctx.signedLinkTokenHash}, true)`);
+    }
+    if (ctx.portalSubdomain) {
+      await tx.execute(sql`select set_config('app.lookup_subdomain', ${ctx.portalSubdomain}, true)`);
     }
     await tx.execute(sql`set local role app_tenant`);
     return fn(tx);

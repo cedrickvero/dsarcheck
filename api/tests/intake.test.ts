@@ -1,0 +1,90 @@
+/**
+ * Public intake (docs/03 § H): field validation, case creation with requester details and the
+ * "Request received via intake form" audit (actor System), and portal host resolution.
+ */
+import { beforeAll, describe, expect, it } from "vitest";
+import { and, eq } from "drizzle-orm";
+import { systemDb } from "@/db/client";
+import { auditEvents, cases, orgs, workspaces } from "@/db/schema";
+import { resolvePortalByHost, type ResolvedPortal } from "@/server/portal/resolve";
+import { submitIntake, validateIntake } from "@/server/portal/intake";
+
+const RUN = `${Date.now()}`;
+const tag = `intake${RUN}`; // valid slug: lowercase letters + digits
+
+let orgId = "";
+let wsId = "";
+let portal: ResolvedPortal;
+
+beforeAll(async () => {
+  orgId = (await systemDb.insert(orgs).values({ name: `${tag}-org`, kind: "direct" }).returning({ id: orgs.id }))[0]!.id;
+  wsId = (await systemDb.insert(workspaces).values({ orgId, name: `${tag}-ws`, subdomain: tag }).returning({ id: workspaces.id }))[0]!.id;
+  portal = { orgId, workspaceId: wsId, name: `${tag}-ws`, subdomain: tag };
+});
+
+describe("validateIntake", () => {
+  it("returns no errors for a complete submission", () => {
+    expect(
+      validateIntake({ type: "Access", name: "Ada Lovelace", email: "ada@example.com", identKind: "Customer ID", ident: "C-1", details: "Please send my data.", consent: "on" }),
+    ).toEqual({});
+  });
+
+  it("returns the verbatim field errors for an empty form", () => {
+    const e = validateIntake({ type: "Access", name: "", email: "", identKind: "Customer ID", ident: "", details: "", consent: "" });
+    expect(e.name).toBe("Enter your full name.");
+    expect(e.email).toBe("Enter a valid email address, like name@example.com.");
+    expect(e.ident).toBe("Enter an identifier so we can find your account.");
+    expect(e.details).toBe("Describe your request.");
+    expect(e.consent).toBe("You must agree before we can process your request.");
+  });
+});
+
+describe("submitIntake", () => {
+  it("creates a New case with requester details and the intake audit (actor System)", async () => {
+    const result = await submitIntake(portal, {
+      type: "Erasure",
+      name: "Ada Lovelace",
+      email: `ada-${RUN}@example.com`,
+      identKind: "Customer ID",
+      ident: "C-123",
+      details: "Please delete my account.",
+      consent: "on",
+    });
+    expect(result.caseNumber).toMatch(/^DSAR-\d{4}-\d{5}$/);
+
+    const [row] = await systemDb
+      .select()
+      .from(cases)
+      .where(and(eq(cases.caseNumber, result.caseNumber), eq(cases.workspaceId, wsId)));
+    expect(row).toBeTruthy();
+    expect(row!.workspaceId).toBe(wsId);
+    expect(row!.requestType).toBe("Erasure");
+    expect(row!.status).toBe("New");
+    expect(row!.requesterName).toBe("Ada Lovelace");
+    expect(row!.requesterEmail).toBe(`ada-${RUN}@example.com`);
+    expect(row!.identifier).toBe("Customer ID C-123");
+    expect(row!.details).toBe("Please delete my account.");
+
+    const [audit] = await systemDb.select().from(auditEvents).where(eq(auditEvents.objectId, row!.id));
+    expect(audit!.action).toBe("Request received via intake form");
+    expect(audit!.category).toBe("Intake");
+    expect(audit!.actorLabel).toBe("System");
+  });
+});
+
+describe("resolvePortalByHost", () => {
+  it("resolves a portal host to its workspace", async () => {
+    const resolved = await resolvePortalByHost(`${tag}.dsarcheck.com`);
+    expect(resolved).not.toBeNull();
+    expect(resolved!.workspaceId).toBe(wsId);
+    expect(resolved!.orgId).toBe(orgId);
+  });
+
+  it("returns null for an unknown subdomain (fail closed, no enumeration)", async () => {
+    expect(await resolvePortalByHost(`nope${RUN}.dsarcheck.com`)).toBeNull();
+  });
+
+  it("returns null for the apex (not a portal)", async () => {
+    expect(await resolvePortalByHost("dsarcheck.com")).toBeNull();
+  });
+});

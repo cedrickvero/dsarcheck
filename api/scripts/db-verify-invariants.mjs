@@ -265,6 +265,18 @@ try {
     usersActorPol[0]?.qual ?? "absent",
   );
 
+  // Migration 0030: the public intake resolves a portal HOST to its workspace by subdomain
+  // via workspaces_subdomain_lookup (subdomain = app.lookup_subdomain). If it is dropped, the
+  // workspaces table is self-scoped and a tenant-less intake can never resolve its workspace.
+  const wsSubdomainPol = await q(
+    `select qual from pg_policies where schemaname = 'public' and tablename = 'workspaces' and policyname = 'workspaces_subdomain_lookup' limit 1`,
+  );
+  check(
+    /app\.lookup_subdomain/.test(wsSubdomainPol[0]?.qual ?? ""),
+    "workspaces_subdomain_lookup policy reads app.lookup_subdomain (portal resolution)",
+    wsSubdomainPol[0]?.qual ?? "absent",
+  );
+
   // Migration 0026 ties memberships(workspace_id, org_id) to workspaces(id, org_id): the
   // composite FK (and its prerequisite unique constraint) make an (org A, workspace of org B)
   // row structurally impossible. Assert BOTH exist so a dropped or failed apply is caught.

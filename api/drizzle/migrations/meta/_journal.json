@@ -211,6 +211,13 @@
       "when": 1795716394038,
       "tag": "0029_users_actor_lookup",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1795723590897,
+      "tag": "0030_workspaces_subdomain_lookup",
+      "breakpoints": true
     }
   ]
 }

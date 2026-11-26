@@ -25,6 +25,11 @@ export interface CreateCaseArgs {
   priority?: Priority;
   receivedAt: Date;
   statutoryDueAt: Date;
+  /** Requester details captured by the public intake form. */
+  requesterName?: string;
+  requesterEmail?: string;
+  identifier?: string;
+  details?: string;
 }
 
 export function formatCaseNumber(year: number, sequence: number): string {
@@ -74,6 +79,10 @@ export async function createCase(
       status: "New",
       receivedAt: args.receivedAt,
       statutoryDueAt: args.statutoryDueAt,
+      requesterName: args.requesterName ?? "",
+      requesterEmail: args.requesterEmail ?? "",
+      identifier: args.identifier ?? "",
+      details: args.details ?? "",
     })
     .returning({ id: cases.id });
   if (!row) throw new Error("case: insert returned no row");
@@ -83,9 +92,9 @@ export async function createCase(
     workspaceId: args.workspaceId,
     actorId: args.actorId,
     actorLabel: args.actorLabel,
-    action: "case.created",
+    action: "Request received via intake form",
     category: "Intake",
-    reason: `Case ${caseNumber} created`,
+    reason: `Case ${caseNumber} received via intake form`,
     objectType: "case",
     objectId: row.id,
     meta: { caseNumber, requestType: args.requestType },
