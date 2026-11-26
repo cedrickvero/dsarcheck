@@ -130,6 +130,15 @@ describe("requireAuthFromToken role derivation", () => {
     expect(actor.workspaceId).toBe(homeWsId);
     expect(actor.roles).toEqual(["owner"]);
   });
+
+  it("refuses a session in a non-home workspace with no active membership (fail closed)", async () => {
+    // A session whose active workspace is NOT home and has NO membership must not resolve
+    // with the home role — it is refused outright.
+    const created = await withTenant({ orgId, workspaceId: foreignWsId, actorId: ownerId }, (tx) =>
+      createSession(tx, { userId: ownerId, orgId, workspaceId: foreignWsId, mfaSatisfiedAt: new Date() }),
+    );
+    await expect(requireAuthFromToken(created.token)).rejects.toThrow(UnauthenticatedError);
+  });
 });
 
 // hashToken is imported to satisfy the "lookup by hash" parity; assert it is consistent.

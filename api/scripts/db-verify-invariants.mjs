@@ -260,8 +260,8 @@ try {
     `select qual from pg_policies where schemaname = 'public' and tablename = 'users' and policyname = 'users_actor_lookup' limit 1`,
   );
   check(
-    /app\.actor_id/.test(usersActorPol[0]?.qual ?? ""),
-    "users_actor_lookup policy reads app.actor_id (session user-read is workspace-independent)",
+    /app\.actor_id/.test(usersActorPol[0]?.qual ?? "") && !/app\.workspace_id/.test(usersActorPol[0]?.qual ?? ""),
+    "users_actor_lookup policy reads app.actor_id only (not app.workspace_id)",
     usersActorPol[0]?.qual ?? "absent",
   );
 

@@ -108,6 +108,19 @@ export async function switchWorkspace(actor: Actor, targetWorkspaceId: string): 
   return withTenant(
     { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },
     async (tx) => {
+      // TOCTOU re-check: re-verify reachability inside the transaction that rotates the
+      // session, so a membership deactivated between the listReachableWorkspaces read and
+      // this transaction cannot switch. The org-scoped memberships RLS already bounds the
+      // row to the actor's own org; this bounds it to an ACTIVE membership of the actor.
+      const [home] = await tx.select({ workspaceId: users.workspaceId }).from(users).where(eq(users.id, actor.userId)).limit(1);
+      const isHome = home?.workspaceId === targetWorkspaceId;
+      const [membership] = await tx
+        .select({ id: memberships.id })
+        .from(memberships)
+        .where(and(eq(memberships.userId, actor.userId), eq(memberships.workspaceId, targetWorkspaceId), eq(memberships.active, true)))
+        .limit(1);
+      if (!isHome && !membership) throw new ForbiddenError("You do not have access to that workspace.");
+
       const [old] = await tx
         .select({ mfa: sessions.mfaSatisfiedAt })
         .from(sessions)
