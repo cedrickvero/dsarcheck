@@ -156,9 +156,17 @@ Decisions that follow, all recorded in code under `api/src/domain/platform.ts` a
 - **The evidence-pack storage slice (PDF renderer + signed links) has LANDED**, superseding the
   deferral above. The nine-section pack renders to a deterministic PDF (`server/cases/evidence-pdf.ts`),
   is served through an authenticated endpoint, and a 24h single-use signed link can be issued and
-  downloaded through the token-gated route. In-app preview and redacted-export sharing remain
-  deferred (see the preview/deferral bullets in this file); `artifact_type` is left
-  `evidence_pack | redacted_export` so the token model extends to exports without re-plumbing.
+  downloaded through the token-gated route. `artifact_type` is `evidence_pack | redacted_export`.
+
+- **Redacted-export sharing (the second signed-link artifact type) has LANDED; the upload UI has
+  not.** `issueSignedLink`/`consumeSignedLink` and the token download route now handle
+  `artifact_type = redacted_export`, binding the link to a `case_files` row's sha256 and streaming
+  the object from storage. `recordRedactedExport` (in `server/cases/collection.ts`) stores the
+  human-produced `_redacted_v2` file (version 2, never an overwrite) + the `finalExportDone` flag
+  + the audit event in one transaction. It is not yet wired to a route/button: the existing
+  "Generate final redacted export" button still calls the flag-only `markFinalExportDone`, so the
+  live app cannot yet record an export. Wiring the upload + record into the UI is the next follow-on
+  (needs the file-picker → presigned PUT → record flow). In-app preview remains deferred.
 
 - **Signed-link expiry is hardcoded to 24 hours, not the selectable 24h/7d/30d (default 7d) in
   docs/05.** The owner's storage-slice spec pins 24 hours ("Links expire after 24 hours"), and 24h
@@ -172,11 +180,11 @@ Decisions that follow, all recorded in code under `api/src/domain/platform.ts` a
   either way (single-use + 24h server-side expiry bound the exposure). Consistent with the existing
   magic-link `?token=` pattern.
 
-- **`recipient_type` (and `artifact_type`) are free text with no DB CHECK.** `artifact_type` is
-  written only by `issueSignedLink` with the literal `"evidence_pack"` and `recipient_type` only
-  through the RBAC-gated issuance route (the UI offers a fixed set). They are metadata with no
-  access-control effect; a vocabulary CHECK is a cheap follow-on if a second artifact type or a
-  recipient-type list is codified.
+- **`recipient_type` is free text with no DB CHECK; `artifact_type` is now CHECK-constrained.**
+  Migration 0028 adds `signed_links_artifact_type_check` (`evidence_pack | redacted_export`), so
+  the polymorphic discriminator is structural. `recipient_type` remains metadata written only
+  through the RBAC-gated issuance route (the UI offers a fixed set) with no access-control effect;
+  a vocabulary CHECK for it is a cheap follow-on if a recipient-type list is codified.
 
 - **The signed-link token travels in the URL query string**, so it can appear in browser history,
   access logs and Referer headers. This is inherent to a shareable link and matches the magic-link

@@ -15,6 +15,7 @@ import { withTenant } from "@/db/client";
 import { can } from "@/server/authz";
 import { writeAuditEvent } from "@/server/db/audit";
 import { ForbiddenError, ValidationError } from "@/server/http/errors";
+import { assertKeyInWorkspace } from "@/server/storage/objectKey";
 import type { Actor } from "@/server/auth/require-auth";
 
 const MIN_REASON = 3;
@@ -365,6 +366,20 @@ export async function recordRedactedExport(
       if (name === "") throw new ValidationError("a file name is required");
       if (storageKey === "") throw new ValidationError("a storage key is required");
       if (!/^[0-9a-f]{64}$/.test(sha256)) throw new ValidationError("a valid sha256 is required");
+      if (!Number.isFinite(input.sizeBytes) || input.sizeBytes < 0) {
+        throw new ValidationError("sizeBytes must be a non-negative number");
+      }
+      // The key must be a tenant-scoped redacted-export key, same rule as every other object
+      // (ws/<workspaceId>/<purpose>/<uuid>); a key for another workspace or purpose is refused.
+      let parts;
+      try {
+        parts = assertKeyInWorkspace(storageKey, actor.workspaceId);
+      } catch {
+        throw new ValidationError("storage key must be scoped to this workspace");
+      }
+      if (parts.purpose !== "redacted_export") {
+        throw new ValidationError("storage key purpose must be redacted_export");
+      }
 
       const [file] = await tx
         .insert(caseFiles)
