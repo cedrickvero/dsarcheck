@@ -252,6 +252,19 @@ try {
     membershipsQual,
   );
 
+  // Migration 0029: the session resolve decouples the user read from the workspace GUC
+  // via users_actor_lookup (id = app.actor_id). If that policy is dropped, a session whose
+  // active workspace differs from the user's home workspace can no longer resolve its own
+  // user row, and the workspace switcher silently breaks sign-in.
+  const usersActorPol = await q(
+    `select qual from pg_policies where schemaname = 'public' and tablename = 'users' and policyname = 'users_actor_lookup' limit 1`,
+  );
+  check(
+    /app\.actor_id/.test(usersActorPol[0]?.qual ?? ""),
+    "users_actor_lookup policy reads app.actor_id (session user-read is workspace-independent)",
+    usersActorPol[0]?.qual ?? "absent",
+  );
+
   // Migration 0026 ties memberships(workspace_id, org_id) to workspaces(id, org_id): the
   // composite FK (and its prerequisite unique constraint) make an (org A, workspace of org B)
   // row structurally impossible. Assert BOTH exist so a dropped or failed apply is caught.

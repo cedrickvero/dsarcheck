@@ -93,10 +93,13 @@ export async function requireAuthFromToken(
   );
   if (!resolved) throw new UnauthenticatedError();
 
-  const { session, user } = resolved;
+  const { session, user, membershipRole } = resolved;
   if (session.privilegeEpoch !== 0 && user.role === null) throw new UnauthenticatedError();
 
-  const role = user.role as Role;
+  // The ACTIVE workspace is the session's workspace (switchable via the workspace
+  // switcher). The role is the membership's role in that workspace, falling back to the
+  // home-workspace role (users.role) when no membership row exists for it.
+  const role = (membershipRole ?? user.role) as Role;
   if (!ROLES.includes(role)) throw new UnauthenticatedError();
 
   const mfaSatisfied = session.mfaSatisfiedAt !== null;
@@ -107,7 +110,7 @@ export async function requireAuthFromToken(
     label: user.email,
     name: user.name || user.email,
     orgId: user.orgId,
-    workspaceId: user.workspaceId,
+    workspaceId: session.workspaceId,
     roles: [role],
     sessionId: session.id,
     mfaSatisfied,

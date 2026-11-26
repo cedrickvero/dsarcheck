@@ -12,7 +12,7 @@
  */
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { sql as raw } from "drizzle-orm";
-import { sessions, users } from "@/db/schema";
+import { memberships, sessions, users } from "@/db/schema";
 import type { Transaction } from "@/db/client";
 import { env } from "@/env";
 import { newToken, hashToken } from "./crypto";
@@ -32,7 +32,7 @@ export interface SessionRecord {
 /** Issue a session and return the ONE time the raw token exists outside the client. */
 export async function createSession(
   tx: Transaction,
-  args: { userId: string; orgId: string; workspaceId: string },
+  args: { userId: string; orgId: string; workspaceId: string; mfaSatisfiedAt?: Date | null },
 ): Promise<{ token: string; sessionId: string }> {
   const token = newToken();
   const [row] = await tx
@@ -43,6 +43,7 @@ export async function createSession(
       userId: args.userId,
       tokenHash: hashToken(token),
       expiresAt: new Date(Date.now() + env.SESSION_ABSOLUTE_DAYS * 86_400_000),
+      mfaSatisfiedAt: args.mfaSatisfiedAt ?? null,
     })
     .returning({ id: sessions.id });
   if (!row) throw new Error("session: insert returned no row");
@@ -50,14 +51,24 @@ export async function createSession(
 }
 
 /**
- * Resolve a presented token to its session and user, applying both expiries and
- * revocation. Returns null for anything unusable - callers must not distinguish
+ * Resolve a presented token to its session, user and the user's per-workspace role.
+ * Returns null for anything unusable - callers must not distinguish
  * "expired" from "revoked" from "never existed" in a response.
+ *
+ * The user row is read by the actor's own id (users_actor_lookup), NOT via the
+ * workspace GUC, so a session may switch its active workspace and still resolve its
+ * user. The role is the membership's role in the session's active workspace, when a
+ * membership exists; callers fall back to `user.role` for the home workspace (which
+ * has no membership row).
  */
-export async function resolveSession(
-  tx: Transaction,
-  token: string,
-): Promise<{ session: SessionRecord; user: typeof users.$inferSelect } | null> {
+export interface ResolvedSession {
+  session: SessionRecord;
+  user: typeof users.$inferSelect;
+  /** memberships.role in the session's active workspace, or null for the home workspace. */
+  membershipRole: string | null;
+}
+
+export async function resolveSession(tx: Transaction, token: string): Promise<ResolvedSession | null> {
   const [row] = await tx
     .select()
     .from(sessions)
@@ -71,13 +82,21 @@ export async function resolveSession(
   if (row.expiresAt.getTime() <= now) return null;
   if (now - row.lastSeenAt.getTime() > idleMs) return null;
 
-  // The session row is visible through the token policy; its workspace_id IS the
-  // tenant. Setting it here is what lets the user row below be read at all - with no
-  // tenant, that SELECT returns nothing and sign-in can never complete.
+  // The session row is visible through the token policy. Its workspace IS the active
+  // tenant; its org scopes the memberships read; its user id scopes the user read via
+  // users_actor_lookup (so a switched workspace does not break resolution).
   await tx.execute(raw`select set_config('app.workspace_id', ${row.workspaceId}, true)`);
+  await tx.execute(raw`select set_config('app.org_id', ${row.orgId}, true)`);
+  await tx.execute(raw`select set_config('app.actor_id', ${row.userId}, true)`);
 
   const [user] = await tx.select().from(users).where(eq(users.id, row.userId)).limit(1);
   if (!user || user.disabledAt) return null;
+
+  const [membership] = await tx
+    .select({ role: memberships.role })
+    .from(memberships)
+    .where(and(eq(memberships.userId, row.userId), eq(memberships.workspaceId, row.workspaceId), eq(memberships.active, true)))
+    .limit(1);
 
   await tx
     .update(sessions)
@@ -97,6 +116,7 @@ export async function resolveSession(
       revokedAt: row.revokedAt,
     },
     user,
+    membershipRole: membership?.role ?? null,
   };
 }
 

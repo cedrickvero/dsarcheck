@@ -12,10 +12,12 @@ import "../globals.css";
 import { requireAuth } from "@/server/auth/require-auth";
 import { now } from "@/server/time";
 import { listNotifications } from "@/server/cases/notifications";
+import { listReachableWorkspaces } from "@/server/cases/workspaces";
 import { UnauthenticatedError, MfaRequiredError } from "@/server/http/errors";
 import { StatePanel } from "./_components/state-panel";
 import { NotificationBell } from "./_components/notification-bell";
-import { markAllRead, markRead } from "./actions";
+import { WorkspaceSwitcher } from "./_components/workspace-switcher";
+import { markAllRead, markRead, switchWorkspaceAction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +62,7 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
   }
 
   const feed = await listNotifications(actor, now());
+  const wsContext = await listReachableWorkspaces(actor);
   const roleLabel = ROLE_LABELS[actor.roles[0] ?? ""] ?? "Workspace";
 
   return (
@@ -67,6 +70,7 @@ export default async function WorkspaceLayout({ children }: { children: React.Re
       <a className="skip-link" href="#main">Skip to main content</a>
       <div className="shell">
         <header className="shell-bar">
+          <WorkspaceSwitcher context={wsContext} onSwitch={switchWorkspaceAction} />
           <nav aria-label="Workspace">
             <a href="/app">Dashboard</a>
             <a href="/app/cases">Cases</a>
