@@ -24,6 +24,7 @@ export const POST = route(async (req) => {
     ident: String(form.get("ident") ?? ""),
     details: String(form.get("details") ?? ""),
     consent: String(form.get("consent") ?? ""),
+    human: String(form.get("human") ?? ""),
   };
 
   let caseNumber: string;

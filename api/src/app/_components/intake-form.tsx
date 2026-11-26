@@ -88,7 +88,7 @@ export function IntakeForm(props: { companyName: string }) {
       </div>
 
       <div className="field">
-        <span>Identifier</span>
+        <span>Account identifier</span>
         <span className="intake-hint">Helps us find your account. Use the email you signed up with, a customer ID from an invoice, or a phone number.</span>
         <div className="intake-ident">
           <select name="identKind" aria-label="Identifier type" defaultValue="Customer ID">
@@ -118,7 +118,7 @@ export function IntakeForm(props: { companyName: string }) {
 
       <label className="intake-consent">
         <input type="checkbox" name="human" value="on" />
-        <span>I am not a robot</span>
+        <span>I am not a robot · Click to verify</span>
       </label>
       <FieldError message={errors.human} />
 

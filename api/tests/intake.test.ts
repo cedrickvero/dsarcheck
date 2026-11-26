@@ -6,8 +6,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { systemDb } from "@/db/client";
 import { auditEvents, cases, orgs, workspaces } from "@/db/schema";
-import { resolvePortalByHost, type ResolvedPortal } from "@/server/portal/resolve";
+import { resolvePortalByHost, portalSlug, type ResolvedPortal } from "@/server/portal/resolve";
 import { submitIntake, validateIntake } from "@/server/portal/intake";
+import { classifyHost } from "@/domain/host";
 
 const RUN = `${Date.now()}`;
 const tag = `intake${RUN}`; // valid slug: lowercase letters + digits
@@ -25,17 +26,18 @@ beforeAll(async () => {
 describe("validateIntake", () => {
   it("returns no errors for a complete submission", () => {
     expect(
-      validateIntake({ type: "Access", name: "Ada Lovelace", email: "ada@example.com", identKind: "Customer ID", ident: "C-1", details: "Please send my data.", consent: "on" }),
+      validateIntake({ type: "Access", name: "Ada Lovelace", email: "ada@example.com", identKind: "Customer ID", ident: "C-1", details: "Please send my data.", consent: "on", human: "on" }),
     ).toEqual({});
   });
 
   it("returns the verbatim field errors for an empty form", () => {
-    const e = validateIntake({ type: "Access", name: "", email: "", identKind: "Customer ID", ident: "", details: "", consent: "" });
+    const e = validateIntake({ type: "Access", name: "", email: "", identKind: "Customer ID", ident: "", details: "", consent: "", human: "" });
     expect(e.name).toBe("Enter your full name.");
     expect(e.email).toBe("Enter a valid email address, like name@example.com.");
     expect(e.ident).toBe("Enter an identifier so we can find your account.");
     expect(e.details).toBe("Describe your request.");
     expect(e.consent).toBe("You must agree before we can process your request.");
+    expect(e.human).toBe("Complete the anti-spam check.");
   });
 });
 
@@ -49,6 +51,7 @@ describe("submitIntake", () => {
       ident: "C-123",
       details: "Please delete my account.",
       consent: "on",
+      human: "on",
     });
     expect(result.caseNumber).toMatch(/^DSAR-\d{4}-\d{5}$/);
 
@@ -86,5 +89,31 @@ describe("resolvePortalByHost", () => {
 
   it("returns null for the apex (not a portal)", async () => {
     expect(await resolvePortalByHost("dsarcheck.com")).toBeNull();
+  });
+});
+
+describe("portalSlug (the tenant discriminator)", () => {
+  it("yields the slug only for a portal surface", () => {
+    expect(portalSlug(classifyHost("lumen.dsarcheck.com"))).toBe("lumen");
+    expect(portalSlug(classifyHost("dsarcheck.com"))).toBeNull();
+    expect(portalSlug(classifyHost("admin.dsarcheck.com"))).toBeNull();
+    expect(portalSlug(classifyHost("www.dsarcheck.com"))).toBeNull();
+  });
+});
+
+describe("intake hardening", () => {
+  it("whitelists the identifier kind, falling back to Customer ID", async () => {
+    const result = await submitIntake(portal, {
+      type: "Access", name: "Ada", email: `ada2-${RUN}@example.com`, identKind: "Hacked", ident: "X-9", details: "data please", consent: "on", human: "on",
+    });
+    const [row] = await systemDb
+      .select({ identifier: cases.identifier })
+      .from(cases)
+      .where(and(eq(cases.caseNumber, result.caseNumber), eq(cases.workspaceId, wsId)));
+    expect(row!.identifier).toBe("Customer ID X-9");
+  });
+
+  it("enforces subdomain uniqueness at the database (no two workspaces share a subdomain)", async () => {
+    await expect(systemDb.insert(workspaces).values({ orgId, name: `${tag}-dup`, subdomain: tag })).rejects.toThrow();
   });
 });

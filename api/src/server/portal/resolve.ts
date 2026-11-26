@@ -12,7 +12,7 @@
 import { eq } from "drizzle-orm";
 import { workspaces } from "@/db/schema";
 import { withLookup } from "@/db/client";
-import { classifyHost } from "@/domain/host";
+import { classifyHost, type HostSurface } from "@/domain/host";
 
 export interface ResolvedPortal {
   orgId: string;
@@ -21,10 +21,19 @@ export interface ResolvedPortal {
   subdomain: string;
 }
 
+/**
+ * The ONLY tenant discriminator: a surface contributes a slug iff it is a portal. The Host
+ * is the sole input; a non-portal surface yields no slug, so it can never resolve a
+ * workspace (the type-level guard in resolvePortalByHost is belt-and-braces over this).
+ */
+export function portalSlug(surface: HostSurface): string | null {
+  return surface.kind === "portal" ? surface.slug : null;
+}
+
 export async function resolvePortalByHost(hostHeader: string | null | undefined): Promise<ResolvedPortal | null> {
   const surface = classifyHost(hostHeader, { platformDomain: process.env.PLATFORM_DOMAIN });
-  if (surface.kind !== "portal") return null;
-  const slug = surface.slug;
+  const slug = portalSlug(surface);
+  if (!slug) return null;
 
   const rows = await withLookup({ portalSubdomain: slug }, (tx) =>
     tx

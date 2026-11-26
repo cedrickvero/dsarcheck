@@ -26,6 +26,8 @@ export const INTAKE_TYPES: IntakeType[] = [
   { value: "Objection", label: "Objection", desc: "Object to how we use your data." },
 ];
 
+export const IDENT_KINDS = ["Customer ID", "Account email", "Phone number", "Other reference"] as const;
+
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export interface IntakeInput {
@@ -36,6 +38,7 @@ export interface IntakeInput {
   ident: string;
   details: string;
   consent: string;
+  human: string;
 }
 
 /** Field-level errors, verbatim from the prototype's submit(). */
@@ -46,6 +49,7 @@ export function validateIntake(input: IntakeInput): Record<string, string> {
   if (!input.ident.trim()) e.ident = "Enter an identifier so we can find your account.";
   if (!input.details.trim()) e.details = "Describe your request.";
   if (input.consent !== "on") e.consent = "You must agree before we can process your request.";
+  if (input.human !== "on") e.human = "Complete the anti-spam check.";
   return e;
 }
 
@@ -58,6 +62,10 @@ export async function submitIntake(
 
   const type = INTAKE_TYPES.find((t) => t.value === input.type);
   if (!type) throw new ValidationError("Unknown request type.");
+
+  // The identifier kind is whitelisted to the form's four <select> options; a value outside
+  // them falls back to "Customer ID" rather than being stored verbatim.
+  const identKind = (IDENT_KINDS as readonly string[]).includes(input.identKind) ? input.identKind : "Customer ID";
 
   const receivedAt = new Date();
   const statutoryDueAt = new Date(receivedAt.getTime() + 30 * 86_400_000); // EU GDPR 30 days
@@ -75,7 +83,7 @@ export async function submitIntake(
         statutoryDueAt,
         requesterName: input.name.trim(),
         requesterEmail: input.email.trim(),
-        identifier: `${input.identKind} ${input.ident.trim()}`,
+        identifier: `${identKind} ${input.ident.trim()}`,
         details: input.details.trim(),
       }),
   );
