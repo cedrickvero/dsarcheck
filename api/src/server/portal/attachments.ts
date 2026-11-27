@@ -57,6 +57,16 @@ export function intakeStorageKey(workspaceId: string, caseId: string, id: string
   return `intake/${workspaceId}/${caseId}/${id}`;
 }
 
+/** Ceiling for the whole multipart body: 5 files plus ~1 MB of form fields. */
+export const MAX_INTAKE_BODY_BYTES = ATTACHMENT_MAX_COUNT * ATTACHMENT_MAX_BYTES + 1024 * 1024;
+
+/** Reject an oversized body before buffering it (Content-Length guard; chunked bodies are unbounded). */
+export function intakeBodyTooLarge(contentLengthHeader: string | null): boolean {
+  if (!contentLengthHeader) return false;
+  const n = Number(contentLengthHeader);
+  return Number.isFinite(n) && n > MAX_INTAKE_BODY_BYTES;
+}
+
 export type PutObject = (key: string, contentType: string, body: Uint8Array) => Promise<void>;
 
 /** The real storage write: direct PUT with server-side encryption, no signed URL. */

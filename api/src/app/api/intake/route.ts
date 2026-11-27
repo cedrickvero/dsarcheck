@@ -11,7 +11,7 @@ import { NextResponse } from "next/server";
 import { route } from "@/server/http/handler";
 import { resolvePortalByHost } from "@/server/portal/resolve";
 import { submitIntake } from "@/server/portal/intake";
-import type { IntakeFile } from "@/server/portal/attachments";
+import { intakeBodyTooLarge, type IntakeFile } from "@/server/portal/attachments";
 
 function originFrom(req: Request): string {
   const forwardedProto = req.headers.get("x-forwarded-proto");
@@ -22,6 +22,12 @@ function originFrom(req: Request): string {
 export const POST = route(async (req) => {
   const portal = await resolvePortalByHost(req.headers.get("host"));
   if (!portal) return new NextResponse("Not found", { status: 404 });
+
+  // Reject an oversized body before buffering it — a public, unauthenticated endpoint
+  // must not let an arbitrary-size multipart body exhaust memory before the file caps apply.
+  if (intakeBodyTooLarge(req.headers.get("content-length"))) {
+    return new NextResponse("Payload too large", { status: 413 });
+  }
 
   const origin = originFrom(req);
   const form = await req.formData();

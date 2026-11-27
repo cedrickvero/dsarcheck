@@ -8,7 +8,7 @@ import { systemDb } from "@/db/client";
 import { auditEvents, caseFiles, cases, orgs, workspaces } from "@/db/schema";
 import { resolvePortalByHost, portalSlug, type ResolvedPortal } from "@/server/portal/resolve";
 import { submitIntake, validateIntake } from "@/server/portal/intake";
-import { storeIntakeAttachments, validateAttachments } from "@/server/portal/attachments";
+import { storeIntakeAttachments, validateAttachments, intakeBodyTooLarge, MAX_INTAKE_BODY_BYTES } from "@/server/portal/attachments";
 import { classifyHost } from "@/domain/host";
 
 const RUN = `${Date.now()}`;
@@ -134,6 +134,13 @@ describe("intake attachments (G14)", () => {
 
   it("accepts a file by extension when the browser omits its MIME type", () => {
     expect(validateAttachments([{ name: "photo.png", type: "", size: 10 }])).toBeNull();
+  });
+
+  it("caps the whole multipart body before buffering (Content-Length guard)", () => {
+    expect(intakeBodyTooLarge(null)).toBe(false);
+    expect(intakeBodyTooLarge(String(MAX_INTAKE_BODY_BYTES))).toBe(false);
+    expect(intakeBodyTooLarge(String(MAX_INTAKE_BODY_BYTES + 1))).toBe(true);
+    expect(intakeBodyTooLarge("not-a-number")).toBe(false);
   });
 
   it("storeIntakeAttachments PUTs each file and returns tenant-scoped metadata", async () => {

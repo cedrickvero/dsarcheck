@@ -136,7 +136,7 @@ Page bg `#F2F4F7`. Header (white, bottom border, 680px container): 36px brand ti
 - Error summary (after failed submit): "{n} fields need attention before you can submit."
 - Card (padding 28, gap 24): request type radio cards (5, grid minmax 240) with descriptions · Full name + Email (grid) · Account identifier (type select 180px: Customer ID / Account email / Phone number / Other reference + input) with helper · Request details textarea · dashed attachments box "Attachments (optional). Do not upload identity documents unless we ask for them." + "Choose files" · consent checkbox "I agree that {company} may use the information in this form to verify my identity and handle my request." · anti-spam (replace mock with Cloudflare Turnstile / hCaptcha) · "Submit request" (brand, 48px) + "We will email a reference number and a link to verify your identity."
 - Validation messages verbatim in docs/05.
-- **Duplicate warning** (exists in Workspace logic, add to intake): if an open case exists for the email, show info notice referencing the existing case before submit (docs/08).
+- **Duplicate warning** (exists in Workspace logic, add to intake): if an open case exists for the email, show an info notice referencing the existing case on the confirmation screen after submit (at-submit, non-enumerating — see docs/08 §3).
 - Success: green check circle, "We received your request", grey box Reference (mono) / Received / Response due by, 3-step list, primary "Track your request" (brand, links to the requester portal) + "Submit another request".
 - Footer: "Read our privacy policy. Questions: {email}" and optional "Request handling powered by Privacyspace". Plus the requester notice (from Setup) on every public page.
 
