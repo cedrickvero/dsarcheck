@@ -54,6 +54,8 @@ From the Apple-guidelines review:
 - Direct and Agency share one app.
 - Subdomain names that don't match the verified domain go to manual review; brand names are reserved.
 
+- **G14 (intake attachments + duplicate warning) is implemented at-submit, not as a live check.** A live "does this email already have a request?" endpoint would be an enumeration oracle that contradicts the sign-in's "we never show whether an email address has a request" promise, so the duplicate check runs server-side inside the submit transaction (case-insensitive, open cases only — not Completed/Rejected) and the notice renders on the confirmation screen referencing the existing case; the new case is always recorded, so the requester still submits once. The attachment limits (max 5, ≤10 MB each, PDF/JPG/PNG) and the notice/error copy ("Attach up to 5 files.", "… is larger than 10 MB.", "… is not a PDF, JPG or PNG.", "You already have an open request about this email (reference …). Your new request has been recorded separately.") are new strings — the prototype's Choose-files control was inert, so there was no reference copy to reuse. Attachments store directly to object storage server-side (no signed URL, because the files arrive in the no-JavaScript multipart POST) and record one `case_files` row per file (`uploaded_by` null, `is_evidence` false, `version` 1, key `intake/{workspace}/{case}/{uuid}`).
+
 ## 4. Open questions for the product owner
 7. Which Privacyspace legal entity issues invoices, and in which country (VAT)? (default: Privacyspace GmbH, Germany)
 1. Case ID sequence: global or per workspace? (default: per workspace)

@@ -5,9 +5,10 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { systemDb } from "@/db/client";
-import { auditEvents, cases, orgs, workspaces } from "@/db/schema";
+import { auditEvents, caseFiles, cases, orgs, workspaces } from "@/db/schema";
 import { resolvePortalByHost, portalSlug, type ResolvedPortal } from "@/server/portal/resolve";
 import { submitIntake, validateIntake } from "@/server/portal/intake";
+import { storeIntakeAttachments, validateAttachments } from "@/server/portal/attachments";
 import { classifyHost } from "@/domain/host";
 
 const RUN = `${Date.now()}`;
@@ -115,5 +116,97 @@ describe("intake hardening", () => {
 
   it("enforces subdomain uniqueness at the database (no two workspaces share a subdomain)", async () => {
     await expect(systemDb.insert(workspaces).values({ orgId, name: `${tag}-dup`, subdomain: tag })).rejects.toThrow();
+  });
+});
+
+describe("intake attachments (G14)", () => {
+  it("validateAttachments rejects count, size and type violations with their copy", () => {
+    expect(validateAttachments([{ name: "a.pdf", type: "application/pdf", size: 10 }])).toBeNull();
+    const six = Array.from({ length: 6 }, (_, i) => ({ name: `f${i}.pdf`, type: "application/pdf", size: 10 }));
+    expect(validateAttachments(six)).toBe("Attach up to 5 files.");
+    expect(validateAttachments([{ name: "big.pdf", type: "application/pdf", size: 10 * 1024 * 1024 + 1 }])).toBe(
+      "big.pdf is larger than 10 MB.",
+    );
+    expect(validateAttachments([{ name: "x.exe", type: "application/octet-stream", size: 10 }])).toBe(
+      "x.exe is not a PDF, JPG or PNG.",
+    );
+  });
+
+  it("accepts a file by extension when the browser omits its MIME type", () => {
+    expect(validateAttachments([{ name: "photo.png", type: "", size: 10 }])).toBeNull();
+  });
+
+  it("storeIntakeAttachments PUTs each file and returns tenant-scoped metadata", async () => {
+    const puts: { key: string; type: string; body: Uint8Array }[] = [];
+    const bytes = new TextEncoder().encode("hello");
+    const stored = await storeIntakeAttachments(
+      wsId,
+      "case-1",
+      [{ name: "a.pdf", type: "application/pdf", size: 5, bytes }],
+      async (key, type, body) => {
+        puts.push({ key, type, body });
+      },
+    );
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.name).toBe("a.pdf");
+    expect(stored[0]!.storageKey).toMatch(new RegExp(`^intake/${wsId}/case-1/`));
+    expect(stored[0]!.sha256).toHaveLength(64);
+    expect(puts).toHaveLength(1);
+    expect(puts[0]!.key).toBe(stored[0]!.storageKey);
+    expect(puts[0]!.body).toEqual(bytes);
+  });
+
+  it("submitIntake records a case_files row per attachment (injected put)", async () => {
+    const bytes = new TextEncoder().encode("pdf bytes");
+    const email = `att-${RUN}@example.com`;
+    const result = await submitIntake(
+      portal,
+      { type: "Access", name: "Ada", email, identKind: "Customer ID", ident: "C-1", details: "data", consent: "on", human: "on" },
+      "http://example.test",
+      [{ name: "a.pdf", type: "application/pdf", size: bytes.length, bytes }],
+      async () => {},
+    );
+    const [c] = await systemDb
+      .select({ id: cases.id })
+      .from(cases)
+      .where(and(eq(cases.caseNumber, result.caseNumber), eq(cases.workspaceId, wsId)));
+    const files = await systemDb.select().from(caseFiles).where(eq(caseFiles.caseId, c!.id));
+    expect(files).toHaveLength(1);
+    expect(files[0]!.name).toBe("a.pdf");
+    expect(files[0]!.workspaceId).toBe(wsId);
+    expect(files[0]!.isEvidence).toBe(false);
+    expect(files[0]!.uploadedBy).toBeNull();
+    expect(files[0]!.sha256).toHaveLength(64);
+  });
+});
+
+describe("duplicate-open-case warning (G14)", () => {
+  it("returns the existing open case number when the same email already has one", async () => {
+    const email = `dup-${RUN}@example.com`;
+    const base = { type: "Access", name: "Ada", identKind: "Customer ID", ident: "C-1", details: "data", consent: "on", human: "on" };
+    const first = await submitIntake(portal, { ...base, email }, "http://example.test");
+    const second = await submitIntake(portal, { ...base, email }, "http://example.test");
+    expect(first.duplicateCaseNumber).toBeNull();
+    expect(second.duplicateCaseNumber).toBe(first.caseNumber);
+  });
+
+  it("matches the email case-insensitively", async () => {
+    const email = `Case-${RUN}@example.com`;
+    const base = { type: "Access", name: "Ada", identKind: "Customer ID", ident: "C-1", details: "data", consent: "on", human: "on" };
+    const first = await submitIntake(portal, { ...base, email }, "http://example.test");
+    const second = await submitIntake(portal, { ...base, email: email.toUpperCase() }, "http://example.test");
+    expect(second.duplicateCaseNumber).toBe(first.caseNumber);
+  });
+
+  it("does not flag a Closed (Completed/Rejected) case as a duplicate", async () => {
+    const email = `done-${RUN}@example.com`;
+    const base = { type: "Access", name: "Ada", identKind: "Customer ID", ident: "C-1", details: "data", consent: "on", human: "on" };
+    const first = await submitIntake(portal, { ...base, email }, "http://example.test");
+    await systemDb
+      .update(cases)
+      .set({ status: "Completed" })
+      .where(and(eq(cases.caseNumber, first.caseNumber), eq(cases.workspaceId, wsId)));
+    const second = await submitIntake(portal, { ...base, email }, "http://example.test");
+    expect(second.duplicateCaseNumber).toBeNull();
   });
 });

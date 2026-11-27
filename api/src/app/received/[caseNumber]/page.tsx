@@ -13,8 +13,12 @@ import { formatDate } from "@/server/cases/format";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReceivedPage(props: { params: Promise<{ caseNumber: string }> }) {
+export default async function ReceivedPage(props: {
+  params: Promise<{ caseNumber: string }>;
+  searchParams: Promise<{ dup?: string }>;
+}) {
   const { caseNumber } = await props.params;
+  const { dup } = await props.searchParams;
   const hostHeader = (await headers()).get("host");
   const portal = await resolvePortalByHost(hostHeader);
   if (!portal) notFound();
@@ -37,6 +41,13 @@ export default async function ReceivedPage(props: { params: Promise<{ caseNumber
           ✓
         </span>
         <h1>We received your request</h1>
+        {dup ? (
+          <p className="intake-dup" role="note">
+            You already have an open request about this email (reference{" "}
+            <span className="intake-ref">{decodeURIComponent(dup)}</span>). Your new request has been recorded
+            separately.
+          </p>
+        ) : null}
         <div className="intake-meta">
           <div>
             <div className="intake-meta-label">Reference</div>

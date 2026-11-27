@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { route } from "@/server/http/handler";
 import { resolvePortalByHost } from "@/server/portal/resolve";
 import { submitIntake } from "@/server/portal/intake";
+import type { IntakeFile } from "@/server/portal/attachments";
 
 function originFrom(req: Request): string {
   const forwardedProto = req.headers.get("x-forwarded-proto");
@@ -34,10 +35,19 @@ export const POST = route(async (req) => {
     consent: String(form.get("consent") ?? ""),
     human: String(form.get("human") ?? ""),
   };
+  const rawFiles = form.getAll("attachments").filter((v): v is File => v instanceof File);
+  const files: IntakeFile[] = await Promise.all(
+    rawFiles.map(async (f) => ({
+      name: f.name,
+      type: f.type,
+      size: f.size,
+      bytes: new Uint8Array(await f.arrayBuffer()),
+    })),
+  );
 
-  let result: { caseNumber: string; email: string; confirmUrl: string };
+  let result: Awaited<ReturnType<typeof submitIntake>>;
   try {
-    result = await submitIntake(portal, input, origin);
+    result = await submitIntake(portal, input, origin, files);
   } catch {
     // Generic: do not disclose which field failed over the wire.
     return NextResponse.redirect(new URL("/?error=1", origin), 303);
@@ -48,5 +58,6 @@ export const POST = route(async (req) => {
   const { sendConfirmationEmail } = await import("@/server/auth/mailer");
   await sendConfirmationEmail(result.email, result.caseNumber, result.confirmUrl).catch(() => undefined);
 
-  return NextResponse.redirect(new URL(`/received/${encodeURIComponent(result.caseNumber)}`, origin), 303);
+  const dup = result.duplicateCaseNumber ? `?dup=${encodeURIComponent(result.duplicateCaseNumber)}` : "";
+  return NextResponse.redirect(new URL(`/received/${encodeURIComponent(result.caseNumber)}${dup}`, origin), 303);
 });

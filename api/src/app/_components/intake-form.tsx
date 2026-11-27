@@ -46,6 +46,22 @@ export function IntakeForm(props: { companyName: string }) {
     if (!String(fd.get("details") ?? "").trim()) err.details = "Describe your request.";
     if (fd.get("consent") !== "on") err.consent = "You must agree before we can process your request.";
     if (fd.get("human") !== "on") err.human = "Complete the anti-spam check.";
+    const files = fd.getAll("attachments").filter((v): v is File => v instanceof File);
+    if (files.length > 5) {
+      err.attachments = "Attach up to 5 files.";
+    } else {
+      for (const f of files) {
+        if (f.size > 10 * 1024 * 1024) {
+          err.attachments = `${f.name} is larger than 10 MB.`;
+          break;
+        }
+        const ok = /\.(pdf|jpe?g|png)$/i.test(f.name) || ["application/pdf", "image/jpeg", "image/png"].includes(f.type);
+        if (!ok) {
+          err.attachments = `${f.name} is not a PDF, JPG or PNG.`;
+          break;
+        }
+      }
+    }
     setErrors(err);
     setTried(true);
     if (Object.keys(err).length > 0) e.preventDefault();
@@ -54,7 +70,7 @@ export function IntakeForm(props: { companyName: string }) {
   const errCount = Object.keys(errors).length;
 
   return (
-    <form className="intake-form" action="/api/intake" method="post" onSubmit={onSubmit} noValidate>
+    <form className="intake-form" action="/api/intake" method="post" encType="multipart/form-data" onSubmit={onSubmit} noValidate>
       {tried && errCount > 0 ? (
         <div className="intake-banner" role="alert">
           {errCount} field{errCount === 1 ? "" : "s"} need attention before you can submit.
@@ -107,6 +123,16 @@ export function IntakeForm(props: { companyName: string }) {
         <textarea name="details" rows={4} />
         <FieldError message={errors.details} />
       </label>
+
+      <div className="intake-attachments">
+        <label className="intake-attachments-label">
+          <span className="intake-attachments-icon" aria-hidden="true">↑</span>
+          <span className="intake-attachments-text">Attachments (optional). Do not upload identity documents unless we ask for them.</span>
+          <span className="intake-attachments-btn">Choose files</span>
+          <input type="file" multiple name="attachments" accept=".pdf,.jpg,.jpeg,.png" />
+        </label>
+        <FieldError message={errors.attachments} />
+      </div>
 
       <label className="intake-consent">
         <input type="checkbox" name="consent" value="on" />
