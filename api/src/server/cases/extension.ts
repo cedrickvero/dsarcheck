@@ -63,7 +63,10 @@ export async function requestExtension(
     if (row.status === "Completed" || row.status === "Rejected") {
       throw new ValidationError("a closed case cannot be extended");
     }
-    if (row.extensionMonths + (row.extensionRequestedMonths ?? 0) + months > 2) {
+    if (row.extensionRequestedMonths != null) {
+      throw new ValidationError("an extension is already awaiting approval");
+    }
+    if (row.extensionMonths + months > 2) {
       throw new ValidationError("the deadline can be extended by 2 months at most");
     }
 
@@ -118,6 +121,9 @@ export async function approveExtension(actor: Actor, caseId: string, reason: str
   return withTenant({ orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId }, async (tx) => {
     const row = await readCase(tx, actor, caseId);
     if (!row) throw new ValidationError("unknown case");
+    if (row.status === "Completed" || row.status === "Rejected") {
+      throw new ValidationError("a closed case cannot be extended");
+    }
     if (!row.extensionRequestedMonths) throw new ValidationError("no extension is awaiting approval");
 
     await tx
@@ -151,6 +157,9 @@ export async function rejectExtension(actor: Actor, caseId: string, reason: stri
   return withTenant({ orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId }, async (tx) => {
     const row = await readCase(tx, actor, caseId);
     if (!row) throw new ValidationError("unknown case");
+    if (row.status === "Completed" || row.status === "Rejected") {
+      throw new ValidationError("a closed case cannot be extended");
+    }
     if (!row.extensionRequestedMonths) throw new ValidationError("no extension is awaiting approval");
 
     await tx.update(cases).set({ extensionRequestedMonths: null }).where(eq(cases.id, caseId));

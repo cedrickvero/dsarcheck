@@ -44,6 +44,8 @@ export interface NotificationCase {
   name: string;
   receivedAt: Date;
   extensionMonths: 0 | 1 | 2;
+  /** G15: pending extension months (1 or 2) awaiting Approver review; null when none. */
+  extensionRequestedMonths?: number | null;
   closedAt?: Date | null;
   systems: { key: string; status: string; outcome?: string | null }[];
   lastAuditAction?: string;
@@ -123,14 +125,16 @@ export function deriveNotifications(
           "identity",
         );
       }
-      // G15: an extension awaiting the approver's decision.
-      if (String(c.lastAuditAction ?? "") === "Extension requested") {
+      // G15: an extension awaiting the approver's decision. Keyed off the pending
+      // sub-state (not the latest audit action), so unrelated later actions don't
+      // silently drop the approver's alert while the extension is still pending.
+      if (c.extensionRequestedMonths != null) {
         add(
           "ex",
           "calendar-clock",
           "info",
           "Extension requested",
-          `${c.name} asked to extend the deadline.`,
+          `${c.name} asked to extend the deadline by ${c.extensionRequestedMonths} month${c.extensionRequestedMonths === 1 ? "" : "s"}.`,
           "overview",
         );
       }

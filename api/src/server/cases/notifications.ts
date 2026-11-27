@@ -56,6 +56,7 @@ export async function listNotifications(actor: Actor, now: Date): Promise<Notifi
           requesterName: cases.requesterName,
           receivedAt: cases.receivedAt,
           extensionMonths: cases.extensionMonths,
+          extensionRequestedMonths: cases.extensionRequestedMonths,
           closedAt: cases.closedAt,
         })
         .from(cases)
@@ -116,6 +117,7 @@ export async function listNotifications(actor: Actor, now: Date): Promise<Notifi
         name: row.requesterName,
         receivedAt: row.receivedAt,
         extensionMonths: row.extensionMonths as 0 | 1 | 2,
+        extensionRequestedMonths: row.extensionRequestedMonths,
         closedAt: row.closedAt,
         systems: (systemsByCaseId.get(row.id) ?? []).map((system) => ({
           key: system.key,

@@ -15,7 +15,7 @@ import type { Actor } from "@/server/auth/require-auth";
 const RUN = `${Date.now()}`;
 const tag = `t15ext-${RUN}`;
 
-let orgId = ""; let wsId = ""; let handlerId = ""; let approverId = "";
+let orgId = ""; let wsId = ""; let otherWsId = ""; let otherCaseId = ""; let handlerId = ""; let approverId = "";
 let handler: Actor; let approver: Actor;
 
 const num = () => `DSAR-2026-${String(10000 + Math.floor(Math.random() * 89999)).padStart(5, "0")}`;
@@ -51,6 +51,8 @@ beforeAll(async () => {
     orgId = org.id;
     const ws = (await systemDb.insert(workspaces).values({ orgId, name: `${tag}-ws`, approverReviewsExtensions: false }).returning({ id: workspaces.id }))[0]!;
     wsId = ws.id;
+    const otherWs = (await systemDb.insert(workspaces).values({ orgId, name: `${tag}-other-ws` }).returning({ id: workspaces.id }))[0]!;
+    otherWsId = otherWs.id;
     const mkUser = async (role: "request_handler" | "approver") =>
       (await systemDb.insert(users).values({
         orgId, workspaceId: wsId, email: `${tag}-${role}@example.test`, emailHash: hashEmail(`${tag}-${role}@example.test`), role,
@@ -59,6 +61,11 @@ beforeAll(async () => {
     approverId = await mkUser("approver");
     handler = { userId: handlerId, orgId, workspaceId: wsId, roles: ["request_handler"], label: `${tag}-request_handler@example.test`, mfaSatisfied: true };
     approver = { userId: approverId, orgId, workspaceId: wsId, roles: ["approver"], label: `${tag}-approver@example.test`, mfaSatisfied: true };
+
+    otherCaseId = (await systemDb.insert(cases).values({
+      orgId, workspaceId: otherWsId, caseNumber: num(), requestType: "Access", status: "In progress", priority: "Normal",
+      receivedAt: new Date("2026-09-24T00:00:00Z"), statutoryDueAt: new Date("2026-10-24T00:00:00Z"), risk: "Low",
+    }).returning({ id: cases.id }))[0]!.id;
   } catch (e) {
     throw new Error(`extension suite setup failed - must not pass silently: ${String(e)}`);
   }
@@ -157,5 +164,31 @@ describe("requestExtension (setting on — approver gate)", () => {
     await setReviewsExtensions(true);
     const id = await mkCase("In progress");
     await expect(approveExtension(approver, id, "nothing to approve")).rejects.toThrow("no extension is awaiting approval");
+  });
+
+  it("refuses to overwrite a pending request", async () => {
+    await setReviewsExtensions(true);
+    const id = await mkCase("In progress");
+    await requestExtension(handler, id, 1, "backlog");
+    await expect(requestExtension(handler, id, 2, "actually two")).rejects.toThrow("already awaiting approval");
+  });
+
+  it("refuses to approve an extension on a case closed while pending", async () => {
+    await setReviewsExtensions(true);
+    const id = await mkCase("In progress");
+    await requestExtension(handler, id, 1, "backlog");
+    // Simulate the case being closed while the request is still pending.
+    await systemDb.update(cases).set({ status: "Completed" }).where(eq(cases.id, id));
+    await expect(approveExtension(approver, id, "reopen it")).rejects.toThrow("closed case");
+    await expect(rejectExtension(approver, id, "close it out")).rejects.toThrow("closed case");
+  });
+});
+
+describe("tenant isolation", () => {
+  it("a cross-tenant case is unknown to request, approve and reject", async () => {
+    await setReviewsExtensions(true);
+    await expect(requestExtension(handler, otherCaseId, 1, "snoop")).rejects.toThrow("unknown case");
+    await expect(approveExtension(approver, otherCaseId, "snoop")).rejects.toThrow("unknown case");
+    await expect(rejectExtension(approver, otherCaseId, "snoop")).rejects.toThrow("unknown case");
   });
 });
