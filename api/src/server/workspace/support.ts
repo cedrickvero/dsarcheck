@@ -39,7 +39,15 @@ async function readGrant(tx: Transaction, actor: Actor, grantId: string) {
     .from(supportGrants)
     .where(and(eq(supportGrants.id, grantId), eq(supportGrants.workspaceId, actor.workspaceId)))
     .limit(1);
-  return row ?? null;
+  if (!row) return null;
+
+  // An Active grant past its expiry is Expired, even on the mutation path, so an owner
+  // cannot "End" (or re-approve) a grant that has already silently lapsed.
+  if (row.status === "Active" && row.expiresAt && row.expiresAt.getTime() < now().getTime()) {
+    await tx.update(supportGrants).set({ status: "Expired" }).where(eq(supportGrants.id, grantId));
+    return { ...row, status: "Expired" as const };
+  }
+  return row;
 }
 
 export interface SupportGrantView {

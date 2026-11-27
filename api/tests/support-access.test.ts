@@ -148,6 +148,16 @@ describe("support access guards", () => {
     await expect(endSupportAccess(owner, grantId, "not active yet")).rejects.toThrow("only an active grant");
   });
 
+  it("cannot end a grant that has silently expired", async () => {
+    const grantId = await mkGrant(wsId);
+    await approveSupportAccess(owner, grantId, "go ahead");
+    await systemDb
+      .update(supportGrants)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .where(eq(supportGrants.id, grantId));
+    await expect(endSupportAccess(owner, grantId, "close it out")).rejects.toThrow("only an active grant");
+  });
+
   it("requires a reason", async () => {
     const grantId = await mkGrant(wsId);
     await expect(approveSupportAccess(owner, grantId, "ab")).rejects.toThrow("reason is required");
