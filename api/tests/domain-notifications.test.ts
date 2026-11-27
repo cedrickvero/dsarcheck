@@ -64,6 +64,22 @@ describe("deriveNotifications()", () => {
     expect(list).toEqual([]);
   });
 
+  it("raises 'Extension requested' from the pending flag, not the latest audit action", () => {
+    const list = derive(
+      [{ status: "In progress", extensionRequestedMonths: 2, lastAuditAction: "Open original file" }],
+      "Approver",
+    );
+    const ex = list.find((n) => n.kind === "ex");
+    expect(ex?.title).toBe("Extension requested");
+    expect(ex?.sub).toContain("2 months");
+    expect(ex?.tab).toBe("overview");
+
+    // A handler never sees the approver's extension item.
+    expect(
+      derive([{ status: "In progress", extensionRequestedMonths: 2 }]).some((n) => n.kind === "ex"),
+    ).toBe(false);
+  });
+
   it("surfaces 'Changes requested' from the last audit action, with the approver's reason", () => {
     const list = derive([
       {

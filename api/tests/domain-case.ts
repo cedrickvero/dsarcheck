@@ -62,6 +62,7 @@ export function mkCase(overrides: Partial<CaseState> = {}): CaseState {
     ident: "Customer ID C-20931",
     receivedAt: RECEIVED,
     extensionMonths: 0,
+    extensionRequestedMonths: null,
     ownerName: "Priya Shah",
     approverName: "Daniel Okafor",
     emailVerification: "Confirmed",

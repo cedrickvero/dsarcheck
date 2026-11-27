@@ -406,6 +406,8 @@ export interface CaseState {
   ident: string;
   receivedAt: Date;
   extensionMonths: 0 | 1 | 2;
+  /** G15: pending extension months (1 or 2) awaiting Approver review; null when none. */
+  extensionRequestedMonths?: number | null;
   ownerName: string;
   approverName?: string;
   emailVerification: EmailVerification;
