@@ -246,6 +246,13 @@
       "when": 1795780087424,
       "tag": "0034_extension_approval_gate",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "5",
+      "when": 1795781735175,
+      "tag": "0035_support_access_grants",
+      "breakpoints": true
     }
   ]
 }

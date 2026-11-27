@@ -11,7 +11,10 @@ import { now } from "@/server/time";
 import { dashboardRows } from "@/server/cases/dashboard";
 import { getAgencyDashboard } from "@/server/cases/agency";
 import { workspaceNameFor } from "@/server/cases/query";
+import { listSupportGrants } from "@/server/workspace/support";
 import { AgencyDashboard } from "./_components/agency-dashboard";
+import { SupportAccessBanner } from "./_components/support-access-banner";
+import { approveSupportAccessAction, declineSupportAccessAction, endSupportAccessAction } from "./actions";
 import { sla } from "@/domain/sla";
 import {
   attentionItems,
@@ -35,6 +38,19 @@ export default async function DashboardPage() {
     workspaceNameFor(actor),
   ]);
 
+  const isOwner = actor.roles.some((role) => ["owner", "workspace_admin"].includes(role));
+  const grants = isOwner ? await listSupportGrants(actor) : [];
+  const supportItems = grants.map((g) => ({
+    id: g.id,
+    staffLabel: g.staffLabel,
+    scope: g.scope,
+    reason: g.reason,
+    status: g.status as "Requested" | "Active" | "Declined" | "Ended" | "Expired",
+    expiresLabel: g.expiresAt
+      ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" }).format(g.expiresAt)
+      : null,
+  }));
+
   const stats = caseStats(rows, at);
   const values = widgetValues(stats);
   const attention = attentionItems(rows, at);
@@ -42,6 +58,11 @@ export default async function DashboardPage() {
 
   return (
     <section className="dashboard">
+      <SupportAccessBanner
+        workspaceName={client}
+        grants={supportItems}
+        actions={{ approve: approveSupportAccessAction, decline: declineSupportAccessAction, end: endSupportAccessAction }}
+      />
       <header className="page-header">
         <div>
           <h1>{DASHBOARD_COPY.title}</h1>

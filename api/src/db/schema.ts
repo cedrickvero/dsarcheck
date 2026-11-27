@@ -620,6 +620,41 @@ export const communications = pgTable(
 );
 
 /**
+ * G5 — a customer-approved, time-limited support-access grant (docs/05 § Admin rules,
+ * non-negotiable #4). A Platform admin requests access; the owner approves (Active,
+ * expires_at = granted_at + 24h) or declines. An owner can End an active grant early.
+ * Expiry is lazy: any Active grant past expires_at is read as Expired.
+ */
+export const SUPPORT_GRANT_STATUSES = ["Requested", "Active", "Declined", "Ended", "Expired"] as const;
+
+export const supportGrants = pgTable(
+  "support_grants",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    staffLabel: text("staff_label").notNull(),
+    scope: text("scope").notNull(),
+    reason: text("reason").notNull(),
+    status: text("status", { enum: SUPPORT_GRANT_STATUSES }).notNull().default("Requested"),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).defaultNow().notNull(),
+    grantedAt: timestamp("granted_at", { withTimezone: true }),
+    declinedAt: timestamp("declined_at", { withTimezone: true }),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    declineReason: text("decline_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("support_grants_workspace_status_idx").on(table.workspaceId, table.status),
+  ],
+);
+
+/**
  * One uploaded file per case (docs/04 CaseFile). Holds the storage key and metadata only —
  * the bytes live in object storage, never here. `needs_redaction`/`is_redacted_export`
  * mark the two ends of the redaction flow; the original (v1) is always preserved and the

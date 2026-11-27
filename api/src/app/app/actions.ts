@@ -10,6 +10,7 @@ import { requireAuth, sessionCookieName } from "@/server/auth/require-auth";
 import { now } from "@/server/time";
 import { markAllNotificationsRead, markNotificationRead } from "@/server/cases/notifications";
 import { switchWorkspace } from "@/server/cases/workspaces";
+import { approveSupportAccess, declineSupportAccess, endSupportAccess } from "@/server/workspace/support";
 import { AppError } from "@/server/http/errors";
 
 export async function markRead(notificationKey: string): Promise<void> {
@@ -51,6 +52,47 @@ export async function switchWorkspaceAction(input: { workspaceId: string }): Pro
       maxAge: 7 * 24 * 3600,
     });
 
+    revalidatePath("/app", "layout");
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof AppError) return { ok: false, message: error.message };
+    throw error;
+  }
+}
+
+export interface SupportAccessResult {
+  ok: boolean;
+  message?: string;
+}
+
+export async function approveSupportAccessAction(input: { grantId: string; reason: string }): Promise<SupportAccessResult> {
+  try {
+    const actor = await requireAuth();
+    await approveSupportAccess(actor, input.grantId, input.reason);
+    revalidatePath("/app", "layout");
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof AppError) return { ok: false, message: error.message };
+    throw error;
+  }
+}
+
+export async function declineSupportAccessAction(input: { grantId: string; reason: string }): Promise<SupportAccessResult> {
+  try {
+    const actor = await requireAuth();
+    await declineSupportAccess(actor, input.grantId, input.reason);
+    revalidatePath("/app", "layout");
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof AppError) return { ok: false, message: error.message };
+    throw error;
+  }
+}
+
+export async function endSupportAccessAction(input: { grantId: string; reason: string }): Promise<SupportAccessResult> {
+  try {
+    const actor = await requireAuth();
+    await endSupportAccess(actor, input.grantId, input.reason);
     revalidatePath("/app", "layout");
     return { ok: true };
   } catch (error) {
