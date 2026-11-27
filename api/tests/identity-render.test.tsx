@@ -21,6 +21,7 @@ const identity = (over: Partial<IdentityRecord> = {}): IdentityRecord => ({
   infoRequested: false,
   risk: "High",
   decision: null,
+  requesterUploads: [],
   ...over,
 });
 

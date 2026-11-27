@@ -9,7 +9,7 @@
  * in Verifying with infoRequested set.
  */
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { auditEvents, cases } from "@/db/schema";
+import { auditEvents, caseFiles, cases } from "@/db/schema";
 import { withTenant } from "@/db/client";
 import { can } from "@/server/authz";
 import { writeAuditEvent } from "@/server/db/audit";
@@ -35,6 +35,8 @@ export interface IdentityRecord {
     at: Date;
     reason: string;
   } | null;
+  /** The requester's answer(s) to "Request more information" (docs/05, G18). */
+  requesterUploads: { name: string; sizeBytes: number; at: Date }[];
 }
 
 const APPROVE_ACTIONS: Record<IdentityDecision, { action: string; category: string }> = {
@@ -103,8 +105,15 @@ export async function getIdentity(actor: Actor, caseId: string): Promise<Identit
         .orderBy(desc(auditEvents.at))
         .limit(1);
 
+      const uploads = await tx
+        .select({ name: caseFiles.name, sizeBytes: caseFiles.sizeBytes, at: caseFiles.createdAt })
+        .from(caseFiles)
+        .where(and(eq(caseFiles.caseId, caseId), eq(caseFiles.sourceKey, "requester_upload")))
+        .orderBy(desc(caseFiles.createdAt));
+
       return {
         ...row,
+        requesterUploads: uploads,
         decision: event
           ? {
               decision: DECISION_BY_ACTION[event.action]!,

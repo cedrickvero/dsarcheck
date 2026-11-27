@@ -584,6 +584,38 @@ export const notificationReads = pgTable(
 );
 
 /**
+ * A requester message (docs/04 Communication, docs/05 § Requester portal). Direction
+ * Inbound = from the requester (channel Portal); Outbound = to the requester (channel
+ * Email or Portal). Tenant-isolated and insert/update-only, like every customer row.
+ */
+export const COMMUNICATION_DIRECTIONS = ["Inbound", "Outbound"] as const;
+export const COMMUNICATION_CHANNELS = ["Email", "Portal"] as const;
+
+export const communications = pgTable(
+  "communications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => orgs.id),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => cases.id),
+    direction: text("direction", { enum: COMMUNICATION_DIRECTIONS }).notNull(),
+    channel: text("channel", { enum: COMMUNICATION_CHANNELS }).notNull(),
+    subject: text("subject").notNull().default(""),
+    body: text("body").notNull().default(""),
+    at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("communications_workspace_case_idx").on(table.workspaceId, table.caseId),
+  ],
+);
+
+/**
  * One uploaded file per case (docs/04 CaseFile). Holds the storage key and metadata only —
  * the bytes live in object storage, never here. `needs_redaction`/`is_redacted_export`
  * mark the two ends of the redaction flow; the original (v1) is always preserved and the

@@ -414,3 +414,36 @@ input:focus-visible, select:focus-visible, summary:focus-visible, tr:focus-withi
 .requester-facts dt { color: #667085; }
 .requester-facts dd { margin: 0; color: #101828; font-weight: 500; }
 .requester-quote { margin: 0; padding: 12px 16px; border-left: 3px solid #d0d5dd; color: #344054; font-style: italic; }
+.requester-notice--green { display: flex; gap: 10px; align-items: flex-start; background: #d9f2e7; color: #0e6b4d; border-radius: 10px; padding: 12px 16px; font-size: 14px; }
+.requester-panel--info { border: 1.5px solid #f5b66b; }
+.requester-info-head { display: flex; gap: 12px; align-items: flex-start; }
+.requester-info-icon { width: 36px; height: 36px; border-radius: 8px; background: #fdf0dc; color: #b54708; display: grid; place-items: center; flex: none; }
+.requester-info-head h2 { margin: 0; font-size: 18px; color: #101828; }
+.requester-info-why { margin: 4px 0 0; color: #475467; font-size: 14px; }
+.requester-info-form { display: flex; flex-direction: column; gap: 12px; }
+.requester-upload {
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  border: 1.5px dashed #d0d5dd; border-radius: 10px; padding: 16px; color: #475467; cursor: pointer;
+}
+.requester-upload:focus-within { outline: 2px solid #14919b; outline-offset: 2px; }
+.requester-upload-icon { font-size: 20px; color: #667085; }
+.requester-upload-text { font-size: 14px; flex: 1; min-width: 200px; }
+.requester-upload-btn { min-height: 44px; padding: 0 16px; border: 1px solid #d0d5dd; border-radius: 8px; background: #fff; color: #0b1f3a; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; }
+.requester-upload input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.requester-info-note { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 14px; color: #344054; }
+.requester-info-note textarea, .requester-msg-label textarea { border: 1px solid #d0d5dd; border-radius: 8px; padding: 10px 12px; resize: vertical; line-height: 1.5; font: inherit; }
+.requester-info-actions, .requester-msg-actions { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.requester-msgs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.requester-msg { display: flex; flex-direction: column; gap: 4px; border-radius: 10px; padding: 12px 14px; font-size: 14px; }
+.requester-msg--you { align-self: flex-end; background: #fff; border: 1px solid #e4e7ec; }
+.requester-msg--company { align-self: flex-start; background: #f7f8fa; border: 1px solid #e4e7ec; }
+.requester-msg-meta { font-size: 12px; color: #667085; font-weight: 500; }
+.requester-msg-subject { font-weight: 600; color: #101828; }
+.requester-msg-body { color: #344054; }
+.requester-msg-form { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #eef1f4; padding-top: 14px; }
+.requester-msg-label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 14px; color: #344054; }
+.message-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.message-list li { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.message-time { font-size: 12px; color: #667085; font-weight: 500; }
+.message-body { color: #344054; }
+.id-uploads h3 { margin: 12px 0 8px; font-size: 14px; color: #101828; }

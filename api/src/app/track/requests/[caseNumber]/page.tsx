@@ -1,7 +1,8 @@
 /**
  * Requester request detail (docs/03 § H2). Session- and email-scoped like the list: the case
  * must belong to the session's email AND workspace. Only requester-safe fields are surfaced
- * (never internal notes, staff names, system names, risk or audit data).
+ * (never internal notes, staff names, system names, risk or audit data). G18 adds the
+ * "Info needed" upload card and the message thread + send form.
  */
 import { cookies, headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
@@ -10,12 +11,14 @@ import { hashToken } from "@/server/auth/crypto";
 import { resolvePortalByHost } from "@/server/portal/resolve";
 import {
   getRequesterCaseDetail,
+  getRequesterCaseRef,
   requesterCookieName,
   requesterStatusView,
   requesterSummary,
   requesterTitle,
   resolveRequesterSession,
 } from "@/server/portal/requester";
+import { getRequesterInfoOption, listRequesterCommunications } from "@/server/portal/replies";
 import { formatDate } from "@/server/cases/format";
 
 export const dynamic = "force-dynamic";
@@ -41,8 +44,12 @@ function buildSteps(status: string): { label: string; done: boolean; current: bo
   ];
 }
 
-export default async function RequestDetailPage(props: { params: Promise<{ caseNumber: string }> }) {
+export default async function RequestDetailPage(props: {
+  params: Promise<{ caseNumber: string }>;
+  searchParams: Promise<{ sent?: string; error?: string }>;
+}) {
   const { caseNumber } = await props.params;
+  const { sent, error } = await props.searchParams;
 
   const hostHeader = (await headers()).get("host");
   const portal = await resolvePortalByHost(hostHeader);
@@ -57,9 +64,21 @@ export default async function RequestDetailPage(props: { params: Promise<{ caseN
   if (!session || session.workspaceId !== portal.workspaceId) redirect("/track");
 
   const number = decodeURIComponent(caseNumber);
-  const detail = await withTenant(
+
+  const ref = await withTenant(
     { orgId: session.orgId, workspaceId: session.workspaceId, actorId: "requester" },
-    (tx) => getRequesterCaseDetail(tx, number, session.email),
+    (tx) => getRequesterCaseRef(tx, number, session.email),
+  );
+  if (!ref) notFound();
+
+  const { detail, messages, infoOption } = await withTenant(
+    { orgId: session.orgId, workspaceId: session.workspaceId, actorId: "requester" },
+    async (tx) => {
+      const detail = await getRequesterCaseDetail(tx, number, session.email);
+      const messages = await listRequesterCommunications(tx, ref.id);
+      const infoOption = await getRequesterInfoOption(tx, ref.id);
+      return { detail, messages, infoOption };
+    },
   );
   if (!detail) notFound();
 
@@ -72,6 +91,7 @@ export default async function RequestDetailPage(props: { params: Promise<{ caseN
     ? Math.max(0, Math.ceil((detail.statutoryDueAt.getTime() - Date.now()) / 86_400_000))
     : null;
   const steps = buildSteps(detail.status);
+  const thread = [...messages].reverse(); // chronological, oldest first
 
   return (
     <main className="intake-page intake-page--wide">
@@ -108,6 +128,41 @@ export default async function RequestDetailPage(props: { params: Promise<{ caseN
             </div>
           ) : null}
 
+          {sent ? (
+            <div className="requester-notice requester-notice--green" role="status">
+              Document received on {formatDate(new Date())}. We'll review it within 2 business days and email you either way.
+            </div>
+          ) : null}
+
+          {detail.infoRequested ? (
+            <section className="requester-panel requester-panel--info" aria-labelledby="need-h">
+              <div className="requester-info-head">
+                <span className="requester-info-icon" aria-hidden="true">↑</span>
+                <div>
+                  <h2 id="need-h">We need one more thing to confirm it's you</h2>
+                  {infoOption ? <p className="requester-info-why">{infoOption}</p> : null}
+                </div>
+              </div>
+              <form action={`/api/track/requests/${caseNumber}/info`} method="post" encType="multipart/form-data" className="requester-info-form">
+                <label className="requester-upload">
+                  <span className="requester-upload-icon" aria-hidden="true">↑</span>
+                  <span className="requester-upload-text">PDF, JPG or PNG, up to 10 MB. Only our privacy team can open it.</span>
+                  <span className="requester-upload-btn">Choose file</span>
+                  <input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png" />
+                </label>
+                <label className="requester-info-note">
+                  <span>Anything we should know? (optional)</span>
+                  <textarea name="note" rows={2} placeholder="e.g. My account is under my married name" />
+                </label>
+                {error ? <span className="intake-error" role="alert">Choose a file or add a note before sending.</span> : null}
+                <div className="requester-info-actions">
+                  <button type="submit" className="button button--primary">Send to {portal.name}</button>
+                  <span className="intake-note">This doesn't change your response date.</span>
+                </div>
+              </form>
+            </section>
+          ) : null}
+
           <section className="requester-panel">
             <h2>Progress</h2>
             <ol className="requester-timeline">
@@ -120,6 +175,32 @@ export default async function RequestDetailPage(props: { params: Promise<{ caseN
                 </li>
               ))}
             </ol>
+          </section>
+
+          <section className="requester-panel" aria-labelledby="messages-h">
+            <h2 id="messages-h">Messages</h2>
+            <ol className="requester-msgs">
+              {thread.map((m) => (
+                <li key={m.id} className={m.direction === "Inbound" ? "requester-msg requester-msg--you" : "requester-msg requester-msg--company"}>
+                  <span className="requester-msg-meta">
+                    {m.direction === "Inbound" ? "You" : portal.name} · {formatDate(m.at)}
+                  </span>
+                  {m.subject ? <span className="requester-msg-subject">{m.subject}</span> : null}
+                  {m.body ? <span className="requester-msg-body">{m.body}</span> : null}
+                </li>
+              ))}
+              {thread.length === 0 ? <li className="intake-note">No messages yet.</li> : null}
+            </ol>
+            <form action={`/api/track/requests/${caseNumber}/message`} method="post" className="requester-msg-form">
+              <label className="requester-msg-label">
+                <span>Send a message</span>
+                <textarea name="body" rows={3} placeholder="Ask a question about this request" required />
+              </label>
+              <div className="requester-msg-actions">
+                <button type="submit" className="button">Send message</button>
+                <span className="intake-note">We usually reply within 2 business days. Don't send identity documents here unless we ask.</span>
+              </div>
+            </form>
           </section>
         </div>
 

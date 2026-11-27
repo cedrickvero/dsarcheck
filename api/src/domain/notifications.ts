@@ -12,7 +12,7 @@
 import { sla } from "./sla";
 import type { CaseStatus, Risk, Tone } from "./types";
 
-export type NotificationKind = "ap" | "hr" | "nw" | "cr" | "ar" | "dl";
+export type NotificationKind = "ap" | "hr" | "nw" | "cr" | "rr" | "ar" | "dl";
 
 export type Role = "Handler" | "Approver";
 
@@ -144,6 +144,18 @@ export function deriveNotifications(
         "warn",
         "Changes requested",
         c.lastAuditReason || "The approver returned this case.",
+        "overview",
+      );
+    }
+
+    // G18: a requester message or an info-request upload both surface as "Requester replied".
+    if (String(c.lastAuditAction ?? "").startsWith("Requester")) {
+      add(
+        "rr",
+        "message-square",
+        "info",
+        "Requester replied",
+        `${c.name} replied on their request.`,
         "overview",
       );
     }

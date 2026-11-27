@@ -80,6 +80,22 @@ export function OverviewTab({ overview }: { overview: CaseOverview }) {
           <a href="?tab=checklist">Open checklist</a>
         </p>
       </section>
+
+      <section className="card" aria-labelledby="ov-messages">
+        <h2 id="ov-messages">Messages from requester</h2>
+        {overview.inboundMessages.length > 0 ? (
+          <ul className="message-list">
+            {overview.inboundMessages.map((m) => (
+              <li key={m.id}>
+                <span className="message-time">{formatDate(m.at)}</span>
+                <span className="message-body">{m.body}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">No messages from the requester yet.</p>
+        )}
+      </section>
     </div>
   );
 }

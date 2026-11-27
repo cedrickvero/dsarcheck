@@ -29,6 +29,7 @@ const overview = (): CaseOverview => ({
     { name: "Email archive", status: "Not started", evidenceCount: 0 },
     { name: "CRM", status: "Retained under exception", evidenceCount: 1 },
   ],
+  inboundMessages: [],
 });
 
 describe("CockpitTabs", () => {

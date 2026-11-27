@@ -52,6 +52,22 @@ export function IdentityTab(props: {
           </div>
         </dl>
 
+        {i.requesterUploads.length > 0 ? (
+          <div className="id-uploads">
+            <h3>Requester uploaded</h3>
+            <ul className="message-list">
+              {i.requesterUploads.map((u, idx) => (
+                <li key={idx}>
+                  <span className="message-time">{formatDateTime(u.at)}</span>
+                  <span className="message-body">
+                    {u.name} · {Math.max(1, Math.round(u.sizeBytes / 1024))} KB
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         {i.decision ? (
           <p className="muted">
             {decisionLabel(i.decision)} · recorded by {i.decision.by} · {formatDateTime(i.decision.at)} · {i.decision.reason}

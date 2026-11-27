@@ -325,6 +325,7 @@ export interface RequesterCaseDetail {
   requestType: string;
   status: string;
   infoRequested: boolean;
+  requesterName: string;
   receivedAt: Date;
   statutoryDueAt: Date | null;
   closedAt: Date | null;
@@ -344,12 +345,27 @@ export async function getRequesterCaseDetail(
       requestType: cases.requestType,
       status: cases.status,
       infoRequested: cases.infoRequested,
+      requesterName: cases.requesterName,
       receivedAt: cases.receivedAt,
       statutoryDueAt: cases.statutoryDueAt,
       closedAt: cases.closedAt,
       extensionMonths: cases.extensionMonths,
       details: cases.details,
     })
+    .from(cases)
+    .where(and(eq(cases.caseNumber, caseNumber), requesterEmailMatches(email)))
+    .limit(1);
+  return row ?? null;
+}
+
+/** The id + name for the requester's own case, for reply/upload endpoints (email- AND tenant-scoped). */
+export async function getRequesterCaseRef(
+  tx: Transaction,
+  caseNumber: string,
+  email: string,
+): Promise<{ id: string; requesterName: string } | null> {
+  const [row] = await tx
+    .select({ id: cases.id, requesterName: cases.requesterName })
     .from(cases)
     .where(and(eq(cases.caseNumber, caseNumber), requesterEmailMatches(email)))
     .limit(1);
