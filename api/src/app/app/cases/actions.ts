@@ -31,6 +31,7 @@ import {
   openOriginalFile as openOriginal,
 } from "@/server/cases/collection";
 import { generateEvidencePack as generatePack } from "@/server/cases/evidence";
+import { approveExtension as approveExt, rejectExtension as rejectExt, requestExtension as requestExt } from "@/server/cases/extension";
 import { issueUploadUrl } from "@/server/storage/signedUrl";
 import { serverSideEncryption } from "@/server/storage/s3Client";
 import { workspacePermissionSource } from "@/server/auth/permission-source";
@@ -350,6 +351,52 @@ export async function generateEvidencePack(input: {
     const result = await generatePack(actor, input.caseId);
     revalidatePath(`/app/cases/${input.caseNumber}`);
     return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function extendDeadline(input: {
+  caseId: string;
+  caseNumber: string;
+  months: number;
+  reason: string;
+}): Promise<ActionResult<{ pending: boolean }>> {
+  try {
+    const actor = await requireAuth();
+    const result = await requestExt(actor, input.caseId, input.months, input.reason);
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: result };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function approveExtension(input: {
+  caseId: string;
+  caseNumber: string;
+  reason: string;
+}): Promise<ActionResult<{ done: true }>> {
+  try {
+    const actor = await requireAuth();
+    await approveExt(actor, input.caseId, input.reason);
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: { done: true } };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
+export async function rejectExtension(input: {
+  caseId: string;
+  caseNumber: string;
+  reason: string;
+}): Promise<ActionResult<{ done: true }>> {
+  try {
+    const actor = await requireAuth();
+    await rejectExt(actor, input.caseId, input.reason);
+    revalidatePath(`/app/cases/${input.caseNumber}`);
+    return { ok: true, data: { done: true } };
   } catch (error) {
     return failure(error);
   }

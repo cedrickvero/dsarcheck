@@ -12,7 +12,7 @@
 import { sla } from "./sla";
 import type { CaseStatus, Risk, Tone } from "./types";
 
-export type NotificationKind = "ap" | "hr" | "nw" | "cr" | "rr" | "ar" | "dl";
+export type NotificationKind = "ap" | "hr" | "ex" | "nw" | "cr" | "rr" | "ar" | "dl";
 
 export type Role = "Handler" | "Approver";
 
@@ -121,6 +121,17 @@ export function deriveNotifications(
           "High-risk identity check",
           `${c.name} needs an Approver decision before work starts.`,
           "identity",
+        );
+      }
+      // G15: an extension awaiting the approver's decision.
+      if (String(c.lastAuditAction ?? "") === "Extension requested") {
+        add(
+          "ex",
+          "calendar-clock",
+          "info",
+          "Extension requested",
+          `${c.name} asked to extend the deadline.`,
+          "overview",
         );
       }
       continue;

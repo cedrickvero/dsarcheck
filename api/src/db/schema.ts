@@ -33,6 +33,8 @@ export const workspaces = pgTable(
       .references(() => orgs.id),
     name: text("name").notNull(),
     subdomain: text("subdomain"),
+    /** G15: when true, an extension request enters a pending sub-state for Approver review. */
+    approverReviewsExtensions: boolean("approver_reviews_extensions").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -466,6 +468,8 @@ export const cases = pgTable(
     emailVerification: text("email_verification").notNull().default("Unverified"),
     /** 0, 1 or 2 - the statutory extension the workspace has applied. */
     extensionMonths: smallint("extension_months").notNull().default(0),
+    /** G15: pending extension months (1 or 2) awaiting Approver review; null when none. */
+    extensionRequestedMonths: smallint("extension_requested_months"),
     /** Low / Medium / High - decided at intake, drives the identity queue and dashboard. */
     risk: text("risk", { enum: RISK_LEVELS }).notNull().default("Low"),
     /** Identity verification facts (docs/04 Case). The recorded decision is the audit log. */

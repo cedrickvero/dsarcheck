@@ -33,7 +33,8 @@ import { ApprovalTab } from "../../_components/approval-tab";
 import { ErasureTab } from "../../_components/erasure-tab";
 import { CollectionTab } from "../../_components/collection-tab";
 import { EvidenceTab } from "../../_components/evidence-tab";
-import { setSystemStatus, recordIdentityDecision, selectTemplate, sendForApproval, approveAndClose, requestChanges, rejectCase, recordErasureOutcome, recordRedaction, requestRedactionReview, completeRedactionReview, issueRedactedExportUpload, recordRedactedExportAction, openOriginalFileAction, generateEvidencePack } from "../actions";
+import { ExtensionForm } from "../../_components/extension-form";
+import { setSystemStatus, recordIdentityDecision, selectTemplate, sendForApproval, approveAndClose, requestChanges, rejectCase, recordErasureOutcome, recordRedaction, requestRedactionReview, completeRedactionReview, issueRedactedExportUpload, recordRedactedExportAction, openOriginalFileAction, generateEvidencePack, extendDeadline, approveExtension, rejectExtension } from "../actions";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,16 @@ export default async function CaseCockpitPage(props: {
         <a href="/app/cases">Back to cases</a>
       </p>
       <CaseHeader summary={summarise(overview.case, now())} />
+      <ExtensionForm
+        caseId={overview.case.id}
+        caseNumber={overview.case.caseNumber}
+        status={overview.case.status}
+        extensionMonths={overview.case.extensionMonths}
+        extensionRequestedMonths={overview.case.extensionRequestedMonths}
+        canExtend={actor.roles.some((r) => can(r, "view_and_update_cases"))}
+        canApprove={actor.roles.some((r) => ["owner", "workspace_admin", "approver"].includes(r))}
+        actions={{ extendDeadline, approveExtension, rejectExtension }}
+      />
       <CockpitTabs
         active={tab}
         requestType={overview.case.requestType}
