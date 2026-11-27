@@ -46,10 +46,10 @@ function buildSteps(status: string): { label: string; done: boolean; current: bo
 
 export default async function RequestDetailPage(props: {
   params: Promise<{ caseNumber: string }>;
-  searchParams: Promise<{ sent?: string; error?: string }>;
+  searchParams: Promise<{ sent?: string; msg?: string; error?: string }>;
 }) {
   const { caseNumber } = await props.params;
-  const { sent, error } = await props.searchParams;
+  const { sent, msg, error } = await props.searchParams;
 
   const hostHeader = (await headers()).get("host");
   const portal = await resolvePortalByHost(hostHeader);
@@ -134,6 +134,12 @@ export default async function RequestDetailPage(props: {
             </div>
           ) : null}
 
+          {msg ? (
+            <div className="requester-notice requester-notice--green" role="status">
+              Message sent. We usually reply within 2 business days.
+            </div>
+          ) : null}
+
           {detail.infoRequested ? (
             <section className="requester-panel requester-panel--info" aria-labelledby="need-h">
               <div className="requester-info-head">
@@ -154,7 +160,7 @@ export default async function RequestDetailPage(props: {
                   <span>Anything we should know? (optional)</span>
                   <textarea name="note" rows={2} placeholder="e.g. My account is under my married name" />
                 </label>
-                {error ? <span className="intake-error" role="alert">Choose a file or add a note before sending.</span> : null}
+                {error ? <span className="intake-error" role="alert">Choose a file before sending.</span> : null}
                 <div className="requester-info-actions">
                   <button type="submit" className="button button--primary">Send to {portal.name}</button>
                   <span className="intake-note">This doesn't change your response date.</span>
@@ -179,6 +185,7 @@ export default async function RequestDetailPage(props: {
 
           <section className="requester-panel" aria-labelledby="messages-h">
             <h2 id="messages-h">Messages</h2>
+            <p className="intake-note">Everything we've sent you about this request, and your replies.</p>
             <ol className="requester-msgs">
               {thread.map((m) => (
                 <li key={m.id} className={m.direction === "Inbound" ? "requester-msg requester-msg--you" : "requester-msg requester-msg--company"}>

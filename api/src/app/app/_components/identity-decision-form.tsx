@@ -77,6 +77,7 @@ export function IdentityDecisionForm(props: {
             value={infoOption}
             onChange={(event) => setInfoOption(event.target.value)}
             placeholder="Additional account identifier"
+            required
           />
         </label>
       ) : null}

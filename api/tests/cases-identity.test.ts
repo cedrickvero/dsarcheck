@@ -85,12 +85,19 @@ describe("recordIdentityDecision", () => {
     expect(identity!.decision?.infoOption).toBe("Proof of address");
   });
 
+  it("requires an explanation when requesting information (the requester card shows it)", async () => {
+    const id = await mkCase("Low", "Verifying");
+    await expect(
+      recordIdentityDecision(handler, id, { decision: "request_info", reason: "need more" }),
+    ).rejects.toThrow("an explanation is required");
+  });
+
   it("a handler cannot approve or reject a high-risk case", async () => {
     const id = await mkCase("High", "Verifying");
     await expect(recordIdentityDecision(handler, id, { decision: "approve", reason: "matches" })).rejects.toThrow("High-risk identity needs an approver");
     await expect(recordIdentityDecision(handler, id, { decision: "reject", reason: "not the holder" })).rejects.toThrow("High-risk identity needs an approver");
     // but may request more information
-    await expect(recordIdentityDecision(handler, id, { decision: "request_info", reason: "need more" })).resolves.toBeTruthy();
+    await expect(recordIdentityDecision(handler, id, { decision: "request_info", reason: "need more", infoOption: "Proof of address" })).resolves.toBeTruthy();
   });
 
   it("an approver may approve a high-risk case", async () => {
@@ -111,7 +118,7 @@ describe("recordIdentityDecision", () => {
 
   it("can only request information while verifying", async () => {
     const id = await mkCase("Low"); // New
-    await expect(recordIdentityDecision(handler, id, { decision: "request_info", reason: "need more" })).rejects.toThrow("information can only be requested while verifying");
+    await expect(recordIdentityDecision(handler, id, { decision: "request_info", reason: "need more", infoOption: "Proof of address" })).rejects.toThrow("information can only be requested while verifying");
   });
 
   it("refuses a second decision once the case has moved on", async () => {

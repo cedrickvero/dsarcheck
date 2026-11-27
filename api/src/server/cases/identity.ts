@@ -152,6 +152,11 @@ export async function recordIdentityDecision(
     throw new ValidationError("a reason is required for an identity decision");
   }
   const infoOption = (input.infoOption ?? "").trim() || null;
+  // The requester's info-needed card shows the explanation, so a request without one would
+  // leave the requester a heading with no context (guardrail G18 LOW).
+  if (input.decision === "request_info" && !infoOption) {
+    throw new ValidationError("an explanation is required when requesting information");
+  }
 
   return withTenant(
     { orgId: actor.orgId, workspaceId: actor.workspaceId, actorId: actor.userId },

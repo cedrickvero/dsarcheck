@@ -11,6 +11,7 @@ import type { ResolvedPortal } from "@/server/portal/resolve";
 import {
   getRequesterInfoOption,
   listRequesterCommunications,
+  MAX_MESSAGE_LENGTH,
   sendRequesterMessage,
   submitRequesterInfo,
 } from "@/server/portal/replies";
@@ -78,6 +79,14 @@ describe("sendRequesterMessage", () => {
     const caseId = await makeCase(2, email);
     await expect(sendRequesterMessage(portal, caseId, "Ada Lovelace", "   ")).rejects.toThrow();
   });
+
+  it("rejects an over-long message", async () => {
+    const email = `long-${RUN}@example.com`;
+    const caseId = await makeCase(7, email);
+    await expect(
+      sendRequesterMessage(portal, caseId, "Ada Lovelace", "x".repeat(MAX_MESSAGE_LENGTH + 1)),
+    ).rejects.toThrow();
+  });
 });
 
 describe("submitRequesterInfo", () => {
@@ -111,10 +120,12 @@ describe("submitRequesterInfo", () => {
     expect(audit!.actorLabel).toBe("Ada Lovelace (requester)");
   });
 
-  it("rejects when neither a file nor a note is provided", async () => {
+  it("rejects when no file is provided (a note alone does not clear infoRequested)", async () => {
     const email = `noop-${RUN}@example.com`;
     const caseId = await makeCase(4, email, true);
-    await expect(submitRequesterInfo(portal, caseId, "Ada Lovelace", {})).rejects.toThrow();
+    await expect(
+      submitRequesterInfo(portal, caseId, "Ada Lovelace", { note: "just a note" }),
+    ).rejects.toThrow("Choose a file before sending.");
   });
 });
 

@@ -33,6 +33,9 @@ export interface RequesterMessage {
 /** The two requester-initiated audit actions the Handler notification derives from. */
 export const REQUESTER_REPLY_ACTIONS = ["Requester replied", "Requester uploaded"] as const;
 
+/** A message body must be bounded: it is stored and rendered verbatim. */
+export const MAX_MESSAGE_LENGTH = 2000;
+
 /** The case's message thread, requester-safe (no internal fields exist on these rows). */
 export async function listRequesterCommunications(tx: Transaction, caseId: string): Promise<RequesterMessage[]> {
   const rows = await tx
@@ -75,6 +78,9 @@ export async function sendRequesterMessage(
 ): Promise<{ id: string }> {
   const text = body.trim();
   if (!text) throw new ValidationError("a message is required");
+  if (text.length > MAX_MESSAGE_LENGTH) {
+    throw new ValidationError(`Messages are limited to ${MAX_MESSAGE_LENGTH} characters.`);
+  }
 
   return withTenant({ orgId: portal.orgId, workspaceId: portal.workspaceId, actorId: "requester" }, async (tx) => {
     const [row] = await tx
@@ -123,7 +129,8 @@ export async function submitRequesterInfo(
 ): Promise<{ fileId: string | null }> {
   const note = (input.note ?? "").trim();
   const file = input.file ?? null;
-  if (!file && !note) throw new ValidationError("a file or note is required");
+  // The prototype's sendInfo requires a file; a note alone must not clear infoRequested.
+  if (!file) throw new ValidationError("Choose a file before sending.");
 
   if (file) {
     const fileError = validateAttachments([{ name: file.name, type: file.type, size: file.size }]);

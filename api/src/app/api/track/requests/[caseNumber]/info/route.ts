@@ -13,7 +13,7 @@ import { hashToken } from "@/server/auth/crypto";
 import { resolvePortalByHost } from "@/server/portal/resolve";
 import { getRequesterCaseRef, requesterCookieName, resolveRequesterSession } from "@/server/portal/requester";
 import { submitRequesterInfo } from "@/server/portal/replies";
-import type { IntakeFile } from "@/server/portal/attachments";
+import { intakeBodyTooLarge, type IntakeFile } from "@/server/portal/attachments";
 
 function originFrom(req: Request): string {
   const forwardedProto = req.headers.get("x-forwarded-proto");
@@ -24,6 +24,11 @@ function originFrom(req: Request): string {
 export const POST = route(async (req, ctx) => {
   const portal = await resolvePortalByHost(req.headers.get("host"));
   if (!portal) return new NextResponse("Not found", { status: 404 });
+
+  // Same DoS guard as the intake route: reject an oversized body before buffering it.
+  if (intakeBodyTooLarge(req.headers.get("content-length"))) {
+    return new NextResponse("Payload too large", { status: 413 });
+  }
 
   const origin = originFrom(req);
   const raw = (await ctx.params).caseNumber;
